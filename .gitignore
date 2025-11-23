@@ -8,5 +8,60 @@ wheels/
 
 # Virtual environments
 .venv
-.secret
+backend/.venv
+
+# Environment variables
 .env
+.secret
+backend/.env
+backend/.secret
+frontend/.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Frontend (Node/Vite)
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/build/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+backend/dist/
+backend/build/
+
+# Test coverage
+coverage/
+.nyc_output/
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Cache directories
+.ruff_cache/
+.mypy_cache/
+.cache/
+
+# Docker
+.dockerignore
+
+# Temporary files
+*.tmp
+*.temp

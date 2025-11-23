@@ -1,276 +1,209 @@
-# SAM3 FastAPI Application
+# SAM3 Annotation Platform
 
-Simple and lightweight REST API for **Segment Anything Model 3 (SAM3)** using HuggingFace Transformers.
+A modern, full-stack annotation platform combining **SAM3 AI-powered segmentation** with an intuitive **React-based annotation interface**. Inspired by T-REX Label and MakeSense.ai.
 
 ## Features
 
-- ✅ **Text Prompt Inference** - Segment objects using natural language ("cat", "laptop", etc.)
-- ✅ **Bounding Box Inference** - Segment using coordinate-based prompts
-- ✅ **Batch Processing** - Process multiple images in one request
-- ✅ **Mask Polygon Coordinates** - Get precise segmentation masks as polygon points
-- ✅ **Optional Visualizations** - Get images with drawn masks/boxes (base64 encoded)
-- ✅ **Processing Time Metadata** - Track inference performance
-- ✅ **GPU Auto-detection** - Automatic CUDA/CPU selection
-- ✅ **Simple Architecture** - No database, no caching, just inference
+### Backend (SAM3 FastAPI)
+- Text prompt inference for object segmentation
+- Bounding box-based segmentation
+- Batch image processing
+- GPU acceleration support
+- RESTful API with OpenAPI documentation
+
+### Frontend (React Annotation Platform)
+- Interactive canvas-based annotation
+- Multiple annotation tools (rectangle, polygon, point)
+- Real-time annotation management
+- Modern UI with Tailwind CSS
+- Integration with SAM3 backend for AI-assisted labeling
 
 ## Architecture
 
 ```
-SAM3 FastAPI App
-├── main.py                         # FastAPI app with model loading
-├── config.py                       # Settings and environment config
-├── integrations/sam3/
-│   ├── inference.py                # SAM3 model inference
-│   └── visualizer.py               # Draw masks and boxes
-├── routers/sam3.py                 # API endpoints
-├── schemas/sam3.py                 # Request/response models
-└── helpers/
-    ├── response_api.py             # JSON response formatting
-    └── logger.py                   # Logging setup
+sam3-app/
+├── backend/                 # FastAPI SAM3 inference API
+│   ├── src/app/
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   └── README.md
+├── frontend/                # React annotation platform
+│   ├── src/
+│   ├── Dockerfile
+│   ├── package.json
+│   └── README.md
+├── docker-compose.yml       # Orchestrates both services
+├── Makefile                 # Development commands
+└── README.md
 ```
-
-## Prerequisites
-
-### 1. HuggingFace Access Token (REQUIRED)
-
-SAM3 is a **gated model** on HuggingFace. You need to:
-
-1. **Create a HuggingFace account**: https://huggingface.co/join
-2. **Request access to SAM3**: Visit https://huggingface.co/facebook/sam3 and accept the license
-3. **Generate an access token**: https://huggingface.co/settings/tokens
-   - Click "New token"
-   - Name it (e.g., "sam3-api")
-   - Select "Read" permissions
-   - Copy the token (starts with `hf_...`)
-
-4. **Add token to `.env` file**:
-```bash
-cp .env.example .env
-# Edit .env and replace:
-HF_TOKEN=hf_your_actual_token_here
-```
-
-⚠️ **Without a valid HF_TOKEN, the application will fail to load the model!**
-
-### 2. System Requirements
-
-- **Docker & Docker Compose** (recommended)
-- **Python 3.12+** (for local development)
-- **NVIDIA GPU with CUDA** (optional, for faster inference)
 
 ## Quick Start
 
-### Using Docker (Recommended)
+### Prerequisites
+
+- **Docker & Docker Compose** (recommended)
+- **Python 3.12+** and **uv** (for local backend development)
+- **Node.js 18+** and **npm** (for local frontend development)
+- **HuggingFace Account & Token** (required for SAM3 model access)
+
+### HuggingFace Setup (REQUIRED)
+
+SAM3 is a gated model. You must:
+
+1. Create account: https://huggingface.co/join
+2. Request access: https://huggingface.co/facebook/sam3
+3. Generate token: https://huggingface.co/settings/tokens
+4. Add to backend/.env:
 
 ```bash
-# 1. Setup HuggingFace token (see Prerequisites above)
-cp .env.example .env
-nano .env  # Add your HF_TOKEN
+cp backend/.env.example backend/.env
+# Edit backend/.env and add:
+HF_TOKEN=hf_your_token_here
+```
 
-# 2. Start the application
+### Docker (Recommended)
+
+```bash
+# 1. Setup environment
+cp backend/.env.example backend/.env
+# Edit backend/.env and add your HF_TOKEN
+
+# 2. Start all services
 make docker-up
 
-# API available at http://localhost:8000
-# Docs at http://localhost:8000/docs
+# 3. Access the application
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:8000
+# API Docs: http://localhost:8000/docs
 ```
 
 ### Local Development
 
+#### Backend Only
+
 ```bash
-# 1. Setup HuggingFace token
+cd backend
+cp .env.example .env  # Add your HF_TOKEN
+make backend-install
+make backend-run
+
+# API at http://localhost:8000
+```
+
+#### Frontend Only
+
+```bash
+cd frontend
 cp .env.example .env
-nano .env  # Add your HF_TOKEN
+make frontend-install
+make frontend-dev
 
-# 2. Install dependencies
-make install
-
-# 3. Run application
-make run
+# App at http://localhost:5173
 ```
 
-## API Endpoints
+## Development Commands
 
-### 1. Text Prompt Inference
-
-Segment objects using natural language descriptions.
+### Monorepo Commands
 
 ```bash
-POST /api/v1/sam3/inference/text
-
-# Example with curl
-curl -X POST http://localhost:8000/api/v1/sam3/inference/text \
-  -F "image=@cat.jpg" \
-  -F "text_prompt=ear" \
-  -F "threshold=0.5" \
-  -F "return_visualization=true"
+make help            # Show all available commands
+make dev             # Start both backend and frontend (Docker)
+make install         # Install all dependencies
+make clean           # Clean all cache and build files
 ```
 
-**Response:**
-```json
-{
-  "data": {
-    "num_objects": 2,
-    "boxes": [[100.5, 150.2, 200.1, 250.8], ...],
-    "scores": [0.95, 0.87],
-    "masks": [
-      {
-        "polygons": [[[120.0, 160.0], [125.0, 165.0], ...]],
-        "area": 5432.0
-      },
-      ...
-    ],
-    "processing_time_ms": 245.5,
-    "visualization_base64": "iVBORw0KGgo..." // optional
-  },
-  "message": "Successfully processed image",
-  "status_code": 200
-}
-```
-
-**Mask Format:**
-- `masks`: Array of mask polygons for each detected object
-- `polygons`: List of polygon contours, where each polygon is a list of `[x, y]` coordinate pairs
-- `area`: Total pixel area of the mask
-- Multiple polygons per mask represent disconnected regions or holes
-
-### 2. Bounding Box Inference
-
-Segment objects using coordinate prompts.
+### Backend Commands
 
 ```bash
-POST /api/v1/sam3/inference/bbox
-
-# Example
-curl -X POST http://localhost:8000/api/v1/sam3/inference/bbox \
-  -F "image=@kitchen.jpg" \
-  -F 'bounding_boxes=[[59, 144, 76, 163, 1], [87, 148, 104, 159, 1]]' \
-  -F "threshold=0.5" \
-  -F "return_visualization=true"
+make backend-install  # Install Python dependencies
+make backend-run      # Run API locally
+make backend-test     # Run tests
+make backend-format   # Format code with ruff
+make backend-lint     # Lint code
 ```
 
-**Bounding box format:**  `[x1, y1, x2, y2, label]`
-- `label`: 1 = positive (include), 0 = negative (exclude)
-
-### 3. Batch Processing
-
-Process multiple images in a single request.
+### Frontend Commands
 
 ```bash
-POST /api/v1/sam3/inference/batch
-
-# Example
-curl -X POST http://localhost:8000/api/v1/sam3/inference/batch \
-  -F "images=@cat.jpg" \
-  -F "images=@dog.jpg" \
-  -F 'text_prompts=["cat", "dog"]' \
-  -F "threshold=0.5" \
-  -F "return_visualizations=false"
+make frontend-install # Install npm dependencies
+make frontend-dev     # Start dev server
+make frontend-build   # Build for production
 ```
 
-**Response:**
-```json
-{
-  "data": {
-    "total_images": 2,
-    "results": [
-      {
-        "image_index": 0,
-        "num_objects": 1,
-        "boxes": [[...]],
-        "scores": [0.95],
-        "masks": [{"polygons": [...], "area": 1234.0}],
-        "visualization_base64": null
-      },
-      ...
-    ],
-    "total_processing_time_ms": 480.3,
-    "average_time_per_image_ms": 240.15
-  }
-}
-```
-
-### 4. Health Check
+### Docker Commands
 
 ```bash
-GET /api/v1/sam3/health
+make docker-up        # Start all services
+make docker-down      # Stop all services
+make docker-logs service=backend    # View backend logs
+make docker-logs service=frontend   # View frontend logs
+make docker-build     # Rebuild images
+make docker-restart service=backend # Restart backend
+make docker-shell service=backend   # Shell into backend container
 ```
 
-## Python Usage Example
+## API Documentation
 
-```python
-import requests
-import base64
-from PIL import Image
-from io import BytesIO
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **OpenAPI JSON**: http://localhost:8000/openapi.json
 
-# Text inference
-with open("cat.jpg", "rb") as f:
-    response = requests.post(
-        "http://localhost:8000/api/v1/sam3/inference/text",
-        files={"image": f},
-        data={
-            "text_prompt": "cat",
-            "threshold": 0.5,
-            "return_visualization": True
-        }
-    )
+## Tech Stack
 
-result = response.json()
-print(f"Found {result['data']['num_objects']} objects")
-print(f"Processing time: {result['data']['processing_time_ms']}ms")
+### Backend
+- **FastAPI** - Modern Python web framework
+- **SAM3** - Segment Anything Model 3 (via HuggingFace)
+- **UV** - Fast Python package manager
+- **Python 3.12**
 
-# Access mask polygon coordinates
-for i, mask_data in enumerate(result['data']['masks']):
-    print(f"Object {i}: {len(mask_data['polygons'])} polygon(s), area: {mask_data['area']} pixels")
-    # Each polygon is a list of [x, y] coordinates
-    for polygon in mask_data['polygons']:
-        print(f"  Polygon with {len(polygon)} points")
+### Frontend
+- **React 18** + **TypeScript**
+- **Vite** - Next-generation build tool
+- **Konva** + **React-Konva** - Canvas manipulation
+- **Tailwind CSS** - Utility-first styling
+- **Axios** - HTTP client
 
-# Decode and save visualization
-if result['data']['visualization_base64']:
-    img_data = base64.b64decode(result['data']['visualization_base64'])
-    img = Image.open(BytesIO(img_data))
-    img.save("result.png")
+### Infrastructure
+- **Docker** + **Docker Compose**
+- **Nginx** - Production frontend server
+
+## Project Structure
+
+### Backend (`/backend`)
+```
+backend/
+├── src/app/
+│   ├── main.py              # FastAPI app
+│   ├── config.py            # Settings
+│   ├── integrations/sam3/   # SAM3 model integration
+│   ├── routers/             # API endpoints
+│   ├── schemas/             # Pydantic models
+│   └── helpers/             # Utilities
+├── Dockerfile
+├── pyproject.toml
+└── README.md
 ```
 
-## Configuration
-
-Edit `.env` file:
-
-```bash
-# Application
-DEBUG=true
-APP_HOST=0.0.0.0
-APP_PORT=8000
-LOG_LEVEL=INFO
-
-# HuggingFace (REQUIRED)
-HF_TOKEN=hf_your_token_here
-
-# SAM3 Model
-SAM3_MODEL_NAME=facebook/sam3
-SAM3_DEVICE=auto  # auto, cpu, cuda
-SAM3_DEFAULT_THRESHOLD=0.5
-
-# API Limits
-MAX_IMAGE_SIZE_MB=10
-MAX_BATCH_SIZE=10
-MAX_IMAGE_DIMENSION=4096
-
-# Visualization
-VISUALIZATION_FORMAT=PNG  # PNG or JPEG
-VISUALIZATION_QUALITY=95
-
-# CORS
-ALLOWED_ORIGINS=*  # Comma-separated origins
+### Frontend (`/frontend`)
+```
+frontend/
+├── src/
+│   ├── components/
+│   │   ├── Canvas.tsx       # Annotation canvas
+│   │   ├── Toolbar.tsx      # Tool selection
+│   │   └── Sidebar.tsx      # Annotations list
+│   ├── App.tsx
+│   └── main.tsx
+├── Dockerfile
+├── nginx.conf
+└── package.json
 ```
 
 ## GPU Support
 
-### Enable GPU in Docker
+To enable GPU acceleration for faster inference:
 
 1. Install [nvidia-docker](https://github.com/NVIDIA/nvidia-docker)
-
 2. Uncomment GPU section in `docker-compose.yml`:
 ```yaml
 deploy:
@@ -281,66 +214,25 @@ deploy:
           count: 1
           capabilities: [gpu]
 ```
-
-3. Restart:
-```bash
-make docker-down
-make docker-up
-```
-
-## Development Commands
-
-```bash
-# Local Development
-make install          # Install dependencies
-make run              # Run locally
-make format           # Format code (ruff)
-make lint             # Lint code (ruff)
-
-# Docker
-make docker-up        # Start services
-make docker-down      # Stop services
-make docker-logs      # View logs
-make docker-build     # Rebuild image
-make docker-shell     # Shell into container
-```
-
-## Project Structure
-
-```
-sam3-app/
-├── src/app/
-│   ├── main.py                      # FastAPI app + model loading
-│   ├── config.py                    # Settings and environment config
-│   ├── integrations/sam3/
-│   │   ├── inference.py             # SAM3 model inference
-│   │   └── visualizer.py            # Mask and box visualization
-│   ├── routers/sam3.py              # API endpoints
-│   ├── schemas/sam3.py              # Pydantic request/response models
-│   └── helpers/
-│       ├── response_api.py          # JSON response formatting
-│       └── logger.py                # Logging setup
-├── docker-compose.yml               # Docker service definition
-├── Dockerfile                       # Python 3.12-slim + uv
-├── pyproject.toml                   # Dependencies
-├── Makefile                         # Development commands
-└── README.md
-```
+3. Restart: `make docker-down && make docker-up`
 
 ## Performance
 
-Performance depends on hardware:
+- **With GPU**: ~200-500ms per image
+- **CPU only**: 5-10x slower than GPU
 
-- **GPU (CUDA)**: Fast inference (~200-500ms per image)
-- **CPU**: 5-10x slower than GPU
+Batch processing recommended for multiple images.
 
-Batch processing is more efficient for multiple images.
+## Future Enhancements
 
-## API Documentation
-
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **OpenAPI JSON**: http://localhost:8000/openapi.json
+- [ ] CVAT integration for advanced labeling
+- [ ] Export annotations (COCO, YOLO, Pascal VOC)
+- [ ] Multi-user collaboration
+- [ ] Annotation history and versioning
+- [ ] Keyboard shortcuts for faster labeling
+- [ ] AI-assisted annotation with SAM3
+- [ ] Project management and datasets
+- [ ] User authentication and authorization
 
 ## Troubleshooting
 
@@ -348,32 +240,41 @@ Batch processing is more efficient for multiple images.
 
 Pre-download the model:
 ```bash
-make docker-shell
-# Inside container:
+make docker-shell service=backend
 python -c "from transformers import Sam3Model; Sam3Model.from_pretrained('facebook/sam3')"
 ```
 
 ### Out of Memory
 
-Reduce limits in `.env`:
+Reduce limits in `backend/.env`:
 ```bash
 MAX_BATCH_SIZE=5
 MAX_IMAGE_DIMENSION=2048
 ```
 
-## Design Philosophy
+### Frontend Not Loading
 
-This application prioritizes simplicity:
+Ensure backend is running and accessible:
+```bash
+curl http://localhost:8000/api/v1/sam3/health
+```
 
-- **No database** - Stateless API, no persistence needed
-- **No caching** - Direct inference on every request
-- **No background jobs** - Synchronous processing with immediate results
-- **Minimal layers** - Router → Integration → Model (no service/repository pattern)
-- **Standard responses** - JSON with consistent structure
-- **Base64 visualizations** - Images returned inline (optional)
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## License
+
+MIT
 
 ## References
 
-- [SAM3 Documentation](https://huggingface.co/facebook/sam3)
-- [SAM3 GitHub](https://github.com/facebookresearch/sam3)
+- [SAM3 Model](https://huggingface.co/facebook/sam3)
+- [T-REX Label](https://www.trexlabel.com/)
+- [MakeSense.ai](https://www.makesense.ai/)
 - [FastAPI](https://fastapi.tiangolo.com/)
+- [React](https://react.dev/)
+- [Vite](https://vite.dev/)
