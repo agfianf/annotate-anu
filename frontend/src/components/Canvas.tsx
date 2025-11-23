@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { Stage, Layer, Image as KonvaImage, Rect, Line, Circle, Text, Transformer } from 'react-konva'
 import Konva from 'konva'
-import type { Tool, Annotation, RectangleAnnotation, PolygonAnnotation, Label } from '../types/annotations'
+import React, { useEffect, useRef, useState } from 'react'
+import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva'
+import type { Annotation, Label, PolygonAnnotation, RectangleAnnotation, Tool } from '../types/annotations'
 
 interface CanvasProps {
   image: string | null
@@ -34,6 +34,7 @@ export default function Canvas({
   const [currentRectangle, setCurrentRectangle] = useState<number[] | null>(null)
   const [polygonPoints, setPolygonPoints] = useState<Array<{ x: number; y: number }>>([])
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null)
+  const [cursorScreenPosition, setCursorScreenPosition] = useState<{ x: number; y: number } | null>(null)
   const [isNearFirstPoint, setIsNearFirstPoint] = useState(false)
 
   const SNAP_DISTANCE = 10 // pixels in original image coordinates
@@ -150,6 +151,14 @@ export default function Canvas({
     const stage = e.target.getStage()
     const pos = stage.getPointerPosition()
 
+    if (!pos || !stage) return
+
+    // Get Stage position in the page
+    const stageBox = stage.container().getBoundingClientRect()
+
+    // Get container position to calculate relative coordinates
+    const containerBox = containerRef.current?.getBoundingClientRect()
+
     // Convert to original image coordinates
     const originalX = pos.x / scale
     const originalY = pos.y / scale
@@ -157,8 +166,16 @@ export default function Canvas({
     // Update mouse position for coordinate display
     if (selectedTool === 'rectangle' || selectedTool === 'polygon') {
       setMousePosition({ x: Math.round(originalX), y: Math.round(originalY) })
+
+      // Calculate position relative to container (not screen)
+      if (containerBox) {
+        const containerRelativeX = stageBox.left - containerBox.left + pos.x
+        const containerRelativeY = stageBox.top - containerBox.top + pos.y
+        setCursorScreenPosition({ x: containerRelativeX, y: containerRelativeY })
+      }
     } else {
       setMousePosition(null)
+      setCursorScreenPosition(null)
     }
 
     // Check if near first point for polygon
@@ -250,6 +267,28 @@ export default function Canvas({
         height: (node.height() * scaleY) / scale,
       }
       onUpdateAnnotation(updatedAnnotation)
+    } else if (annotation.type === 'polygon') {
+      const poly = annotation as PolygonAnnotation
+      const offsetX = node.x() / scale
+      const offsetY = node.y() / scale
+
+      // Update all polygon points with the offset
+      const updatedPoints = poly.points.map(point => ({
+        x: point.x + offsetX,
+        y: point.y + offsetY,
+      }))
+
+      const updatedAnnotation: PolygonAnnotation = {
+        ...poly,
+        points: updatedPoints,
+        updatedAt: Date.now(),
+      }
+
+      // Reset position to 0,0 since we've updated the points
+      node.x(0)
+      node.y(0)
+
+      onUpdateAnnotation(updatedAnnotation)
     }
   }
 
@@ -314,6 +353,7 @@ export default function Canvas({
           {/* Image */}
           {konvaImage && (
             <KonvaImage
+              key="canvas-image"
               image={konvaImage}
               width={dimensions.width}
               height={dimensions.height}
@@ -330,9 +370,9 @@ export default function Canvas({
             if (annotation.type === 'rectangle') {
               const rect = annotation as RectangleAnnotation
               return (
-                <>
+                <React.Fragment key={`rect-group-${annotation.id}`}>
                   <Rect
-                    key={annotation.id}
+                    key={`rect-${annotation.id}`}
                     id={`ann-${annotation.id}`}
                     x={rect.x * scale}
                     y={rect.y * scale}
@@ -343,34 +383,43 @@ export default function Canvas({
                     fill={`${color}33`}
                     onClick={() => onSelectAnnotation(annotation.id)}
                     onTap={() => onSelectAnnotation(annotation.id)}
-                    draggable={selectedTool === 'select' && isSelected}
+                    draggable={selectedTool === 'select'}
                     onDragEnd={(e) => handleDragEnd(annotation, e)}
                     onTransformEnd={(e) => handleTransformEnd(annotation, e)}
                     opacity={isSelected ? 1 : 0.7}
                   />
                   {/* Label text above rectangle */}
                   <Text
-                    key={`label-${annotation.id}`}
+                    key={`rect-label-${annotation.id}`}
                     x={rect.x * scale}
                     y={rect.y * scale - 20}
                     text={labelName}
                     fontSize={14}
                     fill="white"
                     padding={4}
-                    backgroundColor={color}
-                    cornerRadius={3}
+                    listening={false}
                   />
-                </>
+                </React.Fragment>
               )
             } else if (annotation.type === 'polygon') {
               const poly = annotation as PolygonAnnotation
               const points = poly.points.flatMap(p => [p.x * scale, p.y * scale])
 
               return (
-                <>
+                <Group
+                  key={`poly-group-${annotation.id}`}
+                  id={`ann-${annotation.id}`}
+                  draggable={selectedTool === 'select'}
+                  onDragMove={() => {
+                    // Force transformer to update during drag
+                    if (selectedTool === 'select' && transformerRef.current) {
+                      transformerRef.current.getLayer()?.batchDraw()
+                    }
+                  }}
+                  onDragEnd={(e) => handleDragEnd(annotation, e)}
+                >
                   <Line
-                    key={annotation.id}
-                    id={`ann-${annotation.id}`}
+                    key={`poly-${annotation.id}`}
                     points={points}
                     stroke={color}
                     strokeWidth={2}
@@ -383,28 +432,28 @@ export default function Canvas({
                   {/* Label text above polygon (use first point) */}
                   {poly.points.length > 0 && (
                     <Text
-                      key={`label-${annotation.id}`}
+                      key={`poly-label-${annotation.id}`}
                       x={poly.points[0].x * scale}
                       y={poly.points[0].y * scale - 20}
                       text={labelName}
                       fontSize={14}
                       fill="white"
                       padding={4}
-                      backgroundColor={color}
-                      cornerRadius={3}
+                      listening={false}
                     />
                   )}
                   {/* Show polygon points as small circles */}
                   {isSelected && poly.points.map((point, idx) => (
                     <Circle
-                      key={`point-${annotation.id}-${idx}`}
+                      key={`poly-point-${annotation.id}-${idx}`}
                       x={point.x * scale}
                       y={point.y * scale}
                       radius={4}
                       fill={color}
+                      listening={false}
                     />
                   ))}
-                </>
+                </Group>
               )
             }
             return null
@@ -413,6 +462,7 @@ export default function Canvas({
           {/* Current drawing shape */}
           {isDrawing && selectedTool === 'rectangle' && currentRectangle && (
             <Rect
+              key="current-rect"
               x={currentRectangle[0] * scale}
               y={currentRectangle[1] * scale}
               width={currentRectangle[2] * scale}
@@ -420,22 +470,26 @@ export default function Canvas({
               stroke="#f97316"
               strokeWidth={2}
               dash={[5, 5]}
+              listening={false}
             />
           )}
 
           {/* Polygon in progress */}
           {selectedTool === 'polygon' && polygonPoints.length > 0 && (
-            <>
+            <React.Fragment key="polygon-drawing">
               {/* Lines connecting points */}
               <Line
+                key="poly-lines"
                 points={polygonPoints.flatMap(p => [p.x * scale, p.y * scale])}
                 stroke="#f97316"
                 strokeWidth={2}
                 dash={[5, 5]}
+                listening={false}
               />
               {/* Line from last point to mouse position (preview) */}
               {mousePosition && (
                 <Line
+                  key="poly-preview-line"
                   points={[
                     polygonPoints[polygonPoints.length - 1].x * scale,
                     polygonPoints[polygonPoints.length - 1].y * scale,
@@ -446,50 +500,123 @@ export default function Canvas({
                   strokeWidth={1}
                   dash={[3, 3]}
                   opacity={0.6}
+                  listening={false}
                 />
               )}
               {/* Existing polygon points */}
               {polygonPoints.map((point, idx) => (
                 <Circle
-                  key={`temp-point-${idx}`}
+                  key={`temp-poly-point-${idx}`}
                   x={point.x * scale}
                   y={point.y * scale}
                   radius={idx === 0 && isNearFirstPoint ? 8 : 5}
                   fill={idx === 0 && isNearFirstPoint ? '#10b981' : '#f97316'}
                   stroke={idx === 0 && isNearFirstPoint ? '#10b981' : undefined}
                   strokeWidth={idx === 0 && isNearFirstPoint ? 2 : 0}
+                  listening={false}
                 />
               ))}
               {/* Preview point at mouse position */}
               {mousePosition && !isNearFirstPoint && (
                 <Circle
+                  key="poly-preview-point"
                   x={mousePosition.x * scale}
                   y={mousePosition.y * scale}
                   radius={4}
                   fill="#f97316"
                   opacity={0.5}
+                  listening={false}
                 />
               )}
-            </>
+            </React.Fragment>
           )}
 
           {/* Transformer for selected annotation */}
-          {selectedTool === 'select' && <Transformer ref={transformerRef} />}
+          {selectedTool === 'select' && <Transformer key="transformer" ref={transformerRef} />}
         </Layer>
       </Stage>
 
-      {/* Coordinate display */}
-      {mousePosition && (selectedTool === 'rectangle' || selectedTool === 'polygon') && (
+      {/* Coordinate display - follows cursor */}
+      {mousePosition && cursorScreenPosition && (selectedTool === 'rectangle' || selectedTool === 'polygon') && (
         <div
-          className="absolute bg-gray-800/90 text-white px-3 py-1.5 rounded shadow-lg text-xs font-mono pointer-events-none"
+          className="absolute bg-gray-800/95 text-white px-1.5 py-0.5 rounded text-[10px] font-mono pointer-events-none leading-tight whitespace-nowrap"
           style={{
-            left: `${mousePosition.x * scale + 15}px`,
-            top: `${mousePosition.y * scale - 10}px`,
+            left: `${cursorScreenPosition.x + 8}px`,
+            top: `${cursorScreenPosition.y - 20}px`,
           }}
         >
-          x: {mousePosition.x}, y: {mousePosition.y}
+          x={mousePosition.x}, y={mousePosition.y}
         </div>
       )}
+
+      {/* Bounding box coordinates for selected annotation */}
+      {selectedAnnotation && (() => {
+        const annotation = annotations.find(a => a.id === selectedAnnotation)
+        if (!annotation) return null
+
+        let topLeft: { x: number; y: number } | null = null
+        let bottomRight: { x: number; y: number } | null = null
+
+        if (annotation.type === 'rectangle') {
+          const rect = annotation as RectangleAnnotation
+          topLeft = { x: Math.round(rect.x), y: Math.round(rect.y) }
+          bottomRight = { x: Math.round(rect.x + rect.width), y: Math.round(rect.y + rect.height) }
+        } else if (annotation.type === 'polygon') {
+          const poly = annotation as PolygonAnnotation
+          const xs = poly.points.map(p => p.x)
+          const ys = poly.points.map(p => p.y)
+          const minX = Math.min(...xs)
+          const minY = Math.min(...ys)
+          const maxX = Math.max(...xs)
+          const maxY = Math.max(...ys)
+          topLeft = { x: Math.round(minX), y: Math.round(minY) }
+          bottomRight = { x: Math.round(maxX), y: Math.round(maxY) }
+        }
+
+        if (!topLeft || !bottomRight) return null
+
+        // Get Stage and Container positions for proper positioning
+        const stageBox = stageRef.current?.container().getBoundingClientRect()
+        const containerBox = containerRef.current?.getBoundingClientRect()
+        if (!stageBox || !containerBox) return null
+
+        // Calculate offset from container to stage
+        const offsetX = stageBox.left - containerBox.left
+        const offsetY = stageBox.top - containerBox.top
+
+        // Get label color for this annotation
+        const label = getLabel(annotation.labelId)
+        const labelColor = label?.color || '#f97316'
+
+        return (
+          <React.Fragment key="bbox-coords">
+            {/* Top-left coordinate */}
+            <div
+              className="absolute text-white px-1.5 py-0.5 rounded text-[10px] font-mono pointer-events-none leading-tight whitespace-nowrap"
+              style={{
+                backgroundColor: labelColor,
+                opacity: 0.95,
+                left: `${offsetX + topLeft.x * scale - 20}px`,
+                top: `${offsetY + topLeft.y * scale - 30}px`,
+              }}
+            >
+              x1={topLeft.x}, y1={topLeft.y}
+            </div>
+            {/* Bottom-right coordinate */}
+            <div
+              className="absolute text-white px-1.5 py-0.5 rounded text-[10px] font-mono pointer-events-none leading-tight whitespace-nowrap"
+              style={{
+                backgroundColor: labelColor,
+                opacity: 0.95,
+                left: `${offsetX + bottomRight.x * scale + 2}px`,
+                top: `${offsetY + bottomRight.y * scale + 10}px`,
+              }}
+            >
+              x2={bottomRight.x}, y2={bottomRight.y}
+            </div>
+          </React.Fragment>
+        )
+      })()}
 
       {/* Instructions overlay */}
       {selectedTool === 'polygon' && polygonPoints.length > 0 && (
