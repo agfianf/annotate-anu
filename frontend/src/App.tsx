@@ -104,7 +104,14 @@ function App() {
     } else {
       setCurrentImageUrl(null)
     }
+    // Clear selection when image changes
+    setSelectedAnnotation(null)
   }, [currentImage])
+
+  // Clear selection when navigating between images
+  useEffect(() => {
+    setSelectedAnnotation(null)
+  }, [currentImageId])
 
   // Get current image index for display
   const currentImageIndex = images.findIndex(img => img.id === currentImageId)

@@ -249,6 +249,16 @@ export default function Canvas({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectedTool])
 
+  // Reset drawing states when image changes
+  useEffect(() => {
+    setIsDrawing(false)
+    setCurrentRectangle(null)
+    setPolygonPoints([])
+    setIsNearFirstPoint(false)
+    setMousePosition(null)
+    setCursorScreenPosition(null)
+  }, [image])
+
   const handleDragEnd = (annotation: Annotation, e: any) => {
     const node = e.target
     const scaleX = node.scaleX()
