@@ -28,7 +28,7 @@ services:
       - SAM3_CACHE_DIR=/root/.cache/huggingface
 
       # HuggingFace Authentication (REQUIRED for SAM3)
-      - HF_TOKEN=${HF_TOKEN}
+      # HF_TOKEN is loaded from backend/.env via env_file
 
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -36,13 +36,13 @@ services:
     networks:
       - sam3-network
     # Uncomment for GPU support (requires nvidia-docker)
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # Frontend - React Annotation Platform
   frontend:
