@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # SAM3 FastAPI Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sam3-app
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/code/src  # Mount source for hot-reload
+      - huggingface_cache:/root/.cache/huggingface  # Cache model downloads
+    environment:
+      # App settings
+      - DEBUG=${DEBUG:-true}
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8000
+
+      # SAM3 settings
+      - SAM3_MODEL_NAME=${SAM3_MODEL_NAME:-facebook/sam3}
+      - SAM3_DEVICE=${SAM3_DEVICE:-auto}
+      - SAM3_CACHE_DIR=/root/.cache/huggingface
+
+      # HuggingFace Authentication (REQUIRED for SAM3)
+      - HF_TOKEN=${HF_TOKEN}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    restart: unless-stopped
+    # Uncomment for GPU support (requires nvidia-docker)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  huggingface_cache:
+    driver: local
+
+networks:
+  default:
+    name: sam3-network
