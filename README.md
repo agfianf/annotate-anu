@@ -7,6 +7,7 @@ Simple and lightweight REST API for **Segment Anything Model 3 (SAM3)** using Hu
 - ✅ **Text Prompt Inference** - Segment objects using natural language ("cat", "laptop", etc.)
 - ✅ **Bounding Box Inference** - Segment using coordinate-based prompts
 - ✅ **Batch Processing** - Process multiple images in one request
+- ✅ **Mask Polygon Coordinates** - Get precise segmentation masks as polygon points
 - ✅ **Optional Visualizations** - Get images with drawn masks/boxes (base64 encoded)
 - ✅ **Processing Time Metadata** - Track inference performance
 - ✅ **GPU Auto-detection** - Automatic CUDA/CPU selection
@@ -111,6 +112,13 @@ curl -X POST http://localhost:8000/api/v1/sam3/inference/text \
     "num_objects": 2,
     "boxes": [[100.5, 150.2, 200.1, 250.8], ...],
     "scores": [0.95, 0.87],
+    "masks": [
+      {
+        "polygons": [[[120.0, 160.0], [125.0, 165.0], ...]],
+        "area": 5432.0
+      },
+      ...
+    ],
     "processing_time_ms": 245.5,
     "visualization_base64": "iVBORw0KGgo..." // optional
   },
@@ -118,6 +126,12 @@ curl -X POST http://localhost:8000/api/v1/sam3/inference/text \
   "status_code": 200
 }
 ```
+
+**Mask Format:**
+- `masks`: Array of mask polygons for each detected object
+- `polygons`: List of polygon contours, where each polygon is a list of `[x, y]` coordinate pairs
+- `area`: Total pixel area of the mask
+- Multiple polygons per mask represent disconnected regions or holes
 
 ### 2. Bounding Box Inference
 
@@ -164,6 +178,7 @@ curl -X POST http://localhost:8000/api/v1/sam3/inference/batch \
         "num_objects": 1,
         "boxes": [[...]],
         "scores": [0.95],
+        "masks": [{"polygons": [...], "area": 1234.0}],
         "visualization_base64": null
       },
       ...
@@ -203,6 +218,13 @@ with open("cat.jpg", "rb") as f:
 result = response.json()
 print(f"Found {result['data']['num_objects']} objects")
 print(f"Processing time: {result['data']['processing_time_ms']}ms")
+
+# Access mask polygon coordinates
+for i, mask_data in enumerate(result['data']['masks']):
+    print(f"Object {i}: {len(mask_data['polygons'])} polygon(s), area: {mask_data['area']} pixels")
+    # Each polygon is a list of [x, y] coordinates
+    for polygon in mask_data['polygons']:
+        print(f"  Polygon with {len(polygon)} points")
 
 # Decode and save visualization
 if result['data']['visualization_base64']:
