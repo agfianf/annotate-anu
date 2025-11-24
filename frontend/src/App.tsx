@@ -9,8 +9,8 @@ import { AIModeIndicator } from './components/ui/AIModeIndicator'
 import { useStorage } from './hooks/useStorage'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { useHistory } from './hooks/useHistory'
-import type { Tool, Annotation, ImageData, PolygonAnnotation, RectangleAnnotation, PromptMode, LabelGroup } from './types/annotations'
-import { labelGroupStorage, groupUIState } from './lib/storage'
+import type { Tool, Annotation, ImageData, PolygonAnnotation, RectangleAnnotation, PromptMode } from './types/annotations'
+import { annotationStorage } from './lib/storage'
 import { Copy, RotateCcw, Download, Upload, Trash2, Loader2 } from 'lucide-react'
 import './App.css'
 
@@ -83,7 +83,6 @@ function App() {
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null)
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null)
   const [showLabelManager, setShowLabelManager] = useState(false)
-  const [showGroupManager, setShowGroupManager] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [resetIncludeImages, setResetIncludeImages] = useState(false)
@@ -101,10 +100,6 @@ function App() {
   const [zoomLevel, setZoomLevel] = useState(1)
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 })
 
-  // Label groups and UI state
-  const [groups, setGroups] = useState<LabelGroup[]>([])
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
-
   const {
     images,
     labels,
@@ -121,7 +116,6 @@ function App() {
     removeAnnotation,
     removeManyAnnotations,
     addLabel,
-    updateLabel,
     removeLabel,
     resetAll,
   } = useStorage()
@@ -143,25 +137,6 @@ function App() {
   useEffect(() => {
     localStorage.setItem('promptMode', promptMode)
   }, [promptMode])
-
-  // Load groups from IndexedDB
-  useEffect(() => {
-    const loadGroups = async () => {
-      try {
-        const loadedGroups = await labelGroupStorage.getAll()
-        setGroups(loadedGroups)
-      } catch (error) {
-        console.error('Failed to load label groups:', error)
-      }
-    }
-    loadGroups()
-  }, [])
-
-  // Load expanded states from localStorage
-  useEffect(() => {
-    const expandedStates = groupUIState.getExpandedStates()
-    setExpandedGroups(expandedStates)
-  }, [])
 
   const handleImageUpload = async (files: FileList) => {
     for (let i = 0; i < files.length; i++) {
@@ -265,89 +240,37 @@ function App() {
     }
   }
 
-  // Label visibility handlers
-  const handleToggleLabelVisibility = async (labelId: string) => {
-    const label = labels.find(l => l.id === labelId)
-    if (!label) return
-
-    const updatedLabel = {
-      ...label,
-      isVisible: !(label.isVisible ?? true), // Toggle visibility (default to true)
-    }
-
+  // Annotation bulk operation handlers
+  const handleBulkChangeLabel = async (annotationIds: string[], newLabelId: string) => {
     try {
-      await updateLabel(updatedLabel)
-      toast.success(`Label "${label.name}" ${updatedLabel.isVisible ? 'shown' : 'hidden'}`)
+      await annotationStorage.bulkChangeLabel(annotationIds, newLabelId)
+
+      // Reload annotations via useStorage reload
+      window.location.reload() // Temporary - ideally update state directly
+
+      const label = labels.find(l => l.id === newLabelId)
+      toast.success(`${annotationIds.length} annotation(s) moved to "${label?.name}"`)
     } catch (error) {
-      console.error('Failed to toggle label visibility:', error)
-      toast.error('Failed to update label visibility')
+      console.error('Failed to change labels:', error)
+      toast.error('Failed to change labels')
     }
   }
 
-  const handleToggleGroupVisibility = async (groupId: string) => {
-    const group = groups.find(g => g.id === groupId)
-    if (!group) return
+  const handleToggleAnnotationVisibility = async (annotationId: string) => {
+    const annotation = annotations.find(a => a.id === annotationId)
+    if (!annotation) return
 
-    const updatedGroup = {
-      ...group,
-      isVisible: !(group.isVisible ?? true), // Toggle visibility (default to true)
+    const updatedAnnotation = {
+      ...annotation,
+      isVisible: !(annotation.isVisible ?? true),
+      updatedAt: Date.now(),
     }
 
     try {
-      await labelGroupStorage.update(updatedGroup)
-      setGroups(prev => prev.map(g => g.id === groupId ? updatedGroup : g))
-      toast.success(`Group "${group.name}" ${updatedGroup.isVisible ? 'shown' : 'hidden'}`)
+      await updateAnnotation(updatedAnnotation)
     } catch (error) {
-      console.error('Failed to toggle group visibility:', error)
-      toast.error('Failed to update group visibility')
-    }
-  }
-
-  const handleToggleGroupExpanded = (groupId: string) => {
-    const currentState = expandedGroups[groupId] ?? true
-    const newState = !currentState
-
-    setExpandedGroups(prev => ({
-      ...prev,
-      [groupId]: newState,
-    }))
-
-    // Persist to localStorage
-    groupUIState.setExpandedState(groupId, newState)
-  }
-
-  // Group CRUD handlers
-  const handleAddGroup = async (name: string) => {
-    const newGroup: LabelGroup = {
-      id: Date.now().toString(),
-      name,
-      isExpanded: true,
-      isVisible: true,
-      sortOrder: groups.length,
-      createdAt: Date.now(),
-    }
-
-    try {
-      await labelGroupStorage.add(newGroup)
-      setGroups(prev => [...prev, newGroup])
-      toast.success(`Group "${name}" created`)
-    } catch (error) {
-      console.error('Failed to add group:', error)
-      toast.error('Failed to create group')
-    }
-  }
-
-  const handleRemoveGroup = async (groupId: string) => {
-    const group = groups.find(g => g.id === groupId)
-    if (!group) return
-
-    try {
-      await labelGroupStorage.remove(groupId) // This also ungroups labels
-      setGroups(prev => prev.filter(g => g.id !== groupId))
-      toast.success(`Group "${group.name}" deleted`)
-    } catch (error) {
-      console.error('Failed to remove group:', error)
-      toast.error('Failed to delete group')
+      console.error('Failed to toggle annotation visibility:', error)
+      toast.error('Failed to toggle visibility')
     }
   }
 
@@ -763,7 +686,6 @@ function App() {
                 selectedTool={selectedTool}
                 annotations={currentAnnotations}
                 labels={labels}
-                groups={groups}
                 selectedLabelId={selectedLabelId}
                 onAddAnnotation={handleAddAnnotation}
                 onUpdateAnnotation={handleUpdateAnnotation}
@@ -791,17 +713,14 @@ function App() {
           <Sidebar
             annotations={currentAnnotations}
             labels={labels}
-            groups={groups}
             selectedAnnotation={selectedAnnotation}
             selectedLabelId={selectedLabelId}
-            expandedGroups={expandedGroups}
             onSelectAnnotation={setSelectedAnnotation}
             onSelectLabel={setSelectedLabelId}
             onDeleteAnnotation={handleDeleteAnnotation}
             onBulkDeleteAnnotations={handleBulkDeleteAnnotations}
-            onToggleLabelVisibility={handleToggleLabelVisibility}
-            onToggleGroupVisibility={handleToggleGroupVisibility}
-            onToggleGroupExpanded={handleToggleGroupExpanded}
+            onBulkChangeLabel={handleBulkChangeLabel}
+            onToggleAnnotationVisibility={handleToggleAnnotationVisibility}
           />
         </div>
 
@@ -943,16 +862,12 @@ function App() {
                   const formData = new FormData(e.currentTarget)
                   const name = formData.get('name') as string
                   const color = formData.get('color') as string
-                  const groupId = formData.get('groupId') as string
 
                   if (name && color) {
                     const newLabel = {
                       id: Date.now().toString(),
                       name,
                       color,
-                      groupId: groupId || undefined,
-                      isVisible: true,
-                      sortOrder: labels.length,
                       createdAt: Date.now(),
                     }
                     addLabel(newLabel)
@@ -969,19 +884,6 @@ function App() {
                   required
                   className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
                 />
-                {groups.length > 0 && (
-                  <select
-                    name="groupId"
-                    className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
-                  >
-                    <option value="">No group (ungrouped)</option>
-                    {groups.map(group => (
-                      <option key={group.id} value={group.id}>
-                        {group.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
                 <div className="flex gap-2">
                   <input
                     type="color"
@@ -1032,119 +934,6 @@ function App() {
                   </button>
                 </div>
               </form>
-
-              {/* Button to open Group Manager */}
-              <div className="mt-6 pt-6 border-t border-gray-700">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowLabelManager(false)
-                    setShowGroupManager(true)
-                  }}
-                  className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
-                >
-                  Manage Groups
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Group Manager Modal */}
-      {showGroupManager && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowGroupManager(false)
-            }
-          }}
-        >
-          <div className="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">Group Management</h2>
-              <button
-                onClick={() => setShowGroupManager(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="space-y-3">
-                {groups.map(group => {
-                  const labelCount = labels.filter(l => l.groupId === group.id).length
-                  return (
-                    <div
-                      key={group.id}
-                      className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <div className="text-white font-medium">{group.name}</div>
-                        <div className="text-sm text-gray-400">{labelCount} labels</div>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveGroup(group.id)}
-                        className="text-red-400 hover:text-red-300 text-sm"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )
-                })}
-                {groups.length === 0 && (
-                  <div className="text-center text-gray-400 py-4">
-                    No groups yet. Create one below.
-                  </div>
-                )}
-              </div>
-
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault()
-                  const formData = new FormData(e.currentTarget)
-                  const name = formData.get('name') as string
-
-                  if (name) {
-                    handleAddGroup(name)
-                    e.currentTarget.reset()
-                  }
-                }}
-                className="mt-6 space-y-3"
-              >
-                <h3 className="text-white font-medium">Add New Group</h3>
-                <input
-                  type="text"
-                  name="name"
-                  placeholder="Group name (e.g., Vehicles, Animals)"
-                  required
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors"
-                >
-                  Add Group
-                </button>
-              </form>
-
-              {/* Button to go back to Label Manager */}
-              <div className="mt-6 pt-6 border-t border-gray-700">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGroupManager(false)
-                    setShowLabelManager(true)
-                  }}
-                  className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
-                >
-                  Back to Labels
-                </button>
-              </div>
             </div>
           </div>
         </div>

@@ -185,6 +185,35 @@ export const annotationStorage = {
     await Promise.all(annotations.map(a => annotationStorage.remove(a.id)))
   },
   clear: () => clear(STORES.ANNOTATIONS),
+
+  // Bulk update operations
+  updateMany: async (annotations: Annotation[]): Promise<void> => {
+    await Promise.all(annotations.map(ann => annotationStorage.update(ann)))
+  },
+
+  // Bulk change label for multiple annotations
+  bulkChangeLabel: async (annotationIds: string[], newLabelId: string): Promise<void> => {
+    const annotations = await annotationStorage.getAll()
+    const toUpdate = annotations.filter(ann => annotationIds.includes(ann.id))
+    const updated = toUpdate.map(ann => ({
+      ...ann,
+      labelId: newLabelId,
+      updatedAt: Date.now(),
+    }))
+    await annotationStorage.updateMany(updated)
+  },
+
+  // Bulk toggle visibility for multiple annotations
+  bulkToggleVisibility: async (annotationIds: string[]): Promise<void> => {
+    const annotations = await annotationStorage.getAll()
+    const toUpdate = annotations.filter(ann => annotationIds.includes(ann.id))
+    const updated = toUpdate.map(ann => ({
+      ...ann,
+      isVisible: !(ann.isVisible ?? true),
+      updatedAt: Date.now(),
+    }))
+    await annotationStorage.updateMany(updated)
+  },
 }
 
 // Label operations
