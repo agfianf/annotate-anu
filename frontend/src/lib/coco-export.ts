@@ -1,16 +1,16 @@
-import JSZip from 'jszip'
 import type {
   Annotation,
-  RectangleAnnotation,
-  PolygonAnnotation,
-  ImageData,
-  Label,
-  COCODataset,
-  COCOInfo,
-  COCOImage,
   COCOAnnotation,
   COCOCategory,
+  COCODataset,
+  COCOImage,
+  COCOInfo,
+  ImageData,
+  Label,
+  PolygonAnnotation,
+  RectangleAnnotation,
 } from '@/types/annotations'
+import JSZip from 'jszip'
 
 export function exportToCOCO(
   images: ImageData[],
@@ -21,8 +21,8 @@ export function exportToCOCO(
   const info: COCOInfo = {
     year: new Date().getFullYear(),
     version: '1.0',
-    description: 'SAM3 Annotation Export',
-    contributor: 'SAM3 Annotation Platform',
+    description: 'Annotator ANU Export',
+    contributor: 'Annotator ANU',
     date_created: new Date().toISOString(),
   }
 

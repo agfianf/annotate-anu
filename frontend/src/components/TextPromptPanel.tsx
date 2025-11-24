@@ -182,7 +182,7 @@ export function TextPromptPanel({
 
         // Use selected annotation type and label
         console.log(`[AUTO-APPLY] Creating ${num_objects} annotations`)
-        onAnnotationsCreated({ boxes, masks, scores, annotationType, labelId })
+        await onAnnotationsCreated({ boxes, masks, scores, annotationType, labelId })
 
         toast.success(`Auto-detected ${num_objects} object${num_objects > 1 ? 's' : ''} in "${currentImage.name}"`)
       } catch (error) {
@@ -250,7 +250,7 @@ export function TextPromptPanel({
       }
 
       // Use selected annotation type and label
-      onAnnotationsCreated({ boxes, masks, scores, annotationType, labelId })
+      await onAnnotationsCreated({ boxes, masks, scores, annotationType, labelId })
 
       toast.success(`Successfully detected ${num_objects} object${num_objects > 1 ? 's' : ''}!`)
 
@@ -303,7 +303,7 @@ export function TextPromptPanel({
     // Process images sequentially
     for (let i = 0; i < imagesToProcess.length; i++) {
       if (batchCancelRef.current) {
-        toast.info('Batch processing cancelled')
+        toast.success('Batch processing cancelled')
         break
       }
 
@@ -338,7 +338,7 @@ export function TextPromptPanel({
           ))
         } else {
           // Use selected annotation type and label - pass imageId for batch processing
-          onAnnotationsCreated({ boxes, masks, scores, annotationType, labelId, imageId: image.id })
+          await onAnnotationsCreated({ boxes, masks, scores, annotationType, labelId, imageId: image.id })
 
           setBatchProgress(prev => prev.map((item, idx) =>
             idx === i ? { ...item, status: 'success', count: num_objects } : item

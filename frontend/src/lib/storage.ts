@@ -175,6 +175,23 @@ export const annotationStorage = {
     })
   },
   add: (annotation: Annotation) => add(STORES.ANNOTATIONS, annotation),
+  addMany: async (annotations: Annotation[]): Promise<void> => {
+    if (annotations.length === 0) return
+
+    const db = await openDB()
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORES.ANNOTATIONS, 'readwrite')
+      const store = transaction.objectStore(STORES.ANNOTATIONS)
+
+      // Queue all additions in single transaction
+      annotations.forEach(annotation => {
+        store.add(annotation)
+      })
+
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error)
+    })
+  },
   update: (annotation: Annotation) => update(STORES.ANNOTATIONS, annotation),
   remove: (id: string) => remove(STORES.ANNOTATIONS, id),
   removeMany: async (ids: string[]): Promise<void> => {

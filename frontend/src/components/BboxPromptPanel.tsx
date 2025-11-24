@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Loader2, X, Trash2, Square } from 'lucide-react'
 import { Button } from './ui/button'
 import { PromptModeSelector } from './ui/PromptModeSelector'
@@ -43,6 +43,13 @@ export function BboxPromptPanel({
   const [maskThreshold, setMaskThreshold] = useState(0.5)
   const [annotationType, setAnnotationType] = useState<AnnotationType>('polygon')
   const [isLoading, setIsLoading] = useState(false)
+
+  // Auto-switch to 'single' mode if currently in a disabled mode
+  useEffect(() => {
+    if (promptMode !== 'single') {
+      setPromptMode('single')
+    }
+  }, []) // Only run on mount
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -110,7 +117,7 @@ export function BboxPromptPanel({
 
           // Create annotations with the correct label for this group
           // We need to call a modified version that accepts labelId
-          onAnnotationsCreated({
+          await onAnnotationsCreated({
             boxes,
             masks,
             scores,
@@ -320,16 +327,9 @@ export function BboxPromptPanel({
           value={promptMode}
           onChange={setPromptMode}
           disabled={isLoading}
+          disabledModes={['auto-apply', 'batch']}
+          disabledLabel="(coming soon)"
         />
-
-        {/* Mode limitation notice for bbox-prompt */}
-        {promptMode !== 'single' && (
-          <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
-            <p className="text-sm text-yellow-200">
-              <strong>Note:</strong> Bbox-prompt works best in <strong>Single Image</strong> mode since bounding boxes are specific to each image's layout. Auto-apply and batch modes require drawing bboxes for each image individually.
-            </p>
-          </div>
-        )}
 
         {/* Threshold Settings */}
         <div className="space-y-4">

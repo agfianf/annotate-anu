@@ -69,6 +69,13 @@ export function useStorage() {
     setAnnotations(prev => [...prev, annotation])
   }, [])
 
+  const addManyAnnotations = useCallback(async (annotations: Annotation[]) => {
+    // Batch write to IndexedDB in single transaction
+    await annotationStorage.addMany(annotations)
+    // Update React state in single operation
+    setAnnotations(prev => [...prev, ...annotations])
+  }, [])
+
   const updateAnnotation = useCallback(async (annotation: Annotation) => {
     await annotationStorage.update(annotation)
     setAnnotations(prev =>
@@ -157,6 +164,7 @@ export function useStorage() {
     addImage,
     removeImage,
     addAnnotation,
+    addManyAnnotations,
     updateAnnotation,
     removeAnnotation,
     removeManyAnnotations,

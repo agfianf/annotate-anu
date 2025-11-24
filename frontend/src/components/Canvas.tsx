@@ -20,7 +20,7 @@ interface CanvasProps {
   onStagePositionChange?: (position: { x: number; y: number }) => void
 }
 
-export default function Canvas({
+const Canvas = React.memo(function Canvas({
   image,
   selectedTool,
   annotations,
@@ -1151,7 +1151,9 @@ export default function Canvas({
       )}
     </div>
   )
-}
+})
+
+export default Canvas
 
 function UploadIcon({ className }: { className?: string }) {
   return (
