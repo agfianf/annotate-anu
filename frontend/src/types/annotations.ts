@@ -4,6 +4,9 @@ export type Tool = 'select' | 'rectangle' | 'polygon' | 'point'
 // Annotation types
 export type AnnotationType = 'rectangle' | 'polygon' | 'point'
 
+// Prompt mode types
+export type PromptMode = 'single' | 'auto-apply' | 'batch'
+
 // Label definition
 export interface Label {
   id: string

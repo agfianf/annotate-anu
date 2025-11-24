@@ -16,22 +16,6 @@ services:
       - huggingface_cache:/root/.cache/huggingface  # Cache model downloads
     env_file:
       - ./backend/.env
-    environment:
-      # App settings
-      - DEBUG=${DEBUG:-true}
-      - APP_HOST=0.0.0.0
-      - APP_PORT=8000
-
-      # SAM3 settings
-      - SAM3_MODEL_NAME=${SAM3_MODEL_NAME:-facebook/sam3}
-      - SAM3_DEVICE=${SAM3_DEVICE:-auto}
-      - SAM3_CACHE_DIR=/root/.cache/huggingface
-
-      # HuggingFace Authentication (REQUIRED for SAM3)
-      # HF_TOKEN is loaded from backend/.env via env_file
-
-      # Logging
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     restart: unless-stopped
     networks:
       - sam3-network
@@ -57,9 +41,8 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    environment:
-      - VITE_API_URL=http://localhost:8000
-      - VITE_ENV=development
+    env_file:
+      - ./frontend/.env
     depends_on:
       - backend
     networks:

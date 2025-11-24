@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Upload, MousePointer, Square, Pentagon } from 'lucide-react'
 import { TextPromptPanel } from './TextPromptPanel'
 import { BboxPromptPanel } from './BboxPromptPanel'
-import type { Label, ImageData, Tool } from '@/types/annotations'
+import type { Label, ImageData, Tool, PromptMode } from '@/types/annotations'
 
 interface LeftSidebarProps {
   selectedTool: Tool
@@ -10,6 +10,9 @@ interface LeftSidebarProps {
   labels: Label[]
   selectedLabelId: string | null
   currentImage: ImageData | null
+  images: ImageData[]
+  promptMode: PromptMode
+  setPromptMode: (mode: PromptMode) => void
   onImageUpload: (files: FileList) => void
   onAnnotationsCreated: (results: {
     boxes: Array<[number, number, number, number]>
@@ -17,10 +20,14 @@ interface LeftSidebarProps {
     scores: number[]
     annotationType: 'bbox' | 'polygon'
     labelId?: string
+    imageId?: string
   }) => void
   onBboxPromptModeChange?: (enabled: boolean) => void
+  onAIPanelActiveChange?: (active: boolean) => void
   promptBboxes?: Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>
   onPromptBboxesChange?: (bboxes: Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>) => void
+  currentAnnotations?: any[]
+  onAutoApplyLoadingChange?: (loading: boolean) => void
 }
 
 type ActiveTool = 'text-prompt' | 'bbox-prompt' | null
@@ -71,11 +78,17 @@ export function LeftSidebar({
   labels,
   selectedLabelId,
   currentImage,
+  images,
+  promptMode,
+  setPromptMode,
   onImageUpload,
   onAnnotationsCreated,
   onBboxPromptModeChange,
+  onAIPanelActiveChange,
   promptBboxes = [],
   onPromptBboxesChange,
+  currentAnnotations = [],
+  onAutoApplyLoadingChange,
 }: LeftSidebarProps) {
   const [activeTool, setActiveTool] = useState<ActiveTool>(null)
 
@@ -101,9 +114,27 @@ export function LeftSidebar({
       onBboxPromptModeChange(newActiveTool === 'bbox-prompt')
     }
 
+    // Notify parent about AI panel active state
+    if (onAIPanelActiveChange) {
+      onAIPanelActiveChange(newActiveTool !== null)
+    }
+
     // Auto-switch to rectangle tool when bbox-prompt is activated
     if (newActiveTool === 'bbox-prompt') {
       onToolChange('rectangle')
+    }
+  }
+
+  const handlePanelClose = () => {
+    setActiveTool(null)
+    if (onAIPanelActiveChange) {
+      onAIPanelActiveChange(false)
+    }
+    if (onBboxPromptModeChange) {
+      onBboxPromptModeChange(false)
+    }
+    if (onPromptBboxesChange) {
+      onPromptBboxesChange([])
     }
   }
 
@@ -184,8 +215,13 @@ export function LeftSidebar({
               labels={labels}
               selectedLabelId={selectedLabelId}
               currentImage={currentImage}
+              images={images}
+              promptMode={promptMode}
+              setPromptMode={setPromptMode}
               onAnnotationsCreated={onAnnotationsCreated}
-              onClose={() => setActiveTool(null)}
+              onClose={handlePanelClose}
+              currentAnnotations={currentAnnotations}
+              onLoadingChange={onAutoApplyLoadingChange}
             />
           )}
           {activeTool === 'bbox-prompt' && (
@@ -193,8 +229,11 @@ export function LeftSidebar({
               labels={labels}
               selectedLabelId={selectedLabelId}
               currentImage={currentImage}
+              images={images}
+              promptMode={promptMode}
+              setPromptMode={setPromptMode}
               onAnnotationsCreated={onAnnotationsCreated}
-              onClose={() => setActiveTool(null)}
+              onClose={handlePanelClose}
               promptBboxes={promptBboxes}
               onPromptBboxesChange={onPromptBboxesChange}
             />

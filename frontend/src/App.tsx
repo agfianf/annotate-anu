@@ -5,10 +5,11 @@ import Canvas from './components/Canvas'
 import Sidebar from './components/Sidebar'
 import { Modal } from './components/ui/Modal'
 import { ExportModal } from './components/ExportModal'
+import { AIModeIndicator } from './components/ui/AIModeIndicator'
 import { useStorage } from './hooks/useStorage'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
-import type { Tool, Annotation, ImageData, PolygonAnnotation, RectangleAnnotation } from './types/annotations'
-import { Copy, RotateCcw, Download, Upload } from 'lucide-react'
+import type { Tool, Annotation, ImageData, PolygonAnnotation, RectangleAnnotation, PromptMode } from './types/annotations'
+import { Copy, RotateCcw, Download, Upload, Trash2, Loader2 } from 'lucide-react'
 import './App.css'
 
 function App() {
@@ -21,6 +22,12 @@ function App() {
   const [resetIncludeImages, setResetIncludeImages] = useState(false)
   const [promptBboxes, setPromptBboxes] = useState<Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>>([])
   const [isBboxPromptMode, setIsBboxPromptMode] = useState(false)
+  const [isAIPanelActive, setIsAIPanelActive] = useState(false)
+  const [promptMode, setPromptMode] = useState<PromptMode>(() => {
+    const saved = localStorage.getItem('promptMode')
+    return (saved as PromptMode) || 'single'
+  })
+  const [isAutoApplyLoading, setIsAutoApplyLoading] = useState(false)
 
   const {
     images,
@@ -32,6 +39,7 @@ function App() {
     loading,
     setCurrentImageId,
     addImage,
+    removeImage,
     addAnnotation,
     updateAnnotation,
     removeAnnotation,
@@ -47,6 +55,11 @@ function App() {
       setSelectedLabelId(labels[0].id)
     }
   }, [labels, selectedLabelId])
+
+  // Persist prompt mode to localStorage
+  useEffect(() => {
+    localStorage.setItem('promptMode', promptMode)
+  }, [promptMode])
 
   const handleImageUpload = async (files: FileList) => {
     for (let i = 0; i < files.length; i++) {
@@ -140,8 +153,11 @@ function App() {
     scores: number[]
     annotationType: 'bbox' | 'polygon'
     labelId?: string
+    imageId?: string
   }) => {
-    if (!currentImageId) return
+    // Use passed imageId for batch processing, otherwise use currentImageId
+    const targetImageId = results.imageId || currentImageId
+    if (!targetImageId) return
 
     // Use the labelId from results if provided, otherwise use selectedLabelId
     const labelToUse = results.labelId || selectedLabelId
@@ -162,7 +178,7 @@ function App() {
 
         const annotation: RectangleAnnotation = {
           id: `${Date.now()}-${i}`,
-          imageId: currentImageId,
+          imageId: targetImageId,
           labelId: labelToUse,
           type: 'rectangle',
           x,
@@ -191,7 +207,7 @@ function App() {
 
           const annotation: PolygonAnnotation = {
             id: `${Date.now()}-${i}`,
-            imageId: currentImageId,
+            imageId: targetImageId,
             labelId: labelToUse,
             type: 'polygon',
             points,
@@ -349,11 +365,17 @@ function App() {
             labels={labels}
             selectedLabelId={selectedLabelId}
             currentImage={currentImage || null}
+            images={images}
+            promptMode={promptMode}
+            setPromptMode={setPromptMode}
             onImageUpload={handleImageUpload}
             onAnnotationsCreated={handleAutoAnnotateResults}
             onBboxPromptModeChange={setIsBboxPromptMode}
+            onAIPanelActiveChange={setIsAIPanelActive}
             promptBboxes={promptBboxes}
             onPromptBboxesChange={setPromptBboxes}
+            currentAnnotations={currentAnnotations}
+            onAutoApplyLoadingChange={setIsAutoApplyLoading}
           />
 
           {/* Canvas */}
@@ -375,13 +397,16 @@ function App() {
                     <Copy className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="text-gray-400 text-xs">
-                  {currentImage.width} × {currentImage.height} px
+                <div className="flex flex-col items-end gap-1">
+                  <div className="text-gray-400 text-xs">
+                    {currentImage.width} × {currentImage.height} px
+                  </div>
+                  <AIModeIndicator mode={promptMode} isActive={isAIPanelActive} />
                 </div>
               </div>
             )}
 
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden relative">
               <Canvas
                 image={currentImageUrl}
                 selectedTool={selectedTool}
@@ -394,6 +419,15 @@ function App() {
                 onSelectAnnotation={setSelectedAnnotation}
                 promptBboxes={promptBboxes}
               />
+              {/* Auto-apply loading overlay */}
+              {isAutoApplyLoading && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center pointer-events-none">
+                  <div className="bg-gray-800 px-6 py-4 rounded-lg shadow-xl flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+                    <span className="text-white font-medium">Auto-detecting objects...</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -440,7 +474,7 @@ function App() {
                   <div
                     key={image.id}
                     onClick={() => setCurrentImageId(image.id)}
-                    className={`relative flex-shrink-0 cursor-pointer rounded overflow-hidden border-2 transition-all ${
+                    className={`group relative flex-shrink-0 cursor-pointer rounded overflow-hidden border-2 transition-all ${
                       currentImageId === image.id
                         ? 'border-orange-500 ring-2 ring-orange-500/50'
                         : 'border-gray-600 hover:border-gray-500'
@@ -457,6 +491,19 @@ function App() {
                         {imageAnnotationCount}
                       </div>
                     )}
+                    {/* Delete button - appears on hover */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (window.confirm(`Delete "${image.name}"? This will also remove all associated annotations.`)) {
+                          removeImage(image.id)
+                        }
+                      }}
+                      className="absolute top-1 left-1 p-1 bg-red-600 hover:bg-red-700 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete image"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   </div>
                 )
               })}

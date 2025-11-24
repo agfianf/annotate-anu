@@ -1,7 +1,15 @@
 # Stage 1: Development
-FROM node:20-alpine AS development
+FROM node:20 AS development
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    ca-certificates \
+    libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
 
 # Copy package files
 COPY package*.json ./
@@ -16,7 +24,7 @@ EXPOSE 5173
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 # Stage 2: Build the application
-FROM node:20-alpine AS builder
+FROM node:20 AS builder
 
 WORKDIR /app
 

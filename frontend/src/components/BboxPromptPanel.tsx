@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Loader2, X, Trash2, Square } from 'lucide-react'
 import { Button } from './ui/button'
-import type { Label, ImageData } from '@/types/annotations'
+import { PromptModeSelector } from './ui/PromptModeSelector'
+import type { Label, ImageData, PromptMode } from '@/types/annotations'
 import { sam3Client } from '@/lib/sam3-client'
 import toast from 'react-hot-toast'
 
@@ -9,12 +10,16 @@ interface BboxPromptPanelProps {
   labels: Label[]
   selectedLabelId: string | null
   currentImage: ImageData | null
+  images: ImageData[]
+  promptMode: PromptMode
+  setPromptMode: (mode: PromptMode) => void
   onAnnotationsCreated: (results: {
     boxes: Array<[number, number, number, number]>
     masks: Array<{ polygons: Array<Array<[number, number]>>; area: number }>
     scores: number[]
     annotationType: 'bbox' | 'polygon'
     labelId?: string
+    imageId?: string
   }) => void
   onClose: () => void
   promptBboxes?: Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>
@@ -26,6 +31,9 @@ type AnnotationType = 'bbox' | 'polygon'
 export function BboxPromptPanel({
   labels,
   currentImage,
+  images,
+  promptMode,
+  setPromptMode,
   onAnnotationsCreated,
   onClose,
   promptBboxes = [],
@@ -306,6 +314,22 @@ export function BboxPromptPanel({
             </label>
           </div>
         </div>
+
+        {/* Prompt Mode Selector */}
+        <PromptModeSelector
+          value={promptMode}
+          onChange={setPromptMode}
+          disabled={isLoading}
+        />
+
+        {/* Mode limitation notice for bbox-prompt */}
+        {promptMode !== 'single' && (
+          <div className="bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-3">
+            <p className="text-sm text-yellow-200">
+              <strong>Note:</strong> Bbox-prompt works best in <strong>Single Image</strong> mode since bounding boxes are specific to each image's layout. Auto-apply and batch modes require drawing bboxes for each image individually.
+            </p>
+          </div>
+        )}
 
         {/* Threshold Settings */}
         <div className="space-y-4">
