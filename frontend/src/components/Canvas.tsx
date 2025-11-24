@@ -370,6 +370,12 @@ export default function Canvas({
   // Handle keyboard events (Escape to cancel, Shift for proportional scaling, Ctrl/Cmd for adding points, Space for pan)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if user is typing in an input field
+      const target = e.target as HTMLElement
+      const isTyping = target.tagName === 'INPUT' ||
+                       target.tagName === 'TEXTAREA' ||
+                       target.isContentEditable
+
       if (e.key === 'Escape') {
         if (selectedTool === 'polygon') {
           setPolygonPoints([])
@@ -382,19 +388,26 @@ export default function Canvas({
         setIsShiftPressed(true)
       } else if (e.key === 'Control' || e.key === 'Meta') {
         setIsCtrlPressed(true)
-      } else if (e.key === ' ' && !isPanMode) {
+      } else if (e.key === ' ' && !isPanMode && !isTyping) {
         // Enable pan mode when Space is pressed (prevent repeat triggers)
+        // Only if not typing in an input field
         e.preventDefault() // Prevent page scrolling
         setIsPanMode(true)
       }
     }
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      // Check if user is typing in an input field
+      const target = e.target as HTMLElement
+      const isTyping = target.tagName === 'INPUT' ||
+                       target.tagName === 'TEXTAREA' ||
+                       target.isContentEditable
+
       if (e.key === 'Shift') {
         setIsShiftPressed(false)
       } else if (e.key === 'Control' || e.key === 'Meta') {
         setIsCtrlPressed(false)
-      } else if (e.key === ' ') {
+      } else if (e.key === ' ' && !isTyping) {
         // Disable pan mode when Space is released
         setIsPanMode(false)
         // Stop dragging if currently panning
