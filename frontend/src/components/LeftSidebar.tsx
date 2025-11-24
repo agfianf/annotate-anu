@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { MousePointer, Square, Pentagon, ZoomIn, ZoomOut, Maximize2, Undo, Redo, Keyboard } from 'lucide-react'
 import { TextPromptPanel } from './TextPromptPanel'
 import { BboxPromptPanel } from './BboxPromptPanel'
+import { ToolButton } from './ui/ToolButton'
 import type { Label, ImageData, Tool, PromptMode } from '@/types/annotations'
 
 interface LeftSidebarProps {
@@ -110,11 +111,8 @@ export function LeftSidebar({
 }: LeftSidebarProps) {
   const [activeTool, setActiveTool] = useState<ActiveTool>(null)
 
-  const tools: { id: Tool; icon: React.ReactNode; label: string }[] = [
-    { id: 'select', icon: <MousePointer className="w-5 h-5" />, label: 'Select (V)' },
-    { id: 'rectangle', icon: <Square className="w-5 h-5" />, label: 'Rectangle (R)' },
-    { id: 'polygon', icon: <Pentagon className="w-5 h-5" />, label: 'Polygon (P)' },
-  ]
+  // No longer needed - ToolButton component handles everything
+  // const tools: { id: Tool; icon: React.ReactNode; label: string }[] = [...]
 
   const handleToolClick = (tool: ActiveTool) => {
     const newActiveTool = activeTool === tool ? null : tool
@@ -154,154 +152,128 @@ export function LeftSidebar({
       {/* Icon Bar */}
       <div className="w-16 bg-gray-800 flex flex-col items-center py-4 gap-2 border-r border-gray-700">
         {/* Manual Annotation Tools */}
-        {tools.map((tool) => (
-          <button
-            key={tool.id}
-            onClick={() => onToolChange(tool.id)}
-            className={`
-              p-3 rounded transition-colors
-              ${selectedTool === tool.id
-                ? 'bg-orange-600 text-white'
-                : 'text-gray-300 hover:bg-gray-700'
-              }
-            `}
-            title={tool.label}
-          >
-            {tool.icon}
-          </button>
-        ))}
+        <ToolButton
+          icon={<MousePointer className="w-5 h-5" />}
+          tooltipTitle="Select"
+          tooltipDescription="Select annotations or drag to move them around the canvas"
+          shortcut="V"
+          onClick={() => onToolChange('select')}
+          isActive={selectedTool === 'select'}
+          activeColor="orange"
+        />
 
-        {/* Active Label Selector - only show for drawing tools */}
-        {(selectedTool === 'rectangle' || selectedTool === 'polygon') && labels.length > 0 && (
-          <div className="px-2 py-2 w-full border-t border-gray-700">
-            <div className="text-[10px] text-gray-400 mb-1.5 text-center uppercase tracking-wide">
-              Active Label
-            </div>
-            <select
-              value={selectedLabelId || ''}
-              onChange={(e) => onSelectLabel?.(e.target.value)}
-              className="w-full px-2 py-1.5 bg-gray-700 text-white text-xs rounded border-2 border-orange-500 focus:border-orange-400 focus:outline-none cursor-pointer"
-              title="Select label for drawing"
-            >
-              {!selectedLabelId && <option value="">Choose label...</option>}
-              {labels.map(label => (
-                <option key={label.id} value={label.id}>
-                  {label.name}
-                </option>
-              ))}
-            </select>
-            {selectedLabelId && (
-              <div className="flex items-center justify-center gap-1.5 mt-1.5">
-                <div
-                  className="w-3 h-3 rounded border border-gray-600"
-                  style={{ backgroundColor: labels.find(l => l.id === selectedLabelId)?.color || '#f97316' }}
-                />
-                <div className="text-[10px] text-gray-400 truncate">
-                  {labels.find(l => l.id === selectedLabelId)?.name}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        <ToolButton
+          icon={<Square className="w-5 h-5" />}
+          tooltipTitle="Rectangle"
+          tooltipDescription="Click and drag to draw rectangular bounding boxes for object annotation"
+          shortcut="R"
+          onClick={() => onToolChange('rectangle')}
+          isActive={selectedTool === 'rectangle'}
+          activeColor="orange"
+          showLabelSelector={true}
+          labels={labels}
+          selectedLabelId={selectedLabelId}
+          onSelectLabel={onSelectLabel}
+        />
+
+        <ToolButton
+          icon={<Pentagon className="w-5 h-5" />}
+          tooltipTitle="Polygon"
+          tooltipDescription="Click multiple points to draw custom polygon shapes around objects"
+          shortcut="P"
+          onClick={() => onToolChange('polygon')}
+          isActive={selectedTool === 'polygon'}
+          activeColor="orange"
+          showLabelSelector={true}
+          labels={labels}
+          selectedLabelId={selectedLabelId}
+          onSelectLabel={onSelectLabel}
+        />
 
         <div className="w-full h-px bg-gray-700 my-2" />
 
-        {/* Text-Prompt Tool */}
-        <button
+        {/* AI-Powered Tools */}
+        <ToolButton
+          icon={<TextPromptIcon className="w-5 h-5" />}
+          tooltipTitle="Text Prompt"
+          tooltipDescription="AI generates segmentation masks from text descriptions (e.g., 'person', 'car', 'tree')"
           onClick={() => handleToolClick('text-prompt')}
-          className={`
-            p-3 rounded transition-colors
-            ${activeTool === 'text-prompt'
-              ? 'bg-purple-600 text-white'
-              : 'text-gray-300 hover:bg-gray-700'
-            }
-          `}
-          title="AI Text Prompt Segmentation"
-        >
-          <TextPromptIcon className="w-5 h-5" />
-        </button>
+          isActive={activeTool === 'text-prompt'}
+          activeColor="purple"
+        />
 
-        {/* Bbox-Prompt Tool */}
-        <button
+        <ToolButton
+          icon={<BboxPromptIcon className="w-5 h-5" />}
+          tooltipTitle="Bbox Prompt"
+          tooltipDescription="Draw bounding boxes to prompt AI for precise object segmentation. Supports single, auto-apply, and batch modes"
           onClick={() => handleToolClick('bbox-prompt')}
-          className={`
-            p-3 rounded transition-colors
-            ${activeTool === 'bbox-prompt'
-              ? 'bg-blue-600 text-white'
-              : 'text-gray-300 hover:bg-gray-700'
-            }
-          `}
-          title="AI Bounding Box Segmentation"
-        >
-          <BboxPromptIcon className="w-5 h-5" />
-        </button>
+          isActive={activeTool === 'bbox-prompt'}
+          activeColor="blue"
+        />
 
         {/* Spacer to push controls to bottom */}
         <div className="flex-1" />
 
         <div className="w-full h-px bg-gray-700 my-2" />
 
-        {/* Zoom In */}
-        <button
-          onClick={onZoomIn}
+        {/* View Controls */}
+        <ToolButton
+          icon={<ZoomIn className="w-5 h-5" />}
+          tooltipTitle="Zoom In"
+          tooltipDescription="Zoom into the canvas to see more detail"
+          shortcut="+"
+          onClick={() => onZoomIn?.()}
           disabled={!onZoomIn}
-          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Zoom In (+)"
-        >
-          <ZoomIn className="w-5 h-5" />
-        </button>
+        />
 
-        {/* Zoom Out */}
-        <button
-          onClick={onZoomOut}
+        <ToolButton
+          icon={<ZoomOut className="w-5 h-5" />}
+          tooltipTitle="Zoom Out"
+          tooltipDescription="Zoom out to see more of the canvas"
+          shortcut="-"
+          onClick={() => onZoomOut?.()}
           disabled={!onZoomOut}
-          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Zoom Out (-)"
-        >
-          <ZoomOut className="w-5 h-5" />
-        </button>
+        />
 
-        {/* Autofit */}
-        <button
-          onClick={onAutofit}
+        <ToolButton
+          icon={<Maximize2 className="w-5 h-5" />}
+          tooltipTitle="Autofit"
+          tooltipDescription="Fit the entire image to the screen viewport"
+          shortcut="Ctrl+0"
+          onClick={() => onAutofit?.()}
           disabled={!onAutofit}
-          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Fit to Screen (Ctrl+0)"
-        >
-          <Maximize2 className="w-5 h-5" />
-        </button>
+        />
 
-        {/* Undo */}
-        <button
-          onClick={onUndo}
+        {/* History Controls */}
+        <ToolButton
+          icon={<Undo className="w-5 h-5" />}
+          tooltipTitle="Undo"
+          tooltipDescription="Undo your last annotation change"
+          shortcut="Ctrl+Z"
+          onClick={() => onUndo?.()}
           disabled={!canUndo || !onUndo}
-          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Undo (Ctrl+Z)"
-        >
-          <Undo className="w-5 h-5" />
-        </button>
+        />
 
-        {/* Redo */}
-        <button
-          onClick={onRedo}
+        <ToolButton
+          icon={<Redo className="w-5 h-5" />}
+          tooltipTitle="Redo"
+          tooltipDescription="Redo the previously undone change"
+          shortcut="Ctrl+Shift+Z"
+          onClick={() => onRedo?.()}
           disabled={!canRedo || !onRedo}
-          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Redo (Ctrl+Shift+Z)"
-        >
-          <Redo className="w-5 h-5" />
-        </button>
+        />
 
         <div className="w-full h-px bg-gray-700 my-2" />
 
-        {/* Keyboard Shortcuts Help */}
-        <button
-          onClick={onShowShortcuts}
+        {/* Help */}
+        <ToolButton
+          icon={<Keyboard className="w-5 h-5" />}
+          tooltipTitle="Shortcuts"
+          tooltipDescription="View all available keyboard shortcuts and hotkeys"
+          shortcut="?"
+          onClick={() => onShowShortcuts?.()}
           disabled={!onShowShortcuts}
-          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Keyboard Shortcuts (?)"
-        >
-          <Keyboard className="w-5 h-5" />
-        </button>
+        />
       </div>
 
       {/* Panel Area */}
