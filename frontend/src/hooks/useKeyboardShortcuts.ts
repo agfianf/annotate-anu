@@ -14,6 +14,7 @@ interface KeyboardShortcutsConfig {
   onZoomOut?: () => void
   onAutofit?: () => void
   onResetZoom?: () => void
+  onShowShortcuts?: () => void
   selectedTool?: Tool
 }
 
@@ -95,6 +96,12 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
       } else if (event.key === '0' && !event.ctrlKey && !event.metaKey && config.onResetZoom) {
         event.preventDefault()
         config.onResetZoom()
+      }
+
+      // Show shortcuts help
+      else if (event.key === '?' && config.onShowShortcuts) {
+        event.preventDefault()
+        config.onShowShortcuts()
       }
     }
 

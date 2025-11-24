@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MousePointer, Square, Pentagon, ZoomIn, ZoomOut, Maximize2, Undo, Redo } from 'lucide-react'
+import { MousePointer, Square, Pentagon, ZoomIn, ZoomOut, Maximize2, Undo, Redo, Keyboard } from 'lucide-react'
 import { TextPromptPanel } from './TextPromptPanel'
 import { BboxPromptPanel } from './BboxPromptPanel'
 import type { Label, ImageData, Tool, PromptMode } from '@/types/annotations'
@@ -35,6 +35,7 @@ interface LeftSidebarProps {
   onRedo?: () => void
   canUndo?: boolean
   canRedo?: boolean
+  onShowShortcuts?: () => void
 }
 
 type ActiveTool = 'text-prompt' | 'bbox-prompt' | null
@@ -103,6 +104,7 @@ export function LeftSidebar({
   onRedo,
   canUndo = false,
   canRedo = false,
+  onShowShortcuts,
 }: LeftSidebarProps) {
   const [activeTool, setActiveTool] = useState<ActiveTool>(null)
 
@@ -252,6 +254,18 @@ export function LeftSidebar({
           title="Redo (Ctrl+Shift+Z)"
         >
           <Redo className="w-5 h-5" />
+        </button>
+
+        <div className="w-full h-px bg-gray-700 my-2" />
+
+        {/* Keyboard Shortcuts Help */}
+        <button
+          onClick={onShowShortcuts}
+          disabled={!onShowShortcuts}
+          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Keyboard Shortcuts (?)"
+        >
+          <Keyboard className="w-5 h-5" />
         </button>
       </div>
 

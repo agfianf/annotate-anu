@@ -58,6 +58,7 @@ export default function Canvas({
   } | null>(null)
   const [isDraggingStage, setIsDraggingStage] = useState(false)
   const [stageDragStart, setStageDragStart] = useState<{ x: number; y: number } | null>(null)
+  const [isPanMode, setIsPanMode] = useState(false) // Space key hold-to-pan mode
 
   const SNAP_DISTANCE = 10 // pixels in original image coordinates
 
@@ -196,6 +197,17 @@ export default function Canvas({
   }
 
   const handleMouseDown = (e: any) => {
+    // If Space is held (pan mode), start panning regardless of tool or target
+    if (isPanMode) {
+      const stage = e.target.getStage()
+      const pos = stage.getPointerPosition()
+      if (pos) {
+        setIsDraggingStage(true)
+        setStageDragStart({ x: pos.x - stagePosition.x, y: pos.y - stagePosition.y })
+      }
+      return // Don't process other interactions while in pan mode
+    }
+
     // Deselect when clicking on stage or image (empty area)
     const clickedOnEmpty = e.target === e.target.getStage() || e.target.attrs?.image
     if (clickedOnEmpty && selectedTool === 'select') {
@@ -281,8 +293,8 @@ export default function Canvas({
 
     if (!pos || !stage) return
 
-    // Handle manual stage panning
-    if (isDraggingStage && stageDragStart && selectedTool === 'select') {
+    // Handle manual stage panning (works in pan mode or select mode)
+    if (isDraggingStage && stageDragStart && (isPanMode || selectedTool === 'select')) {
       const newPos = {
         x: pos.x - stageDragStart.x,
         y: pos.y - stageDragStart.y,
@@ -301,8 +313,8 @@ export default function Canvas({
     const originalX = (pos.x - stagePosition.x) / (scale * zoomLevel)
     const originalY = (pos.y - stagePosition.y) / (scale * zoomLevel)
 
-    // Update mouse position for coordinate display
-    if (selectedTool === 'rectangle' || selectedTool === 'polygon') {
+    // Update mouse position for coordinate display (hide when in pan mode)
+    if (!isPanMode && (selectedTool === 'rectangle' || selectedTool === 'polygon')) {
       setMousePosition({ x: Math.round(originalX), y: Math.round(originalY) })
 
       // Calculate position relative to container (not screen)
@@ -316,16 +328,16 @@ export default function Canvas({
       setCursorScreenPosition(null)
     }
 
-    // Check if near first point for polygon
-    if (selectedTool === 'polygon' && polygonPoints.length >= 3) {
+    // Check if near first point for polygon (not in pan mode)
+    if (!isPanMode && selectedTool === 'polygon' && polygonPoints.length >= 3) {
       const distance = calculateDistance({ x: originalX, y: originalY }, polygonPoints[0])
       setIsNearFirstPoint(distance <= SNAP_DISTANCE)
     } else {
       setIsNearFirstPoint(false)
     }
 
-    // Update rectangle preview when start point is set
-    if (selectedTool === 'rectangle' && rectangleStartPoint) {
+    // Update rectangle preview when start point is set (not in pan mode)
+    if (!isPanMode && selectedTool === 'rectangle' && rectangleStartPoint) {
       const width = originalX - rectangleStartPoint.x
       const height = originalY - rectangleStartPoint.y
       setCurrentRectangle([rectangleStartPoint.x, rectangleStartPoint.y, width, height])
@@ -355,7 +367,7 @@ export default function Canvas({
     }
   }
 
-  // Handle keyboard events (Escape to cancel, Shift for proportional scaling, Ctrl/Cmd for adding points)
+  // Handle keyboard events (Escape to cancel, Shift for proportional scaling, Ctrl/Cmd for adding points, Space for pan)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -370,6 +382,10 @@ export default function Canvas({
         setIsShiftPressed(true)
       } else if (e.key === 'Control' || e.key === 'Meta') {
         setIsCtrlPressed(true)
+      } else if (e.key === ' ' && !isPanMode) {
+        // Enable pan mode when Space is pressed (prevent repeat triggers)
+        e.preventDefault() // Prevent page scrolling
+        setIsPanMode(true)
       }
     }
 
@@ -378,6 +394,12 @@ export default function Canvas({
         setIsShiftPressed(false)
       } else if (e.key === 'Control' || e.key === 'Meta') {
         setIsCtrlPressed(false)
+      } else if (e.key === ' ') {
+        // Disable pan mode when Space is released
+        setIsPanMode(false)
+        // Stop dragging if currently panning
+        setIsDraggingStage(false)
+        setStageDragStart(null)
       }
     }
 
@@ -387,7 +409,7 @@ export default function Canvas({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [selectedTool])
+  }, [selectedTool, isPanMode])
 
   // Reset drawing states when image changes
   useEffect(() => {
@@ -635,8 +657,12 @@ export default function Canvas({
     )
   }
 
-  // Determine cursor style based on tool
+  // Determine cursor style based on tool and pan mode
   const getCursorStyle = () => {
+    // Pan mode takes priority
+    if (isPanMode) {
+      return isDraggingStage ? 'grabbing' : 'grab'
+    }
     if (selectedTool === 'rectangle' || selectedTool === 'polygon') {
       return 'crosshair'
     } else if (selectedTool === 'select') {

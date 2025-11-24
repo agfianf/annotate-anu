@@ -5,6 +5,7 @@ import Canvas from './components/Canvas'
 import Sidebar from './components/Sidebar'
 import { Modal } from './components/ui/Modal'
 import { ExportModal } from './components/ExportModal'
+import ShortcutsHelpModal from './components/ui/ShortcutsHelpModal'
 import { AIModeIndicator } from './components/ui/AIModeIndicator'
 import { useStorage } from './hooks/useStorage'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
@@ -85,6 +86,7 @@ function App() {
   const [showLabelManager, setShowLabelManager] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false)
   const [resetIncludeImages, setResetIncludeImages] = useState(false)
   const [promptBboxes, setPromptBboxes] = useState<Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>>([])
   const [isBboxPromptMode, setIsBboxPromptMode] = useState(false)
@@ -578,6 +580,7 @@ function App() {
     onZoomOut: handleZoomOut,
     onAutofit: handleAutofit,
     onResetZoom: handleResetZoom,
+    onShowShortcuts: () => setShowShortcutsModal(prev => !prev),
   })
 
   if (loading) {
@@ -651,6 +654,7 @@ function App() {
             onRedo={handleRedo}
             canUndo={canUndo}
             canRedo={canRedo}
+            onShowShortcuts={() => setShowShortcutsModal(true)}
           />
 
           {/* Canvas */}
@@ -1026,6 +1030,12 @@ function App() {
           </div>
         </div>
       </Modal>
+
+      {/* Keyboard Shortcuts Help Modal */}
+      <ShortcutsHelpModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
+      />
 
       {/* Export Modal */}
       <ExportModal
