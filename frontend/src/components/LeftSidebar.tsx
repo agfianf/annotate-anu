@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { MousePointer, Square, Pentagon } from 'lucide-react'
+import { MousePointer, Square, Pentagon, ZoomIn, ZoomOut, Maximize2, Undo, Redo } from 'lucide-react'
 import { TextPromptPanel } from './TextPromptPanel'
 import { BboxPromptPanel } from './BboxPromptPanel'
 import type { Label, ImageData, Tool, PromptMode } from '@/types/annotations'
@@ -28,6 +28,13 @@ interface LeftSidebarProps {
   onPromptBboxesChange?: (bboxes: Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>) => void
   currentAnnotations?: any[]
   onAutoApplyLoadingChange?: (loading: boolean) => void
+  onZoomIn?: () => void
+  onZoomOut?: () => void
+  onAutofit?: () => void
+  onUndo?: () => void
+  onRedo?: () => void
+  canUndo?: boolean
+  canRedo?: boolean
 }
 
 type ActiveTool = 'text-prompt' | 'bbox-prompt' | null
@@ -89,6 +96,13 @@ export function LeftSidebar({
   onPromptBboxesChange,
   currentAnnotations = [],
   onAutoApplyLoadingChange,
+  onZoomIn,
+  onZoomOut,
+  onAutofit,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }: LeftSidebarProps) {
   const [activeTool, setActiveTool] = useState<ActiveTool>(null)
 
@@ -183,6 +197,61 @@ export function LeftSidebar({
           title="Bbox-Prompt Automate"
         >
           <BboxPromptIcon className="w-5 h-5" />
+        </button>
+
+        {/* Spacer to push controls to bottom */}
+        <div className="flex-1" />
+
+        <div className="w-full h-px bg-gray-700 my-2" />
+
+        {/* Zoom In */}
+        <button
+          onClick={onZoomIn}
+          disabled={!onZoomIn}
+          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Zoom In (+)"
+        >
+          <ZoomIn className="w-5 h-5" />
+        </button>
+
+        {/* Zoom Out */}
+        <button
+          onClick={onZoomOut}
+          disabled={!onZoomOut}
+          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Zoom Out (-)"
+        >
+          <ZoomOut className="w-5 h-5" />
+        </button>
+
+        {/* Autofit */}
+        <button
+          onClick={onAutofit}
+          disabled={!onAutofit}
+          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Fit to Screen (Ctrl+0)"
+        >
+          <Maximize2 className="w-5 h-5" />
+        </button>
+
+        {/* Undo */}
+        <button
+          onClick={onUndo}
+          disabled={!canUndo || !onUndo}
+          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo className="w-5 h-5" />
+        </button>
+
+        {/* Redo */}
+        <button
+          onClick={onRedo}
+          disabled={!canRedo || !onRedo}
+          className="p-3 rounded transition-colors text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Redo (Ctrl+Shift+Z)"
+        >
+          <Redo className="w-5 h-5" />
         </button>
       </div>
 

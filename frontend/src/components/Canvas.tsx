@@ -14,6 +14,10 @@ interface CanvasProps {
   selectedAnnotation: string | null
   onSelectAnnotation: (id: string | null) => void
   promptBboxes?: Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>
+  zoomLevel?: number
+  onZoomChange?: (zoom: number) => void
+  stagePosition?: { x: number; y: number }
+  onStagePositionChange?: (position: { x: number; y: number }) => void
 }
 
 export default function Canvas({
@@ -27,6 +31,10 @@ export default function Canvas({
   selectedAnnotation,
   onSelectAnnotation,
   promptBboxes = [],
+  zoomLevel = 1,
+  onZoomChange,
+  stagePosition = { x: 0, y: 0 },
+  onStagePositionChange,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
@@ -48,6 +56,8 @@ export default function Canvas({
     x: number
     y: number
   } | null>(null)
+  const [isDraggingStage, setIsDraggingStage] = useState(false)
+  const [stageDragStart, setStageDragStart] = useState<{ x: number; y: number } | null>(null)
 
   const SNAP_DISTANCE = 10 // pixels in original image coordinates
 
@@ -69,7 +79,8 @@ export default function Canvas({
           const containerHeight = containerRef.current.offsetHeight
           const scaleX = containerWidth / img.width
           const scaleY = containerHeight / img.height
-          const newScale = Math.min(scaleX, scaleY, 1) // Don't scale up beyond 100%
+          // Remove 100% cap to allow upscaling for small images
+          const newScale = Math.min(scaleX, scaleY)
           setScale(newScale)
           setDimensions({
             width: img.width * newScale,
@@ -88,7 +99,8 @@ export default function Canvas({
         const containerHeight = containerRef.current.offsetHeight
         const scaleX = containerWidth / konvaImage.width
         const scaleY = containerHeight / konvaImage.height
-        const newScale = Math.min(scaleX, scaleY, 1)
+        // Remove 100% cap to allow upscaling for small images
+        const newScale = Math.min(scaleX, scaleY)
         setScale(newScale)
         setDimensions({
           width: konvaImage.width * newScale,
@@ -132,22 +144,73 @@ export default function Canvas({
     return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2))
   }
 
+  // Zoom constants
+  const MIN_ZOOM = 0.1
+  const MAX_ZOOM = 5
+  const ZOOM_SPEED = 1.1
+
+  // Handle mouse wheel for zooming
+  const handleWheel = (e: any) => {
+    e.evt.preventDefault()
+    if (!onZoomChange || !stageRef.current) return
+
+    const stage = stageRef.current
+    const oldScale = zoomLevel
+    const pointer = stage.getPointerPosition()
+
+    if (!pointer) return
+
+    // Calculate new zoom level
+    const direction = e.evt.deltaY > 0 ? -1 : 1
+    const newScale = direction > 0
+      ? Math.min(MAX_ZOOM, oldScale * ZOOM_SPEED)
+      : Math.max(MIN_ZOOM, oldScale / ZOOM_SPEED)
+
+    if (newScale === oldScale) return
+
+    // Calculate new position to zoom toward mouse cursor
+    const mousePointTo = {
+      x: (pointer.x - stagePosition.x) / oldScale,
+      y: (pointer.y - stagePosition.y) / oldScale,
+    }
+
+    const newPos = {
+      x: pointer.x - mousePointTo.x * newScale,
+      y: pointer.y - mousePointTo.y * newScale,
+    }
+
+    onZoomChange(newScale)
+    onStagePositionChange?.(newPos)
+  }
+
   const handleMouseDown = (e: any) => {
     // Deselect when clicking on stage or image (empty area)
     const clickedOnEmpty = e.target === e.target.getStage() || e.target.attrs?.image
     if (clickedOnEmpty && selectedTool === 'select') {
       onSelectAnnotation(null)
+      // Start manual stage panning only when clicking on empty space
+      const stage = e.target.getStage()
+      const pos = stage.getPointerPosition()
+      if (pos) {
+        setIsDraggingStage(true)
+        setStageDragStart({ x: pos.x - stagePosition.x, y: pos.y - stagePosition.y })
+      }
       return
     }
 
-    if (selectedTool === 'select') return
+    if (selectedTool === 'select') {
+      // Clicking on an annotation - disable stage dragging
+      setIsDraggingStage(false)
+      setStageDragStart(null)
+      return
+    }
 
     const stage = e.target.getStage()
     const pos = stage.getPointerPosition()
 
-    // Convert to original image coordinates
-    const originalX = pos.x / scale
-    const originalY = pos.y / scale
+    // Convert to original image coordinates (account for both zoom and autofit scale)
+    const originalX = (pos.x - stagePosition.x) / (scale * zoomLevel)
+    const originalY = (pos.y - stagePosition.y) / (scale * zoomLevel)
 
     if (selectedTool === 'rectangle') {
       if (!rectangleStartPoint) {
@@ -206,15 +269,25 @@ export default function Canvas({
 
     if (!pos || !stage) return
 
+    // Handle manual stage panning
+    if (isDraggingStage && stageDragStart && selectedTool === 'select') {
+      const newPos = {
+        x: pos.x - stageDragStart.x,
+        y: pos.y - stageDragStart.y,
+      }
+      onStagePositionChange?.(newPos)
+      return
+    }
+
     // Get Stage position in the page
     const stageBox = stage.container().getBoundingClientRect()
 
     // Get container position to calculate relative coordinates
     const containerBox = containerRef.current?.getBoundingClientRect()
 
-    // Convert to original image coordinates
-    const originalX = pos.x / scale
-    const originalY = pos.y / scale
+    // Convert to original image coordinates (account for both zoom and autofit scale)
+    const originalX = (pos.x - stagePosition.x) / (scale * zoomLevel)
+    const originalY = (pos.y - stagePosition.y) / (scale * zoomLevel)
 
     // Update mouse position for coordinate display
     if (selectedTool === 'rectangle' || selectedTool === 'polygon') {
@@ -250,6 +323,10 @@ export default function Canvas({
   const handleMouseUp = () => {
     // Rectangle creation now happens on second click in handleMouseDown
     // This function is kept for compatibility but no longer handles rectangle drag
+
+    // Stop manual stage panning on mouse up
+    setIsDraggingStage(false)
+    setStageDragStart(null)
   }
 
   const handleDoubleClick = () => {
@@ -319,6 +396,9 @@ export default function Canvas({
     node.scaleX(1)
     node.scaleY(1)
 
+    // Note: Only divide by 'scale' (autofit scale), not zoomLevel
+    // The Stage handles zoomLevel transform, so node positions are in Layer coordinates
+
     if (annotation.type === 'rectangle') {
       const updatedAnnotation: RectangleAnnotation = {
         ...annotation,
@@ -362,6 +442,9 @@ export default function Canvas({
     node.scaleX(1)
     node.scaleY(1)
 
+    // Note: Only divide by 'scale' (autofit scale), not zoomLevel
+    // The Stage handles zoomLevel transform, so node positions are in Layer coordinates
+
     if (annotation.type === 'rectangle') {
       const updatedAnnotation: RectangleAnnotation = {
         ...annotation,
@@ -385,6 +468,7 @@ export default function Canvas({
 
   const handlePolygonPointDragMove = (annotation: PolygonAnnotation, pointIndex: number, e: any) => {
     const node = e.target
+    // Note: Only divide by 'scale' (autofit scale), not zoomLevel
     const newX = node.x() / scale
     const newY = node.y() / scale
 
@@ -398,6 +482,7 @@ export default function Canvas({
 
   const handlePolygonPointDragEnd = (annotation: PolygonAnnotation, pointIndex: number, e: any) => {
     const node = e.target
+    // Note: Only divide by 'scale' (autofit scale), not zoomLevel
     const newX = node.x() / scale
     const newY = node.y() / scale
 
@@ -437,9 +522,10 @@ export default function Canvas({
     const stage = e.target.getStage()
     const pos = stage.getPointerPosition()
 
-    // Convert to original image coordinates
-    const clickX = pos.x / scale
-    const clickY = pos.y / scale
+    // Convert to original image coordinates (account for both zoom and autofit scale)
+    const totalScale = scale * zoomLevel
+    const clickX = (pos.x - stagePosition.x) / totalScale
+    const clickY = (pos.y - stagePosition.y) / totalScale
 
     const poly = annotation as PolygonAnnotation
 
@@ -543,6 +629,11 @@ export default function Canvas({
         ref={stageRef}
         width={dimensions.width}
         height={dimensions.height}
+        scaleX={zoomLevel}
+        scaleY={zoomLevel}
+        x={stagePosition.x}
+        y={stagePosition.y}
+        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -926,6 +1017,9 @@ export default function Canvas({
         const label = getLabel(annotation.labelId)
         const labelColor = label?.color || '#f97316'
 
+        // Account for both scale and zoom level, plus stage position
+        const totalScale = scale * zoomLevel
+
         return (
           <React.Fragment key="bbox-coords">
             {/* Top-left coordinate */}
@@ -934,8 +1028,8 @@ export default function Canvas({
               style={{
                 backgroundColor: labelColor,
                 opacity: 0.95,
-                left: `${offsetX + topLeft.x * scale - 20}px`,
-                top: `${offsetY + topLeft.y * scale - 30}px`,
+                left: `${offsetX + stagePosition.x + topLeft.x * totalScale - 20}px`,
+                top: `${offsetY + stagePosition.y + topLeft.y * totalScale - 30}px`,
               }}
             >
               x1={topLeft.x}, y1={topLeft.y}
@@ -946,8 +1040,8 @@ export default function Canvas({
               style={{
                 backgroundColor: labelColor,
                 opacity: 0.95,
-                left: `${offsetX + bottomRight.x * scale + 2}px`,
-                top: `${offsetY + bottomRight.y * scale + 10}px`,
+                left: `${offsetX + stagePosition.x + bottomRight.x * totalScale + 2}px`,
+                top: `${offsetY + stagePosition.y + bottomRight.y * totalScale + 10}px`,
               }}
             >
               x2={bottomRight.x}, y2={bottomRight.y}

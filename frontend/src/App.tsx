@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { LeftSidebar } from './components/LeftSidebar'
 import Canvas from './components/Canvas'
@@ -8,6 +8,7 @@ import { ExportModal } from './components/ExportModal'
 import { AIModeIndicator } from './components/ui/AIModeIndicator'
 import { useStorage } from './hooks/useStorage'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { useHistory } from './hooks/useHistory'
 import type { Tool, Annotation, ImageData, PolygonAnnotation, RectangleAnnotation, PromptMode } from './types/annotations'
 import { Copy, RotateCcw, Download, Upload, Trash2, Loader2 } from 'lucide-react'
 import './App.css'
@@ -94,6 +95,10 @@ function App() {
   })
   const [isAutoApplyLoading, setIsAutoApplyLoading] = useState(false)
 
+  // Zoom and pan state
+  const [zoomLevel, setZoomLevel] = useState(1)
+  const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 })
+
   const {
     images,
     labels,
@@ -113,6 +118,12 @@ function App() {
     removeLabel,
     resetAll,
   } = useStorage()
+
+  // History for undo/redo
+  const { recordChange, undo, redo, canUndo, canRedo } = useHistory(currentImageId)
+
+  // Track if we're in undo/redo operation to prevent re-recording
+  const isUndoingRef = useRef(false)
 
   // Set default selected label when labels are loaded
   useEffect(() => {
@@ -188,6 +199,10 @@ function App() {
     } as Annotation
 
     await addAnnotation(fullAnnotation)
+    // Record history after user action (not during undo/redo)
+    if (!isUndoingRef.current) {
+      recordChange([...currentAnnotations, fullAnnotation])
+    }
   }
 
   const handleUpdateAnnotation = async (annotation: Annotation) => {
@@ -196,6 +211,10 @@ function App() {
       updatedAt: Date.now(),
     }
     await updateAnnotation(updatedAnnotation)
+    // Record history after user action (not during undo/redo)
+    if (!isUndoingRef.current) {
+      recordChange(currentAnnotations.map(a => a.id === annotation.id ? updatedAnnotation : a))
+    }
   }
 
   const handleDeleteAnnotation = async (id: string) => {
@@ -203,12 +222,20 @@ function App() {
     if (selectedAnnotation === id) {
       setSelectedAnnotation(null)
     }
+    // Record history after user action (not during undo/redo)
+    if (!isUndoingRef.current) {
+      recordChange(currentAnnotations.filter(a => a.id !== id))
+    }
   }
 
   const handleBulkDeleteAnnotations = async (ids: string[]) => {
     await removeManyAnnotations(ids)
     if (selectedAnnotation && ids.includes(selectedAnnotation)) {
       setSelectedAnnotation(null)
+    }
+    // Record history after user action (not during undo/redo)
+    if (!isUndoingRef.current) {
+      recordChange(currentAnnotations.filter(a => !ids.includes(a.id)))
     }
   }
 
@@ -286,6 +313,14 @@ function App() {
         }
       }
     }
+
+    // Record history after AI annotations are created
+    if (!isUndoingRef.current && currentImageId) {
+      // Give a small delay for state to update
+      setTimeout(() => {
+        recordChange(annotations.filter(a => a.imageId === (results.imageId || currentImageId)))
+      }, 50)
+    }
   }
 
   // Get current image as data URL for canvas
@@ -326,6 +361,127 @@ function App() {
       setCurrentImageId(images[prevIndex].id)
     }
   }
+
+  // Zoom controls
+  const MIN_ZOOM = 0.1
+  const MAX_ZOOM = 5
+  const ZOOM_STEP = 0.1
+
+  const handleZoomIn = () => {
+    setZoomLevel(prev => {
+      const newZoom = Math.min(MAX_ZOOM, prev + ZOOM_STEP)
+
+      // Zoom toward center of viewport
+      if (currentImage) {
+        const centerX = window.innerWidth / 2
+        const centerY = window.innerHeight / 2
+
+        const mousePointTo = {
+          x: (centerX - stagePosition.x) / prev,
+          y: (centerY - stagePosition.y) / prev,
+        }
+
+        const newPos = {
+          x: centerX - mousePointTo.x * newZoom,
+          y: centerY - mousePointTo.y * newZoom,
+        }
+
+        setStagePosition(newPos)
+      }
+
+      return newZoom
+    })
+  }
+
+  const handleZoomOut = () => {
+    setZoomLevel(prev => {
+      const newZoom = Math.max(MIN_ZOOM, prev - ZOOM_STEP)
+
+      // Zoom toward center of viewport
+      if (currentImage) {
+        const centerX = window.innerWidth / 2
+        const centerY = window.innerHeight / 2
+
+        const mousePointTo = {
+          x: (centerX - stagePosition.x) / prev,
+          y: (centerY - stagePosition.y) / prev,
+        }
+
+        const newPos = {
+          x: centerX - mousePointTo.x * newZoom,
+          y: centerY - mousePointTo.y * newZoom,
+        }
+
+        setStagePosition(newPos)
+      }
+
+      return newZoom
+    })
+  }
+
+  const handleAutofit = () => {
+    setZoomLevel(1)
+    setStagePosition({ x: 0, y: 0 })
+  }
+
+  const handleResetZoom = () => {
+    setZoomLevel(1)
+    setStagePosition({ x: 0, y: 0 })
+  }
+
+  // Undo/Redo handlers
+  const handleUndo = async () => {
+    const previousState = undo()
+    if (previousState) {
+      isUndoingRef.current = true
+
+      // Restore previous state to IndexedDB
+      // We need to update all annotations for the current image
+      await Promise.all(previousState.map(annotation => updateAnnotation(annotation)))
+
+      // Also remove annotations that were added after
+      const currentIds = new Set(previousState.map(a => a.id))
+      const annotationsToRemove = currentAnnotations.filter(a => !currentIds.has(a.id))
+      if (annotationsToRemove.length > 0) {
+        await removeManyAnnotations(annotationsToRemove.map(a => a.id))
+      }
+
+      // Reset flag after a short delay to allow state to settle
+      setTimeout(() => {
+        isUndoingRef.current = false
+      }, 100)
+    }
+  }
+
+  const handleRedo = async () => {
+    const nextState = redo()
+    if (nextState) {
+      isUndoingRef.current = true
+
+      // Restore next state to IndexedDB
+      await Promise.all(nextState.map(annotation => updateAnnotation(annotation)))
+
+      // Also remove annotations that shouldn't exist
+      const nextIds = new Set(nextState.map(a => a.id))
+      const annotationsToRemove = currentAnnotations.filter(a => !nextIds.has(a.id))
+      if (annotationsToRemove.length > 0) {
+        await removeManyAnnotations(annotationsToRemove.map(a => a.id))
+      }
+
+      // Reset flag after a short delay to allow state to settle
+      setTimeout(() => {
+        isUndoingRef.current = false
+      }, 100)
+    }
+  }
+
+  // Initialize history when image changes
+  useEffect(() => {
+    if (currentImageId && currentAnnotations.length > 0) {
+      // Record initial state when switching to an image that has annotations
+      recordChange(currentAnnotations)
+    }
+  }, [currentImageId]) // Only on image change, not on every annotation change
 
   // Copy filename to clipboard
   const copyFilenameToClipboard = async () => {
@@ -375,6 +531,12 @@ function App() {
     },
     onNextImage: goToNextImage,
     onPreviousImage: goToPreviousImage,
+    onUndo: handleUndo,
+    onRedo: handleRedo,
+    onZoomIn: handleZoomIn,
+    onZoomOut: handleZoomOut,
+    onAutofit: handleAutofit,
+    onResetZoom: handleResetZoom,
   })
 
   if (loading) {
@@ -441,6 +603,13 @@ function App() {
             onPromptBboxesChange={setPromptBboxes}
             currentAnnotations={currentAnnotations}
             onAutoApplyLoadingChange={setIsAutoApplyLoading}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onAutofit={handleAutofit}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
 
           {/* Canvas */}
@@ -488,6 +657,10 @@ function App() {
                 selectedAnnotation={selectedAnnotation}
                 onSelectAnnotation={setSelectedAnnotation}
                 promptBboxes={promptBboxes}
+                zoomLevel={zoomLevel}
+                onZoomChange={setZoomLevel}
+                stagePosition={stagePosition}
+                onStagePositionChange={setStagePosition}
               />
               {/* Auto-apply loading overlay */}
               {isAutoApplyLoading && (

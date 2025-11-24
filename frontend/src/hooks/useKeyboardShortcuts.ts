@@ -8,6 +8,12 @@ interface KeyboardShortcutsConfig {
   onNewAnnotation?: () => void
   onNextImage?: () => void
   onPreviousImage?: () => void
+  onUndo?: () => void
+  onRedo?: () => void
+  onZoomIn?: () => void
+  onZoomOut?: () => void
+  onAutofit?: () => void
+  onResetZoom?: () => void
   selectedTool?: Tool
 }
 
@@ -62,6 +68,33 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
       } else if (event.key === 'd' && config.onPreviousImage) {
         event.preventDefault()
         config.onPreviousImage()
+      }
+
+      // Undo/Redo shortcuts
+      else if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'Z' && config.onRedo) {
+        event.preventDefault()
+        config.onRedo()
+      } else if ((event.ctrlKey || event.metaKey) && event.key === 'y' && config.onRedo) {
+        event.preventDefault()
+        config.onRedo()
+      } else if ((event.ctrlKey || event.metaKey) && event.key === 'z' && config.onUndo) {
+        event.preventDefault()
+        config.onUndo()
+      }
+
+      // Zoom shortcuts
+      else if ((event.key === '+' || event.key === '=') && config.onZoomIn) {
+        event.preventDefault()
+        config.onZoomIn()
+      } else if (event.key === '-' && config.onZoomOut) {
+        event.preventDefault()
+        config.onZoomOut()
+      } else if ((event.ctrlKey || event.metaKey) && event.key === '0' && config.onAutofit) {
+        event.preventDefault()
+        config.onAutofit()
+      } else if (event.key === '0' && !event.ctrlKey && !event.metaKey && config.onResetZoom) {
+        event.preventDefault()
+        config.onResetZoom()
       }
     }
 
