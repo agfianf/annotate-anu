@@ -88,6 +88,7 @@ function App() {
   const [showResetModal, setShowResetModal] = useState(false)
   const [showShortcutsModal, setShowShortcutsModal] = useState(false)
   const [resetIncludeImages, setResetIncludeImages] = useState(false)
+  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false)
   const [promptBboxes, setPromptBboxes] = useState<Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>>([])
   const [isBboxPromptMode, setIsBboxPromptMode] = useState(false)
   const [isAIPanelActive, setIsAIPanelActive] = useState(false)
@@ -581,6 +582,7 @@ function App() {
     onAutofit: handleAutofit,
     onResetZoom: handleResetZoom,
     onShowShortcuts: () => setShowShortcutsModal(prev => !prev),
+    onToggleSidebar: () => setIsRightSidebarCollapsed(prev => !prev),
   })
 
   if (loading) {
@@ -606,6 +608,7 @@ function App() {
             onClick={() => setShowExportModal(true)}
             disabled={annotations.length === 0}
             className="px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-1.5"
+            title="Export annotations to COCO JSON or YOLO format"
           >
             <Download className="w-4 h-4" />
             Export
@@ -613,6 +616,7 @@ function App() {
           <button
             onClick={() => setShowResetModal(true)}
             className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors flex items-center gap-1.5"
+            title="Reset all data (annotations and optionally images)"
           >
             <RotateCcw className="w-4 h-4" />
             Reset
@@ -620,6 +624,7 @@ function App() {
           <button
             onClick={() => setShowLabelManager(true)}
             className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded transition-colors"
+            title="Create, edit, and delete labels"
           >
             Manage Labels
           </button>
@@ -731,6 +736,8 @@ function App() {
             onBulkDeleteAnnotations={handleBulkDeleteAnnotations}
             onBulkChangeLabel={handleBulkChangeLabel}
             onToggleAnnotationVisibility={handleToggleAnnotationVisibility}
+            isCollapsed={isRightSidebarCollapsed}
+            onToggleCollapse={() => setIsRightSidebarCollapsed(prev => !prev)}
           />
         </div>
 
@@ -746,6 +753,7 @@ function App() {
             }}
             disabled={currentImageIndex <= 0 || images.length === 0}
             className="p-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+            title="Previous image (D)"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -755,7 +763,7 @@ function App() {
           {/* Thumbnails */}
           <div className="flex-1 flex gap-2 overflow-x-auto py-2">
             {/* Upload placeholder button */}
-            <label className="flex-shrink-0 cursor-pointer group">
+            <label className="flex-shrink-0 cursor-pointer group" title="Upload images to annotate">
               <div className="h-20 w-20 border-2 border-dashed border-gray-600 hover:border-orange-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-gray-900/50 hover:bg-gray-900">
                 <Upload className="w-6 h-6 text-gray-400 group-hover:text-orange-500 transition-colors" />
                 <span className="text-xs text-gray-500 group-hover:text-orange-500 transition-colors">Add</span>
@@ -805,6 +813,7 @@ function App() {
               }}
               disabled={currentImageIndex >= images.length - 1 || images.length === 0}
               className="p-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+              title="Next image (F)"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

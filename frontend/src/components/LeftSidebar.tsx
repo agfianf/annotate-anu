@@ -109,9 +109,9 @@ export function LeftSidebar({
   const [activeTool, setActiveTool] = useState<ActiveTool>(null)
 
   const tools: { id: Tool; icon: React.ReactNode; label: string }[] = [
-    { id: 'select', icon: <MousePointer className="w-5 h-5" />, label: 'Select' },
-    { id: 'rectangle', icon: <Square className="w-5 h-5" />, label: 'Rectangle' },
-    { id: 'polygon', icon: <Pentagon className="w-5 h-5" />, label: 'Polygon' },
+    { id: 'select', icon: <MousePointer className="w-5 h-5" />, label: 'Select (V)' },
+    { id: 'rectangle', icon: <Square className="w-5 h-5" />, label: 'Rectangle (R)' },
+    { id: 'polygon', icon: <Pentagon className="w-5 h-5" />, label: 'Polygon (P)' },
   ]
 
   const handleToolClick = (tool: ActiveTool) => {
@@ -181,7 +181,7 @@ export function LeftSidebar({
               : 'text-gray-300 hover:bg-gray-700'
             }
           `}
-          title="Text-Prompt Automate"
+          title="AI Text Prompt Segmentation"
         >
           <TextPromptIcon className="w-5 h-5" />
         </button>
@@ -196,7 +196,7 @@ export function LeftSidebar({
               : 'text-gray-300 hover:bg-gray-700'
             }
           `}
-          title="Bbox-Prompt Automate"
+          title="AI Bounding Box Segmentation"
         >
           <BboxPromptIcon className="w-5 h-5" />
         </button>

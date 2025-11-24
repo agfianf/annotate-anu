@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Trash2, Eye, EyeOff, ChevronDown, ChevronRight, Square as SquareIcon, Shapes, Circle, Filter, SortDesc, Sparkles } from 'lucide-react'
+import { Trash2, Eye, EyeOff, ChevronDown, ChevronRight, Square as SquareIcon, Shapes, Circle, Filter, SortDesc, Sparkles, ChevronLeft } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import type { Annotation, Label } from '../types/annotations'
 
@@ -17,6 +17,8 @@ interface SidebarProps {
   onBulkDeleteAnnotations: (ids: string[]) => void
   onBulkChangeLabel: (annotationIds: string[], newLabelId: string) => void
   onToggleAnnotationVisibility: (annotationId: string) => void
+  isCollapsed: boolean
+  onToggleCollapse: () => void
 }
 
 export default function Sidebar({
@@ -30,6 +32,8 @@ export default function Sidebar({
   onBulkDeleteAnnotations,
   onBulkChangeLabel,
   onToggleAnnotationVisibility,
+  isCollapsed,
+  onToggleCollapse,
 }: SidebarProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [expandedLabels, setExpandedLabels] = useState<Record<string, boolean>>(() => {
@@ -192,8 +196,40 @@ export default function Sidebar({
     }
   }
 
+  // Collapsed view - thin icon bar
+  if (isCollapsed) {
+    return (
+      <div className="w-12 bg-gray-800 border-l border-gray-700 flex flex-col items-center py-3 gap-3 transition-all duration-300">
+        {/* Expand Button */}
+        <button
+          onClick={onToggleCollapse}
+          className="p-2 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+          title="Expand Sidebar (Ctrl+B)"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+
+        {/* Annotations Icon with Count Badge */}
+        <div className="relative">
+          <Shapes className="w-5 h-5 text-gray-400" />
+          {annotations.length > 0 && (
+            <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-[10px] rounded-full flex items-center justify-center font-medium">
+              {annotations.length > 9 ? '9+' : annotations.length}
+            </div>
+          )}
+        </div>
+
+        {/* Label Groups Count */}
+        <div className="text-xs text-gray-400 font-medium">
+          {labels.length}
+        </div>
+      </div>
+    )
+  }
+
+  // Expanded view - full sidebar
   return (
-    <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col">
+    <div className="w-80 bg-gray-800 border-l border-gray-700 flex flex-col transition-all duration-300">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-700">
         <div className="flex items-center justify-between">
@@ -201,9 +237,18 @@ export default function Sidebar({
             <Shapes className="w-5 h-5" />
             Annotations
           </h2>
-          <div className="text-sm text-gray-400">
-            {annotations.length} total
-            {autoAnnotationsCount > 0 && ` • ${autoAnnotationsCount} auto`}
+          <div className="flex items-center gap-2">
+            <div className="text-sm text-gray-400">
+              {annotations.length} total
+              {autoAnnotationsCount > 0 && ` • ${autoAnnotationsCount} auto`}
+            </div>
+            <button
+              onClick={onToggleCollapse}
+              className="p-1 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+              title="Collapse Sidebar (Ctrl+B)"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -225,6 +270,7 @@ export default function Sidebar({
                     ? 'bg-purple-600 text-white'
                     : 'bg-gray-700 text-gray-400 hover:bg-gray-650'
                 }`}
+                title="Show all annotations"
               >
                 All
               </button>
@@ -235,6 +281,7 @@ export default function Sidebar({
                     ? 'bg-purple-600 text-white'
                     : 'bg-gray-700 text-gray-400 hover:bg-gray-650'
                 }`}
+                title="Show only manual annotations"
               >
                 Manual
               </button>
@@ -245,6 +292,7 @@ export default function Sidebar({
                     ? 'bg-purple-600 text-white'
                     : 'bg-gray-700 text-gray-400 hover:bg-gray-650'
                 }`}
+                title="Show only AI-generated annotations"
               >
                 <Sparkles className="w-3 h-3" />
                 Auto
@@ -262,6 +310,7 @@ export default function Sidebar({
               value={sortMode}
               onChange={(e) => setSortMode(e.target.value as SortMode)}
               className="w-full px-3 py-1.5 bg-gray-700 text-white text-xs rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+              title="Sort annotations by different criteria"
             >
               <option value="newest">Newest First</option>
               <option value="confidence-high">Confidence: High → Low</option>
@@ -275,6 +324,7 @@ export default function Sidebar({
               <button
                 onClick={() => setShowThresholdModal(true)}
                 className="flex-1 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors flex items-center justify-center gap-1.5"
+                title="Remove AI annotations below confidence threshold"
               >
                 <Sparkles className="w-3 h-3" />
                 Remove Low ({lowConfidenceCount})
@@ -283,6 +333,7 @@ export default function Sidebar({
             <button
               onClick={() => setShowDeleteAllConfirm(true)}
               className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition-colors flex items-center justify-center gap-1.5"
+              title="Delete all annotations for this image"
             >
               <Trash2 className="w-3 h-3" />
               Delete All
@@ -304,6 +355,7 @@ export default function Sidebar({
               value={bulkChangeLabelId}
               onChange={(e) => setBulkChangeLabelId(e.target.value)}
               className="flex-1 px-3 py-1.5 bg-gray-700 text-white text-sm rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+              title="Select new label for selected annotations"
             >
               <option value="">Change label...</option>
               {labels.map(label => (
@@ -316,6 +368,7 @@ export default function Sidebar({
               onClick={handleBulkLabelChange}
               disabled={!bulkChangeLabelId}
               className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm rounded transition-colors"
+              title="Apply label change to selected annotations"
             >
               Apply
             </button>
@@ -325,6 +378,7 @@ export default function Sidebar({
           <button
             onClick={handleBulkDelete}
             className="w-full px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors flex items-center justify-center gap-2"
+            title="Delete all selected annotations (Del)"
           >
             <Trash2 className="w-4 h-4" />
             Delete {selectedIds.size}
@@ -334,6 +388,7 @@ export default function Sidebar({
           <button
             onClick={() => setSelectedIds(new Set())}
             className="w-full px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors"
+            title="Deselect all annotations"
           >
             Clear Selection
           </button>
@@ -364,6 +419,7 @@ export default function Sidebar({
                       <button
                         onClick={() => toggleSelectAllForLabel(label.id)}
                         className="p-1 hover:bg-gray-600 rounded transition-colors"
+                        title={allSelected ? 'Deselect all in this label' : 'Select all in this label'}
                       >
                         <div
                           className={`w-4 h-4 border-2 rounded flex items-center justify-center ${
@@ -387,6 +443,7 @@ export default function Sidebar({
                     <button
                       onClick={() => toggleLabelExpanded(label.id)}
                       className="p-1 hover:bg-gray-600 rounded transition-colors text-gray-400"
+                      title={isExpanded ? 'Collapse label group' : 'Expand label group'}
                     >
                       {isExpanded ? (
                         <ChevronDown className="w-4 h-4" />
@@ -421,7 +478,7 @@ export default function Sidebar({
                     <button
                       onClick={() => toggleLabelVisibility(label.id)}
                       className="p-1 hover:bg-gray-600 rounded transition-colors text-gray-400 hover:text-white"
-                      title="Toggle visibility for all annotations with this label"
+                      title="Toggle visibility for all annotations in this label"
                     >
                       <Eye className="w-4 h-4" />
                     </button>
@@ -451,6 +508,7 @@ export default function Sidebar({
                               <button
                                 onClick={() => toggleSelection(ann.id)}
                                 className="p-1 hover:bg-gray-600 rounded transition-colors"
+                                title={isSelected ? 'Deselect annotation' : 'Select annotation'}
                               >
                                 <div
                                   className={`w-4 h-4 border-2 rounded flex items-center justify-center ${
@@ -476,6 +534,7 @@ export default function Sidebar({
                               <button
                                 onClick={() => onSelectAnnotation(ann.id)}
                                 className="flex-1 text-left text-sm text-gray-300 hover:text-white transition-colors flex items-center gap-1"
+                                title="Select and focus this annotation"
                               >
                                 {ann.isAutoGenerated && (
                                   <Sparkles className="w-3 h-3 text-purple-400" />
@@ -492,7 +551,7 @@ export default function Sidebar({
                               <button
                                 onClick={() => onToggleAnnotationVisibility(ann.id)}
                                 className="p-1 hover:bg-gray-600 rounded transition-colors text-gray-400 hover:text-white"
-                                title={isVisible ? 'Hide annotation' : 'Show annotation'}
+                                title={isVisible ? 'Hide annotation on canvas' : 'Show annotation on canvas'}
                               >
                                 {isVisible ? (
                                   <Eye className="w-4 h-4" />
@@ -505,7 +564,7 @@ export default function Sidebar({
                               <button
                                 onClick={() => onDeleteAnnotation(ann.id)}
                                 className="p-1 hover:bg-red-600 rounded transition-colors text-gray-400 hover:text-white"
-                                title="Delete annotation"
+                                title="Delete annotation (Del)"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>

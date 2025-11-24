@@ -65,6 +65,13 @@ const ShortcutsHelpModal: React.FC<ShortcutsHelpModalProps> = ({ isOpen, onClose
       ],
     },
     {
+      title: '🎛️ UI Controls',
+      shortcuts: [
+        { keys: ['Ctrl', 'B'], description: 'Toggle annotations sidebar' },
+        { keys: ['⌘', 'B'], description: 'Toggle annotations sidebar (Mac)' },
+      ],
+    },
+    {
       title: '🎨 Canvas Interactions',
       shortcuts: [
         { keys: ['Space'], description: 'Pan mode (hold and drag)' },

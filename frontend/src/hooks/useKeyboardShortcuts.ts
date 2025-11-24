@@ -15,6 +15,7 @@ interface KeyboardShortcutsConfig {
   onAutofit?: () => void
   onResetZoom?: () => void
   onShowShortcuts?: () => void
+  onToggleSidebar?: () => void
   selectedTool?: Tool
 }
 
@@ -102,6 +103,12 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
       else if (event.key === '?' && config.onShowShortcuts) {
         event.preventDefault()
         config.onShowShortcuts()
+      }
+
+      // Toggle sidebar
+      else if ((event.ctrlKey || event.metaKey) && event.key === 'b' && config.onToggleSidebar) {
+        event.preventDefault()
+        config.onToggleSidebar()
       }
     }
 
