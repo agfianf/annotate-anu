@@ -3,33 +3,37 @@ import { Database, Download, Keyboard, Layers, Sparkles, Target } from 'lucide-r
 const features = [
   {
     icon: Sparkles,
-    title: 'AI-Powered Segmentation',
-    description: 'SAM3 integration for automatic object detection with text or bounding box prompts',
+    title: 'Automated Segmentation',
+    description:
+      'SAM3 inference runs locally or via optimized endpoints to auto-segment objects instantly',
   },
   {
     icon: Target,
-    title: 'Manual Precision Tools',
-    description: 'Rectangle, polygon, and point annotation tools with pixel-perfect control',
+    title: 'Manual Precision',
+    description:
+      "Need to tweak the AI's work? Use our pixel-perfect pen, rectangle, and polygon tools for fine-tuning",
   },
   {
     icon: Layers,
-    title: 'Batch Processing',
-    description: 'Annotate multiple images at once with batch SAM3 inference',
-  },
-  {
-    icon: Download,
-    title: 'Export Flexibility',
-    description: 'Export to COCO JSON, YOLO format, or ZIP archives with one click',
+    title: 'Batch Workflow',
+    description:
+      'Load hundreds of images at once. Our interface handles batch processing without browser lag',
   },
   {
     icon: Keyboard,
-    title: 'Keyboard Shortcuts',
-    description: 'Lightning-fast workflow with comprehensive keyboard shortcuts',
+    title: 'Lightning Shortcuts',
+    description:
+      'Designed for power users. Keep your hands on the keyboard and annotate without breaking flow',
+  },
+  {
+    icon: Download,
+    title: 'Export Ready',
+    description: 'Export to COCO JSON, YOLO format, or ZIP archives with one click',
   },
   {
     icon: Database,
-    title: 'Browser-Based Storage',
-    description: 'Your data stays local with IndexedDB - no server uploads required',
+    title: 'Local-First Storage',
+    description: 'Your data stays local with IndexedDB - no server uploads, total privacy',
   },
 ]
 
@@ -39,11 +43,9 @@ function Features() {
       <div className="container mx-auto">
         {/* Section Header */}
         <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-            Everything You Need to Annotate
-          </h2>
+          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">Feature Deep Dive</h2>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Powerful features designed for speed, accuracy, and ease of use
+            Everything you need for professional-grade annotation workflows
           </p>
         </div>
 

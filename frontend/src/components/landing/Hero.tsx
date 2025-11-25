@@ -14,13 +14,13 @@ function Hero() {
           {/* Text Content */}
           <div className="text-center md:text-left">
             <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight">
-              Annotate Faster.
-              <br />
-              <span className="text-emerald-600">Annotate Smarter.</span>
+              Annotate at the Speed of AI.{' '}
+              <span className="text-emerald-600">100% Private.</span>
             </h1>
             <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-              AnnotateANU combines powerful AI-assisted segmentation with lightning-fast manual annotation
-              tools. Free, open-source, and built for speed.
+              AnnotateANU combines the power of Meta's SAM3 for instant segmentation with a strictly
+              local-first architecture. Your images never leave your browser. Free, open-source, and built
+              for high-performance computer vision workflows.
             </p>
 
             {/* CTA Buttons */}
@@ -30,7 +30,7 @@ function Hero() {
                 onClick={handleGetStarted}
                 className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl"
               >
-                Get Started
+                Start Annotating Now
               </Link>
               <a
                 href="https://github.com/yourusername/annotateau"
@@ -42,8 +42,8 @@ function Hero() {
               </a>
             </div>
 
-            {/* Quick info badges */}
-            <div className="mt-8 flex flex-wrap gap-4 justify-center md:justify-start text-sm text-gray-600">
+            {/* Trust Badges */}
+            <div className="mt-8 flex flex-wrap gap-6 justify-center md:justify-start text-sm text-gray-600">
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
                   <path
@@ -52,7 +52,7 @@ function Hero() {
                     clipRule="evenodd"
                   />
                 </svg>
-                <span>Free & Open Source</span>
+                <span className="font-medium">100% Open Source</span>
               </div>
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
@@ -62,17 +62,12 @@ function Hero() {
                     clipRule="evenodd"
                   />
                 </svg>
-                <span>Browser-Based</span>
+                <span className="font-medium">No Server Uploads</span>
               </div>
               <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <span>SAM3-Powered AI</span>
+                <span className="font-medium">Powered by</span>
+                <img src="/meta-logo.png" alt="Meta" className="h-5" />
+                <span className="font-medium">SAM3</span>
               </div>
             </div>
           </div>

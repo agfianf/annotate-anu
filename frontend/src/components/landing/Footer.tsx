@@ -1,9 +1,29 @@
 import { Github } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { markAsVisited } from '../../lib/navigation'
 
 function Footer() {
+  const handleGetStarted = () => {
+    markAsVisited()
+  }
+
   return (
-    <footer className="bg-gray-900 text-gray-400 py-12 px-4">
+    <footer className="bg-gray-900 text-gray-400 py-16 px-4">
       <div className="container mx-auto">
+        {/* CTA Section */}
+        <div className="text-center mb-16 pb-12 border-b border-gray-800">
+          <h3 className="text-3xl md:text-4xl font-bold text-white mb-6">
+            Ready to speed up your CV pipeline?
+          </h3>
+          <Link
+            to="/app"
+            onClick={handleGetStarted}
+            className="inline-block px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl"
+          >
+            Get Started - It's Free
+          </Link>
+        </div>
+
         <div className="grid md:grid-cols-3 gap-8 mb-8">
           {/* Brand */}
           <div>
@@ -68,7 +88,7 @@ function Footer() {
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-sm">
-            &copy; {new Date().getFullYear()} AnnotateANU. Released under the MIT License.
+            &copy; {new Date().getFullYear()} AnnotateANU. Built for the Computer Vision Community.
           </p>
           <div className="flex items-center gap-4">
             <a

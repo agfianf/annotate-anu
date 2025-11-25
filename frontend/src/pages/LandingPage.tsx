@@ -3,6 +3,7 @@ import Footer from '../components/landing/Footer'
 import Hero from '../components/landing/Hero'
 import HowItWorks from '../components/landing/HowItWorks'
 import Navigation from '../components/landing/Navigation'
+import Roadmap from '../components/landing/Roadmap'
 
 function LandingPage() {
   return (
@@ -11,6 +12,7 @@ function LandingPage() {
       <Hero />
       <Features />
       <HowItWorks />
+      <Roadmap />
       <Footer />
     </div>
   )
