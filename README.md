@@ -113,10 +113,10 @@ make docker-up
 
 We are constantly evolving. Here's what's shipping next to AnnotateANU:
 
-### 🔌 Bring Your Own Model (BYOM)
+#### 🔌 Bring Your Own Model (BYOM)
 Connect your existing custom models via API. Pre-label your images using your own weights to bootstrap the annotation process even faster.
 
-### ☁️ Enterprise Storage Integration
+#### ☁️ Enterprise Storage Integration
 Move beyond browser storage. We're adding native integration for MinIO and S3-compatible object storage, allowing you to pull and sync datasets directly from your cloud buckets.
 
 
