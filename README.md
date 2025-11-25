@@ -38,23 +38,17 @@
 
 ## ✨ Features
 
-**⚡ Automated Segmentation**
-SAM3 inference runs locally or via optimized endpoints to auto-segment objects instantly. Use text prompts or bounding boxes to get pixel-perfect masks in milliseconds.
+- **⚡ Automated Segmentation**: SAM3 inference runs locally or via optimized endpoints to auto-segment objects instantly. Use text prompts or bounding boxes to get pixel-perfect masks in milliseconds.
 
-**🎯 Manual Precision**
-Need to tweak the AI's work? Use our pixel-perfect pen, rectangle, and polygon tools for fine-tuning your annotations with complete control.
+- **🎯 Manual Precision**: Need to tweak the AI's work? Use our pixel-perfect pen, rectangle, and polygon tools for fine-tuning your annotations with complete control.
 
-**📦 Batch Workflow**
-Load hundreds of images at once. Our interface handles batch processing without browser lag, making large dataset annotation a breeze.
+- **📦 Batch Workflow**: Load hundreds of images at once. Our interface handles batch processing without browser lag, making large dataset annotation a breeze.
 
-**⌨️ Lightning Shortcuts**
-Designed for power users. Keep your hands on the keyboard and annotate without breaking flow with comprehensive keyboard shortcuts.
+- **⌨️ Lightning Shortcuts**: Designed for power users. Keep your hands on the keyboard and annotate without breaking flow with comprehensive keyboard shortcuts.
 
-**💾 Export Ready**
-Export to COCO JSON, YOLO format, or ZIP archives with one click. Industry-standard formats ready for your ML pipelines.
+- **💾 Export Ready**: Export to COCO JSON, YOLO format, or ZIP archives with one click. Industry-standard formats ready for your ML pipelines.
 
-**🔒 Local-First Storage**
-Your data stays local with IndexedDB - no server uploads, total privacy. All processing happens in your browser or on your local backend.
+- **🔒 Local-First Storage**: Your data stays local with IndexedDB - no server uploads, total privacy. All processing happens in your browser or on your local backend.
 
 ## Architecture
 
