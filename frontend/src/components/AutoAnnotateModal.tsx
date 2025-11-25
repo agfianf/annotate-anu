@@ -106,7 +106,7 @@ export function AutoAnnotateModal({
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Mode Selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-3">
+          <label className="block text-sm font-medium text-gray-800 mb-3">
             Annotation Mode
           </label>
           <div className="space-y-2">
@@ -117,11 +117,11 @@ export function AutoAnnotateModal({
                 value="text"
                 checked={mode === 'text'}
                 onChange={(e) => setMode(e.target.value as AnnotationMode)}
-                className="w-4 h-4 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-800"
+                className="w-4 h-4 text-purple-600 focus:ring-purple-500 focus:ring-offset-white"
               />
               <div>
-                <div className="text-white font-medium">Text Prompt</div>
-                <div className="text-sm text-gray-400">
+                <div className="text-gray-900 font-medium">Text Prompt</div>
+                <div className="text-sm text-gray-700">
                   Describe what to detect (e.g., "truck plate", "person")
                 </div>
               </div>
@@ -135,11 +135,11 @@ export function AutoAnnotateModal({
                 checked={mode === 'bbox'}
                 onChange={(e) => setMode(e.target.value as AnnotationMode)}
                 disabled
-                className="w-4 h-4 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-800"
+                className="w-4 h-4 text-purple-600 focus:ring-purple-500 focus:ring-offset-white"
               />
               <div>
-                <div className="text-white font-medium">Bounding Box</div>
-                <div className="text-sm text-gray-400">
+                <div className="text-gray-900 font-medium">Bounding Box</div>
+                <div className="text-sm text-gray-700">
                   Use existing annotations as prompts (coming soon)
                 </div>
               </div>
@@ -150,7 +150,7 @@ export function AutoAnnotateModal({
         {/* Text Prompt Input */}
         {mode === 'text' && (
           <div>
-            <label htmlFor="textPrompt" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="textPrompt" className="block text-sm font-medium text-gray-800 mb-2">
               Text Prompt
             </label>
             <input
@@ -159,10 +159,10 @@ export function AutoAnnotateModal({
               value={textPrompt}
               onChange={(e) => setTextPrompt(e.target.value)}
               placeholder="e.g., truck plate, person, car"
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-white/80 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               disabled={isLoading}
             />
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-gray-600">
               Describe the object(s) you want to detect in the image
             </p>
           </div>
@@ -170,7 +170,7 @@ export function AutoAnnotateModal({
 
         {/* Label Selection */}
         <div>
-          <label htmlFor="labelSelect" className="block text-sm font-medium text-gray-300 mb-2">
+          <label htmlFor="labelSelect" className="block text-sm font-medium text-gray-800 mb-2">
             Assign Label
           </label>
           <div className="relative">
@@ -178,7 +178,7 @@ export function AutoAnnotateModal({
               id="labelSelect"
               value={labelId}
               onChange={(e) => setLabelId(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none"
+              className="w-full px-3 py-2 bg-white/80 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none"
               disabled={isLoading}
             >
               <option value="">Select a label...</option>
@@ -195,14 +195,14 @@ export function AutoAnnotateModal({
               />
             )}
           </div>
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-gray-600">
             All detected objects will be tagged with this label
           </p>
         </div>
 
         {/* Annotation Type Selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-3">
+          <label className="block text-sm font-medium text-gray-800 mb-3">
             Annotation Type
           </label>
           <div className="space-y-2">
@@ -213,12 +213,12 @@ export function AutoAnnotateModal({
                 value="polygon"
                 checked={annotationType === 'polygon'}
                 onChange={(e) => setAnnotationType(e.target.value as AnnotationType)}
-                className="w-4 h-4 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-800"
+                className="w-4 h-4 text-purple-600 focus:ring-purple-500 focus:ring-offset-white"
                 disabled={isLoading}
               />
               <div>
-                <div className="text-white font-medium">Polygon / Mask</div>
-                <div className="text-sm text-gray-400">
+                <div className="text-gray-900 font-medium">Polygon / Mask</div>
+                <div className="text-sm text-gray-700">
                   Precise segmentation masks following object contours
                 </div>
               </div>
@@ -231,12 +231,12 @@ export function AutoAnnotateModal({
                 value="bbox"
                 checked={annotationType === 'bbox'}
                 onChange={(e) => setAnnotationType(e.target.value as AnnotationType)}
-                className="w-4 h-4 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-800"
+                className="w-4 h-4 text-purple-600 focus:ring-purple-500 focus:ring-offset-white"
                 disabled={isLoading}
               />
               <div>
-                <div className="text-white font-medium">Bounding Box</div>
-                <div className="text-sm text-gray-400">
+                <div className="text-gray-900 font-medium">Bounding Box</div>
+                <div className="text-sm text-gray-700">
                   Rectangular boxes around detected objects
                 </div>
               </div>
@@ -247,7 +247,7 @@ export function AutoAnnotateModal({
         {/* Threshold Settings */}
         <div className="space-y-4">
           <div>
-            <label htmlFor="threshold" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="threshold" className="block text-sm font-medium text-gray-800 mb-2">
               Detection Threshold: {threshold.toFixed(2)}
             </label>
             <input
@@ -261,13 +261,13 @@ export function AutoAnnotateModal({
               className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-600"
               disabled={isLoading}
             />
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-gray-600">
               Higher values = more confident detections (fewer results)
             </p>
           </div>
 
           <div>
-            <label htmlFor="maskThreshold" className="block text-sm font-medium text-gray-300 mb-2">
+            <label htmlFor="maskThreshold" className="block text-sm font-medium text-gray-800 mb-2">
               Mask Threshold: {maskThreshold.toFixed(2)}
             </label>
             <input
@@ -281,14 +281,14 @@ export function AutoAnnotateModal({
               className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-600"
               disabled={isLoading}
             />
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-gray-600">
               Controls segmentation mask precision
             </p>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-700">
+        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200/50">
           <Button variant="outline" onClick={onClose} type="button" disabled={isLoading}>
             Cancel
           </Button>

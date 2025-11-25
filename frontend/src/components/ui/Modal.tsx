@@ -42,15 +42,15 @@ export function Modal({
       onClick={handleBackdropClick}
     >
       <div
-        className={`bg-gray-800 rounded-lg shadow-xl ${maxWidthClasses[maxWidth]} w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col`}
+        className={`glass-strong rounded-lg shadow-2xl ${maxWidthClasses[maxWidth]} w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col`}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-white">{title}</h2>
+        <div className="px-6 py-4 border-b border-gray-200/50 flex items-center justify-between">
+          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
           {showCloseButton && !blocking && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors"
+              className="text-gray-600 hover:text-gray-900 transition-colors"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />

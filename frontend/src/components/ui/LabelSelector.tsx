@@ -29,7 +29,7 @@ export function LabelSelector({
       <select
         value={selectedLabelId || ''}
         onChange={(e) => handleSelect(e.target.value)}
-        className="w-full px-2 py-1.5 text-sm bg-white/90 border border-gray-300/50 rounded focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-gray-900 cursor-pointer"
+        className="w-full px-2 py-1.5 text-sm bg-white/90 border border-gray-300/50 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-gray-900 cursor-pointer"
       >
         {labels.map((label) => (
           <option key={label.id} value={label.id}>

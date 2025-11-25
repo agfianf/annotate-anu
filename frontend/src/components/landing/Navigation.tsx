@@ -19,10 +19,18 @@ function Navigation() {
     <nav className="sticky top-0 z-50 glass border-b border-gray-200">
       <div className="container mx-auto px-4 py-3 flex items-center justify-between">
         {/* Logo */}
-        <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold text-emerald-600">AnnotateAnu</span>
-          <span className="text-xs text-gray-500 hidden sm:inline">by ANU</span>
-        </div>
+        <Link
+          to="/"
+          className="flex items-center gap-3 group transition-all hover:opacity-90"
+          aria-label="AnnotateANU Home"
+        >
+          <img
+            src="/logo.png"
+            alt="AnnotateANU Logo"
+            className="h-12 w-12 sm:h-14 sm:w-14 transition-transform group-hover:scale-105"
+          />
+          <span className="text-2xl font-bold text-emerald-600">AnnotateANU</span>
+        </Link>
 
         {/* Desktop Nav Links */}
         <div className="hidden md:flex items-center gap-6">

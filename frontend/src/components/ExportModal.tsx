@@ -79,23 +79,23 @@ export function ExportModal({
       <div className="space-y-6">
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4">
-          <div className="bg-gray-700/50 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-orange-500">{totalImages}</div>
-            <div className="text-sm text-gray-400">Images</div>
+          <div className="glass rounded-lg p-3 text-center border border-gray-200/30">
+            <div className="text-2xl font-bold text-emerald-500">{totalImages}</div>
+            <div className="text-sm text-gray-700">Images</div>
           </div>
-          <div className="bg-gray-700/50 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-orange-500">{totalAnnotations}</div>
-            <div className="text-sm text-gray-400">Annotations</div>
+          <div className="glass rounded-lg p-3 text-center border border-gray-200/30">
+            <div className="text-2xl font-bold text-emerald-500">{totalAnnotations}</div>
+            <div className="text-sm text-gray-700">Annotations</div>
           </div>
-          <div className="bg-gray-700/50 rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold text-orange-500">{totalLabels}</div>
-            <div className="text-sm text-gray-400">Labels</div>
+          <div className="glass rounded-lg p-3 text-center border border-gray-200/30">
+            <div className="text-2xl font-bold text-emerald-500">{totalLabels}</div>
+            <div className="text-sm text-gray-700">Labels</div>
           </div>
         </div>
 
         {/* Format Selection */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-3">
+          <label className="block text-sm font-medium text-gray-800 mb-3">
             Export Format
           </label>
           <div className="space-y-2">
@@ -106,11 +106,11 @@ export function ExportModal({
                 value="coco"
                 checked={format === 'coco'}
                 onChange={(e) => setFormat(e.target.value as ExportFormat)}
-                className="w-4 h-4 text-orange-600 focus:ring-orange-500 focus:ring-offset-gray-800"
+                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white"
               />
               <div>
-                <div className="text-white font-medium">COCO JSON</div>
-                <div className="text-sm text-gray-400">
+                <div className="text-gray-900 font-medium">COCO JSON</div>
+                <div className="text-sm text-gray-700">
                   Common Objects in Context format (single JSON file)
                 </div>
               </div>
@@ -123,11 +123,11 @@ export function ExportModal({
                 value="yolo"
                 checked={format === 'yolo'}
                 onChange={(e) => setFormat(e.target.value as ExportFormat)}
-                className="w-4 h-4 text-orange-600 focus:ring-orange-500 focus:ring-offset-gray-800"
+                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white"
               />
               <div>
-                <div className="text-white font-medium">YOLO</div>
-                <div className="text-sm text-gray-400">
+                <div className="text-gray-900 font-medium">YOLO</div>
+                <div className="text-sm text-gray-700">
                   One .txt file per image + classes.txt
                 </div>
               </div>
@@ -137,7 +137,7 @@ export function ExportModal({
 
         {/* Path Prefix */}
         <div>
-          <label htmlFor="pathPrefix" className="block text-sm font-medium text-gray-300 mb-2">
+          <label htmlFor="pathPrefix" className="block text-sm font-medium text-gray-800 mb-2">
             Image Path Prefix (optional)
           </label>
           <input
@@ -146,9 +146,9 @@ export function ExportModal({
             value={pathPrefix}
             onChange={(e) => setPathPrefix(e.target.value)}
             placeholder={format === 'coco' ? '/dataset/images/' : ''}
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            className="w-full px-3 py-2 bg-white/80 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
           />
-          <p className="mt-1 text-xs text-gray-400">
+          <p className="mt-1 text-xs text-gray-600">
             {format === 'coco'
               ? 'Prefix to add before image filenames in the export (e.g., "/dataset/images/")'
               : 'Path prefix for image references (mainly for documentation)'}
@@ -157,25 +157,25 @@ export function ExportModal({
 
         {/* Preview */}
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-800 mb-2">
             Format Preview
           </label>
-          <div className="bg-gray-900 rounded-lg p-4 max-h-64 overflow-y-auto">
-            <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap">
+          <div className="bg-gray-800 rounded-lg p-4 max-h-64 overflow-y-auto border border-gray-300/50">
+            <pre className="text-xs text-gray-100 font-mono whitespace-pre-wrap">
               {getPreview()}
             </pre>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-700">
+        <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200/50">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button
             onClick={handleExport}
             disabled={totalAnnotations === 0}
-            className="bg-orange-600 hover:bg-orange-700"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             <Download className="w-4 h-4 mr-2" />
             Export {format.toUpperCase()}

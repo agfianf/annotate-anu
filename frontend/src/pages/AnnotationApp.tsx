@@ -617,15 +617,20 @@ function AnnotationApp() {
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Link
             to="/"
-            className="p-2 hover:bg-emerald-50 rounded-lg transition-colors text-gray-600 hover:text-emerald-600"
+            className="flex items-center gap-2 hover:opacity-90 transition-opacity group"
             title="Return to home"
+            aria-label="AnnotateANU - Return to home"
           >
-            <Home className="w-5 h-5" />
+            <img
+              src="/logo.png"
+              alt="AnnotateANU"
+              className="h-10 w-10 transition-transform group-hover:scale-105"
+            />
+            <span className="text-xl font-bold text-emerald-600">AnnotateANU</span>
           </Link>
-          <h1 className="text-xl font-semibold text-gray-900">AnnotateAnu</h1>
         </div>
         <div className="flex items-center gap-3">
           {images.length > 0 && (
@@ -864,18 +869,18 @@ function AnnotationApp() {
             }
           }}
         >
-          <div className="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-700 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-white">
+          <div className="glass-strong rounded-lg shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200/50 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">
                 Label Management
                 {labels.length === 0 && (
-                  <span className="ml-2 text-sm text-orange-500">(Create at least one label)</span>
+                  <span className="ml-2 text-sm text-emerald-600">(Create at least one label)</span>
                 )}
               </h2>
               {labels.length > 0 && (
                 <button
                   onClick={() => setShowLabelManager(false)}
-                  className="text-gray-400 hover:text-white"
+                  className="text-gray-600 hover:text-gray-900"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -889,16 +894,16 @@ function AnnotationApp() {
                 {labels.map(label => (
                   <div
                     key={label.id}
-                    className="flex items-center gap-3 p-3 bg-gray-700 rounded-lg"
+                    className="flex items-center gap-3 p-3 glass rounded-lg border border-gray-200/30"
                   >
                     <div
                       className="w-6 h-6 rounded"
                       style={{ backgroundColor: label.color }}
                     />
-                    <span className="flex-1 text-white">{label.name}</span>
+                    <span className="flex-1 text-gray-900">{label.name}</span>
                     <button
                       onClick={() => removeLabel(label.id)}
-                      className="text-red-400 hover:text-red-300 text-sm"
+                      className="text-red-600 hover:text-red-700 text-sm"
                     >
                       Delete
                     </button>
@@ -925,18 +930,18 @@ function AnnotationApp() {
                 }}
                 className="mt-6 space-y-3"
               >
-                <h3 className="text-white font-medium">Add New Label</h3>
+                <h3 className="text-gray-900 font-medium">Add New Label</h3>
                 <input
                   type="text"
                   name="name"
                   placeholder="Label name"
                   required
-                  className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:border-orange-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-white/80 text-gray-900 rounded border border-gray-300 focus:border-emerald-500 focus:outline-none"
                 />
 
                 {/* Color Palette Grid */}
                 <div>
-                  <label className="text-sm text-gray-400 mb-2 block">Choose Color</label>
+                  <label className="text-sm text-gray-700 mb-2 block">Choose Color</label>
                   <div className="grid grid-cols-5 gap-2">
                     {PRESET_COLORS.map((color) => (
                       <button
@@ -945,7 +950,7 @@ function AnnotationApp() {
                         onClick={() => setSelectedColor(color)}
                         className={`w-10 h-10 rounded transition-all ${
                           selectedColor === color
-                            ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-800 scale-110'
+                            ? 'ring-2 ring-emerald-600 ring-offset-2 ring-offset-white scale-110'
                             : 'hover:scale-105'
                         }`}
                         style={{ backgroundColor: color }}
@@ -957,7 +962,7 @@ function AnnotationApp() {
 
                 <button
                   type="submit"
-                  className="w-full px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors"
+                  className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors"
                 >
                   Add Label
                 </button>
@@ -978,12 +983,12 @@ function AnnotationApp() {
           maxWidth="md"
         >
           <div className="text-center space-y-4">
-            <div className="text-gray-300">
+            <div className="text-gray-800">
               You need to create at least one label before annotating images.
             </div>
             <button
               onClick={() => setShowLabelManager(true)}
-              className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded transition-colors"
+              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors"
             >
               Create Labels
             </button>
@@ -1002,34 +1007,34 @@ function AnnotationApp() {
         maxWidth="md"
       >
         <div className="space-y-4">
-          <div className="bg-red-900/20 border border-red-700 rounded-lg p-4">
-            <p className="text-red-400 font-medium">⚠️ Warning: This action cannot be undone!</p>
+          <div className="bg-red-50/80 border border-red-300 rounded-lg p-4">
+            <p className="text-red-700 font-medium">⚠️ Warning: This action cannot be undone!</p>
           </div>
-          <p className="text-gray-300">
+          <p className="text-gray-800">
             Are you sure you want to reset? This will permanently delete:
           </p>
-          <ul className="list-disc list-inside text-gray-400 space-y-1">
+          <ul className="list-disc list-inside text-gray-700 space-y-1">
             <li>All annotations</li>
             <li>All labels (will reset to defaults)</li>
             <li>Tool configuration</li>
-            {resetIncludeImages && <li className="text-red-400 font-medium">All loaded images</li>}
+            {resetIncludeImages && <li className="text-red-700 font-medium">All loaded images</li>}
           </ul>
-          <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
+          <label className="flex items-center gap-2 text-gray-800 cursor-pointer">
             <input
               type="checkbox"
               checked={resetIncludeImages}
               onChange={(e) => setResetIncludeImages(e.target.checked)}
-              className="w-4 h-4 text-orange-600 focus:ring-orange-500 focus:ring-offset-gray-800"
+              className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white"
             />
             Also clear loaded images
           </label>
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-700">
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200/50">
             <button
               onClick={() => {
                 setShowResetModal(false)
                 setResetIncludeImages(false)
               }}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+              className="px-4 py-2 glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
             >
               Cancel
             </button>

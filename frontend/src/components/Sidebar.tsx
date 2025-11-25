@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Trash2, Eye, EyeOff, ChevronDown, ChevronRight, Square as SquareIcon, Shapes, Circle, Filter, SortDesc, Sparkles, ChevronLeft } from 'lucide-react'
 import { Modal } from './ui/Modal'
 import type { Annotation, Label } from '../types/annotations'
@@ -609,96 +610,102 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Delete All Confirmation Modal */}
-      <Modal
-        isOpen={showDeleteAllConfirm}
-        onClose={() => setShowDeleteAllConfirm(false)}
-        title="Delete All Annotations"
-        maxWidth="md"
-      >
-        <div className="space-y-4">
-          <p className="text-gray-700">
-            Are you sure you want to delete all {annotations.length} annotations for this image?
-          </p>
-          <p className="text-red-400 text-sm">This action cannot be undone.</p>
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setShowDeleteAllConfirm(false)}
-              className="px-4 py-2 bg-white hover:bg-gray-200 text-gray-900 rounded transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleDeleteAll}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-gray-900 rounded transition-colors"
-            >
-              Delete All
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Low Confidence Threshold Modal */}
-      <Modal
-        isOpen={showThresholdModal}
-        onClose={() => setShowThresholdModal(false)}
-        title="Remove Low Confidence Annotations"
-        maxWidth="md"
-      >
-        <div className="space-y-4">
-          <p className="text-gray-700">
-            Remove auto-generated annotations with confidence below the threshold.
-          </p>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-700">
-                Confidence Threshold
-              </label>
-              <span className="text-orange-500 font-medium">
-                {Math.round(confidenceThreshold * 100)}%
-              </span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={confidenceThreshold}
-              onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
-              className="w-full"
-            />
-            <div className="flex justify-between text-xs text-gray-600">
-              <span>0%</span>
-              <span>50%</span>
-              <span>100%</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded p-3">
-            <p className="text-sm text-gray-700">
-              <span className="font-medium text-red-400">{lowConfidenceCount}</span> annotations
-              will be removed (below {Math.round(confidenceThreshold * 100)}%)
+      {/* Delete All Confirmation Modal - Rendered via Portal */}
+      {createPortal(
+        <Modal
+          isOpen={showDeleteAllConfirm}
+          onClose={() => setShowDeleteAllConfirm(false)}
+          title="Delete All Annotations"
+          maxWidth="md"
+        >
+          <div className="space-y-4">
+            <p className="text-gray-800">
+              Are you sure you want to delete all {annotations.length} annotations for this image?
             </p>
+            <p className="text-red-700 text-sm font-medium">This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteAllConfirm(false)}
+                className="px-4 py-2 glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+              >
+                Delete All
+              </button>
+            </div>
           </div>
+        </Modal>,
+        document.body
+      )}
 
-          <div className="flex justify-end gap-3">
-            <button
-              onClick={() => setShowThresholdModal(false)}
-              className="px-4 py-2 bg-white hover:bg-gray-200 text-gray-900 rounded transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleRemoveLowConfidence}
-              disabled={lowConfidenceCount === 0}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-gray-900 rounded transition-colors"
-            >
-              Remove {lowConfidenceCount}
-            </button>
+      {/* Low Confidence Threshold Modal - Rendered via Portal */}
+      {createPortal(
+        <Modal
+          isOpen={showThresholdModal}
+          onClose={() => setShowThresholdModal(false)}
+          title="Remove Low Confidence Annotations"
+          maxWidth="md"
+        >
+          <div className="space-y-4">
+            <p className="text-gray-800">
+              Remove auto-generated annotations with confidence below the threshold.
+            </p>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-800">
+                  Confidence Threshold
+                </label>
+                <span className="text-emerald-600 font-medium">
+                  {Math.round(confidenceThreshold * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={confidenceThreshold}
+                onChange={(e) => setConfidenceThreshold(parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-gray-700">
+                <span>0%</span>
+                <span>50%</span>
+                <span>100%</span>
+              </div>
+            </div>
+
+            <div className="glass rounded p-3 border border-gray-200/30">
+              <p className="text-sm text-gray-800">
+                <span className="font-medium text-red-600">{lowConfidenceCount}</span> annotations
+                will be removed (below {Math.round(confidenceThreshold * 100)}%)
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowThresholdModal(false)}
+                className="px-4 py-2 glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRemoveLowConfidence}
+                disabled={lowConfidenceCount === 0}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded transition-colors"
+              >
+                Remove {lowConfidenceCount}
+              </button>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>,
+        document.body
+      )}
     </div>
   )
 }

@@ -94,8 +94,8 @@ const ShortcutsHelpModal: React.FC<ShortcutsHelpModalProps> = ({ isOpen, onClose
       <div className="flex items-center gap-1 flex-wrap">
         {keys.map((key, index) => (
           <React.Fragment key={index}>
-            {index > 0 && <span className="text-gray-500 text-xs">+</span>}
-            <kbd className="px-2 py-1 text-xs font-semibold text-gray-200 bg-gray-700 border border-gray-600 rounded shadow-sm min-w-[28px] text-center">
+            {index > 0 && <span className="text-gray-600 text-xs">+</span>}
+            <kbd className="px-2 py-1 text-xs font-semibold text-gray-800 bg-white/70 border border-gray-300 rounded shadow-sm min-w-[28px] text-center">
               {key}
             </kbd>
           </React.Fragment>
@@ -109,14 +109,14 @@ const ShortcutsHelpModal: React.FC<ShortcutsHelpModalProps> = ({ isOpen, onClose
       <div className="space-y-6 p-4">
         {shortcutCategories.map((category, categoryIndex) => (
           <div key={categoryIndex}>
-            <h3 className="text-sm font-semibold text-orange-400 mb-3">{category.title}</h3>
+            <h3 className="text-sm font-semibold text-emerald-600 mb-3">{category.title}</h3>
             <div className="space-y-2">
               {category.shortcuts.map((shortcut, shortcutIndex) => (
                 <div
                   key={shortcutIndex}
-                  className="flex items-center justify-between py-2 px-3 rounded hover:bg-gray-700/50 transition-colors"
+                  className="flex items-center justify-between py-2 px-3 rounded hover:bg-white/40 transition-colors"
                 >
-                  <span className="text-sm text-gray-300">{shortcut.description}</span>
+                  <span className="text-sm text-gray-800">{shortcut.description}</span>
                   {renderKeys(shortcut.keys)}
                 </div>
               ))}
@@ -125,9 +125,9 @@ const ShortcutsHelpModal: React.FC<ShortcutsHelpModalProps> = ({ isOpen, onClose
         ))}
       </div>
 
-      <div className="border-t border-gray-700 mt-4 pt-4 px-4 pb-2">
-        <p className="text-xs text-gray-500 text-center">
-          Press <kbd className="px-1.5 py-0.5 text-xs bg-gray-700 border border-gray-600 rounded">?</kbd> anytime to toggle this help
+      <div className="border-t border-gray-200/50 mt-4 pt-4 px-4 pb-2">
+        <p className="text-xs text-gray-700 text-center">
+          Press <kbd className="px-1.5 py-0.5 text-xs bg-white/70 border border-gray-300 rounded text-gray-800">?</kbd> anytime to toggle this help
         </p>
       </div>
     </Modal>

@@ -51,24 +51,24 @@ export function ImageSelectorModal({
           <div className="flex gap-2">
             <button
               onClick={selectAll}
-              className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+              className="px-3 py-1.5 text-sm glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
             >
               Select All
             </button>
             <button
               onClick={selectNone}
-              className="px-3 py-1.5 text-sm bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+              className="px-3 py-1.5 text-sm glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
             >
               Select None
             </button>
           </div>
-          <div className="text-sm text-gray-400">
+          <div className="text-sm text-gray-700">
             {selectedIds.size} of {images.length} selected
           </div>
         </div>
 
         {/* Image list */}
-        <div className="max-h-96 overflow-y-auto space-y-2 border border-gray-700 rounded p-3">
+        <div className="max-h-96 overflow-y-auto space-y-2 border border-gray-200/50 rounded p-3 bg-white/30">
           {images.map((image) => {
             const isSelected = selectedIds.has(image.id)
             const imageUrl = URL.createObjectURL(image.blob)
@@ -79,12 +79,12 @@ export function ImageSelectorModal({
                 onClick={() => toggleImage(image.id)}
                 className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
                   isSelected
-                    ? 'bg-orange-600/20 border border-orange-600/50'
-                    : 'bg-gray-800 border border-gray-700 hover:bg-gray-700'
+                    ? 'bg-emerald-100/60 border border-emerald-400/50'
+                    : 'bg-white/60 border border-gray-300 hover:bg-white/80'
                 }`}
               >
                 <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center ${
-                  isSelected ? 'bg-orange-600 border-orange-600' : 'border-gray-500'
+                  isSelected ? 'bg-emerald-600 border-emerald-600' : 'border-gray-400'
                 }`}>
                   {isSelected && <Check className="w-3 h-3 text-white" />}
                 </div>
@@ -95,8 +95,8 @@ export function ImageSelectorModal({
                   onLoad={() => URL.revokeObjectURL(imageUrl)}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-white truncate">{image.name}</div>
-                  <div className="text-xs text-gray-400">
+                  <div className="text-sm font-medium text-gray-900 truncate">{image.name}</div>
+                  <div className="text-xs text-gray-700">
                     {image.width} × {image.height}
                   </div>
                 </div>
@@ -109,14 +109,14 @@ export function ImageSelectorModal({
         <div className="flex justify-end gap-3 pt-2">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+            className="px-4 py-2 glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
           >
             Cancel
           </button>
           <button
             onClick={handleConfirm}
             disabled={selectedIds.size === 0}
-            className="px-4 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
           >
             Process {selectedIds.size} Image{selectedIds.size !== 1 ? 's' : ''}
           </button>

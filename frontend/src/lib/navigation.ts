@@ -1,5 +1,5 @@
 /**
- * Navigation and localStorage utilities for AnnotateAnu
+ * Navigation and localStorage utilities for AnnotateANU
  */
 
 const VISITED_KEY = 'annotateau-visited';

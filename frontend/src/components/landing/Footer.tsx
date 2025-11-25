@@ -7,7 +7,14 @@ function Footer() {
         <div className="grid md:grid-cols-3 gap-8 mb-8">
           {/* Brand */}
           <div>
-            <h3 className="text-white font-bold text-xl mb-4">AnnotateAnu</h3>
+            <div className="flex items-center gap-3 mb-4">
+              <img
+                src="/logo.png"
+                alt="AnnotateANU Logo"
+                className="h-10 w-10"
+              />
+              <h3 className="text-white font-bold text-xl">AnnotateANU</h3>
+            </div>
             <p className="text-sm leading-relaxed">
               Free, open-source annotation platform powered by SAM3 AI and built for speed.
             </p>
@@ -61,7 +68,7 @@ function Footer() {
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-sm">
-            &copy; {new Date().getFullYear()} AnnotateAnu. Released under the MIT License.
+            &copy; {new Date().getFullYear()} AnnotateANU. Released under the MIT License.
           </p>
           <div className="flex items-center gap-4">
             <a

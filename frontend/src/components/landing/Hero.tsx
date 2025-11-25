@@ -19,7 +19,7 @@ function Hero() {
               <span className="text-emerald-600">Annotate Smarter.</span>
             </h1>
             <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-              AnnotateAnu combines powerful AI-assisted segmentation with lightning-fast manual annotation
+              AnnotateANU combines powerful AI-assisted segmentation with lightning-fast manual annotation
               tools. Free, open-source, and built for speed.
             </p>
 
