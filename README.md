@@ -1,24 +1,71 @@
-# SAM3 Annotation Platform
+<div align="center">
+  <img src="assets/logo.png" alt="AnnotateANU Logo" width="200"/>
 
-A modern, full-stack annotation platform combining **SAM3 AI-powered segmentation** with an intuitive **React-based annotation interface**. Inspired by T-REX Label and MakeSense.ai.
+  # AnnotateANU
 
-## Features
+  ### Annotate at the Speed of AI. 100% Private.
 
-### Backend (SAM3 FastAPI)
-- Text prompt inference for object segmentation
-- Bounding box-based segmentation
-- Batch image processing
-- GPU acceleration support
-- RESTful API with OpenAPI documentation
+  <p>
+    AnnotateANU combines the power of Meta's SAM3 for instant segmentation with a strictly local-first architecture.<br/>
+    Your images never leave your browser. Free, open-source, and built for high-performance computer vision workflows.
+  </p>
 
-### Frontend (React Annotation Platform)
-- **Local-First Storage** - All data stored in browser (IndexedDB), works offline, complete privacy
-- **Manual Annotation Tools** - Rectangle, polygon, and point drawing with full editing
-- **AI-Assisted Segmentation** - Text and bounding box prompts with single/auto-apply/batch modes
-- **Smart Management** - Filter by type, sort by confidence, bulk operations
-- **Export Ready** - COCO JSON and YOLO format export
-- **Keyboard Shortcuts** - Fast navigation and tool switching
-- **Modern UI** - Responsive canvas with zoom, pan, and Tailwind CSS styling
+  [![Open Source](https://img.shields.io/badge/Open%20Source-100%25-brightgreen)](https://github.com/yourusername/annotateau)
+  [![Privacy](https://img.shields.io/badge/Privacy-No%20Server%20Uploads-blue)](https://github.com/yourusername/annotateau)
+  [![Powered by SAM3](https://img.shields.io/badge/Powered%20by-Meta%20SAM3-0467DF)](https://huggingface.co/facebook/sam3)
+
+  [Get Started](#quick-start) · [View Demo](https://annotateau.example.com) · [Report Bug](https://github.com/yourusername/annotateau/issues)
+
+</div>
+
+---
+
+## 📚 Table of Contents
+
+- [Why Choose AnnotateANU?](#why-choose-annotatanu)
+- [Features](#-features)
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+- [Development Commands](#development-commands)
+- [API Documentation](#api-documentation)
+- [Tech Stack](#tech-stack)
+- [GPU Support](#gpu-support)
+- [Roadmap](#-roadmap---coming-soon)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#-contributing)
+
+---
+
+## Why Choose AnnotateANU?
+
+### ⚡ AI-Powered Precision
+Don't waste hours clicking points. Our integration with SAM3 (Segment Anything Model 3) allows for automatic object detection via text prompts or simple bounding boxes. Get pixel-perfect masks in milliseconds.
+
+### 🔒 Privacy by Design
+We utilize IndexedDB for browser-based storage. Your dataset remains strictly local on your machine. We do not upload your images to any server, ensuring total data sovereignty and zero latency.
+
+### 🛠️ Flexible & Export Ready
+Whether you need Bounding Boxes or Polygon Segmentation, we support it. Export instantly to industry standards: COCO JSON, YOLO format, or ZIP archives with a single click.
+
+## ✨ Features
+
+### ⚡ Automated Segmentation
+SAM3 inference runs locally or via optimized endpoints to auto-segment objects instantly. Use text prompts or bounding boxes to get pixel-perfect masks in milliseconds.
+
+### 🎯 Manual Precision
+Need to tweak the AI's work? Use our pixel-perfect pen, rectangle, and polygon tools for fine-tuning your annotations with complete control.
+
+### 📦 Batch Workflow
+Load hundreds of images at once. Our interface handles batch processing without browser lag, making large dataset annotation a breeze.
+
+### ⌨️ Lightning Shortcuts
+Designed for power users. Keep your hands on the keyboard and annotate without breaking flow with comprehensive keyboard shortcuts.
+
+### 💾 Export Ready
+Export to COCO JSON, YOLO format, or ZIP archives with one click. Industry-standard formats ready for your ML pipelines.
+
+### 🔒 Local-First Storage
+Your data stays local with IndexedDB - no server uploads, total privacy. All processing happens in your browser or on your local backend.
 
 ## Architecture
 
@@ -234,16 +281,23 @@ deploy:
 
 Batch processing recommended for multiple images.
 
-## Future Enhancements
+## 🚀 Roadmap - Coming Soon
 
-- [ ] CVAT integration for advanced labeling
+We are constantly evolving. Here's what's shipping next to AnnotateANU:
+
+### 🔌 Bring Your Own Model (BYOM)
+Connect your existing custom models via API. Pre-label your images using your own weights to bootstrap the annotation process even faster.
+
+### ☁️ Enterprise Storage Integration
+Move beyond browser storage. We're adding native integration for MinIO and S3-compatible object storage, allowing you to pull and sync datasets directly from your cloud buckets.
+
+### 📋 Additional Planned Features
 - [ ] Pascal VOC export format (COCO and YOLO already supported)
-- [ ] Multi-user collaboration and cloud sync
 - [ ] Annotation history and versioning with persistent undo/redo
 - [ ] Video annotation support
+- [ ] Multi-user collaboration
 - [ ] Project management and datasets
-- [ ] User authentication and authorization
-- [ ] Custom model integration (bring your own segmentation model)
+- [ ] CVAT integration for advanced labeling
 
 ## Troubleshooting
 
@@ -270,16 +324,34 @@ Ensure backend is running and accessible:
 curl http://localhost:8000/api/v1/sam3/health
 ```
 
-## Contributing
+## 🤝 Contributing
+
+We welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, we'd love your help.
 
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Submit a pull request
+4. Commit your changes (`git commit -m 'Add some amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
 
-## License
+Want to influence what we build next? Join our community on GitHub and share your ideas!
 
-MIT
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+  <p><strong>Ready to speed up your CV pipeline?</strong></p>
+  <p>© 2025 AnnotateANU. Built for the Computer Vision Community.</p>
+  <p>
+    <a href="https://github.com/yourusername/annotateau">GitHub</a> ·
+    <a href="https://annotateau.example.com">Website</a> ·
+    <a href="https://github.com/yourusername/annotateau/issues">Issues</a>
+  </p>
+</div>
 
 ## References
 
