@@ -1,11 +1,17 @@
 .PHONY: help dev install clean \
         backend-install backend-run backend-test backend-format backend-lint \
         frontend-install frontend-dev frontend-build \
-        docker-up docker-down docker-logs docker-build docker-restart docker-shell
+        docker-up docker-down docker-logs docker-build docker-restart docker-shell \
+        turbo-dev turbo-build turbo-lint
 
 help:
-	@echo "SAM3 Annotation Platform - Available Commands"
+	@echo "SAM3 Annotation Platform - Turborepo Monorepo"
 	@echo "=============================================="
+	@echo ""
+	@echo "Turborepo Commands (Recommended):"
+	@echo "  turbo-dev        - Run all apps in dev mode with Turbo"
+	@echo "  turbo-build      - Build all apps with Turbo caching"
+	@echo "  turbo-lint       - Lint all apps"
 	@echo ""
 	@echo "Development:"
 	@echo "  dev              - Start both backend and frontend in development mode"
@@ -32,64 +38,85 @@ help:
 	@echo "  docker-restart   - Restart services (usage: make docker-restart service=backend|frontend)"
 	@echo "  docker-shell     - Open shell in container (usage: make docker-shell service=backend|frontend)"
 
+# Turborepo commands
+turbo-dev:
+	@echo "Starting all apps with Turborepo..."
+	npm run dev
+
+turbo-build:
+	@echo "Building all apps with Turborepo..."
+	npm run build
+
+turbo-lint:
+	@echo "Linting all apps with Turborepo..."
+	npm run lint
+
 # Development
 dev:
 	@echo "Starting development environment..."
 	@echo "This will start both backend and frontend services using Docker Compose"
 	docker-compose up
 
-install: backend-install frontend-install
+install:
+	@echo "Installing root dependencies..."
+	npm install
+	@echo "Installing workspace dependencies..."
+	npm install --workspaces
 	@echo "✓ All dependencies installed"
 
 clean:
 	@echo "Cleaning cache and build files..."
 	@echo "Cleaning backend..."
-	@cd backend && find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	@cd backend && find . -type f -name "*.pyc" -delete 2>/dev/null || true
-	@cd backend && find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
-	@cd backend && find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
+	@cd apps/api-inference && find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	@cd apps/api-inference && find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	@cd apps/api-inference && find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	@cd apps/api-inference && find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
 	@echo "Cleaning frontend..."
-	@cd frontend && rm -rf node_modules dist .vite 2>/dev/null || true
+	@cd apps/web && rm -rf dist .vite 2>/dev/null || true
+	@echo "Cleaning packages..."
+	@cd packages/shared-types && rm -rf dist 2>/dev/null || true
+	@echo "Cleaning root..."
+	@rm -rf node_modules 2>/dev/null || true
 	@echo "✓ Cleanup complete"
 
 # Backend commands
 backend-install:
 	@echo "Installing backend dependencies..."
-	@cd backend && uv venv || true
-	@cd backend && uv pip install git+https://github.com/huggingface/transformers.git
-	@cd backend && uv sync
+	@cd apps/api-inference && uv venv || true
+	@cd apps/api-inference && uv pip install git+https://github.com/huggingface/transformers.git
+	@cd apps/api-inference && uv sync
 	@echo "✓ Backend dependencies installed"
 
 backend-run:
 	@echo "Starting SAM3 API..."
-	@cd backend/src && PYTHONPATH=. uv run python app/main.py
+	@cd apps/api-inference/src && PYTHONPATH=. uv run python app/main.py
 
 backend-test:
 	@echo "Running backend tests..."
-	@cd backend && uv run pytest src/tests/ -v
+	@cd apps/api-inference && uv run pytest src/tests/ -v
 
 backend-format:
 	@echo "Formatting backend code..."
-	@cd backend && uv run ruff check --fix src/
-	@cd backend && uv run ruff format src/
+	@cd apps/api-inference && uv run ruff check --fix src/
+	@cd apps/api-inference && uv run ruff format src/
 
 backend-lint:
 	@echo "Linting backend code..."
-	@cd backend && uv run ruff check src/
+	@cd apps/api-inference && uv run ruff check src/
 
 # Frontend commands
 frontend-install:
 	@echo "Installing frontend dependencies..."
-	@cd frontend && npm install
+	@cd apps/web && npm install
 	@echo "✓ Frontend dependencies installed"
 
 frontend-dev:
 	@echo "Starting frontend dev server..."
-	@cd frontend && npm run dev
+	@cd apps/web && npm run dev
 
 frontend-build:
 	@echo "Building frontend for production..."
-	@cd frontend && npm run build
+	@cd apps/web && npm run build
 
 # Docker commands
 docker-up:
