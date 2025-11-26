@@ -105,7 +105,7 @@ HF_TOKEN=hf_your_token_here
 ```bash
 # 1. Setup environment
 cp apps/api-inference/.env.example apps/api-inference/.env
-# Edit backend/.env and add your HF_TOKEN
+# Edit apps/api-inference/.env and add your HF_TOKEN
 
 # 2. Start all services
 make docker-up
