@@ -52,19 +52,26 @@
 
 ## Architecture
 
+AnnotateANU is a **Turborepo monorepo** with shared TypeScript types and optimized build caching:
+
 ```
-sam3-app/
-├── backend/                 # FastAPI SAM3 inference API
-│   ├── src/app/
-│   ├── Dockerfile
-│   ├── pyproject.toml
-│   └── README.md
-├── frontend/                # React annotation platform
-│   ├── src/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── README.md
-├── docker-compose.yml       # Orchestrates both services
+sam3-app/                    # Turborepo Monorepo
+├── apps/
+│   ├── web/                 # React annotation interface
+│   │   ├── src/
+│   │   ├── Dockerfile
+│   │   └── package.json
+│   └── api-inference/       # FastAPI SAM3 backend
+│       ├── src/app/
+│       ├── Dockerfile
+│       └── pyproject.toml
+├── packages/
+│   ├── shared-types/        # Shared TypeScript API types
+│   │   └── src/
+│   └── tsconfig/            # Shared TypeScript configs
+├── turbo.json               # Turborepo pipeline config
+├── package.json             # Root workspace config
+├── docker-compose.yml       # Orchestrates all services
 ├── Makefile                 # Development commands
 └── README.md
 ```
@@ -85,11 +92,11 @@ SAM3 is a gated model. You must:
 1. Create account: https://huggingface.co/join
 2. Request access: https://huggingface.co/facebook/sam3
 3. Generate token: https://huggingface.co/settings/tokens
-4. Add to backend/.env:
+4. Add to apps/api-inference/.env:
 
 ```bash
-cp backend/.env.example backend/.env
-# Edit backend/.env and add:
+cp apps/api-inference/.env.example apps/api-inference/.env
+# Edit apps/api-inference/.env and add:
 HF_TOKEN=hf_your_token_here
 ```
 
@@ -97,7 +104,7 @@ HF_TOKEN=hf_your_token_here
 
 ```bash
 # 1. Setup environment
-cp backend/.env.example backend/.env
+cp apps/api-inference/.env.example apps/api-inference/.env
 # Edit backend/.env and add your HF_TOKEN
 
 # 2. Start all services
