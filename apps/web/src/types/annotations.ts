@@ -132,35 +132,16 @@ export interface COCODataset {
   categories: COCOCategory[]
 }
 
-// SAM3 types
-export interface SAM3TextPromptRequest {
-  image: File
-  text_prompt: string
-  threshold?: number
-  return_visualization?: boolean
-}
+// SAM3 types - re-exported from shared package
+export type {
+  SAM3Response,
+  SAM3BatchResponse,
+  InferenceResult,
+  BatchInferenceResult,
+  MaskPolygon,
+  BoundingBox,
+  APIResponse
+} from '@sam3/shared-types'
 
-export interface SAM3BboxPromptRequest {
-  image: File
-  bounding_boxes: Array<[number, number, number, number, number]> // [x1, y1, x2, y2, label]
-  threshold?: number
-  return_visualization?: boolean
-}
-
-export interface SAM3Mask {
-  polygons: Array<Array<[number, number]>>
-  area: number
-}
-
-export interface SAM3Response {
-  data: {
-    num_objects: number
-    boxes: Array<[number, number, number, number]>
-    scores: number[]
-    masks: SAM3Mask[]
-    processing_time_ms: number
-    visualization_base64?: string
-  }
-  message: string
-  status_code: number
-}
+// Alias for backward compatibility
+export type SAM3Mask = import('@sam3/shared-types').MaskPolygon

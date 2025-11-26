@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { SAM3Response } from '@/types/annotations'
+import type { SAM3Response } from '@sam3/shared-types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
