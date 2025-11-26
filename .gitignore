@@ -8,14 +8,14 @@ wheels/
 
 # Virtual environments
 .venv
-backend/.venv
+apps/api-inference/.venv
 
 # Environment variables
 .env
 .secret
-backend/.env
-backend/.secret
-frontend/.env
+apps/api-inference/.env
+apps/api-inference/.secret
+apps/web/.env
 
 # IDEs
 .vscode/
@@ -28,13 +28,18 @@ frontend/.env
 .DS_Store
 Thumbs.db
 
-# Frontend (Node/Vite)
+# Frontend (Node/Vite/Turborepo)
 node_modules/
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/build/
+apps/web/node_modules/
+apps/web/dist/
+apps/web/.vite/
+apps/web/build/
+packages/*/node_modules/
+packages/*/dist/
 *.tsbuildinfo
+
+# Turborepo
+.turbo
 
 # Logs
 *.log
@@ -44,8 +49,10 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Build outputs
-backend/dist/
-backend/build/
+apps/api-inference/dist/
+apps/api-inference/build/
+dist/
+build/
 
 # Test coverage
 coverage/
