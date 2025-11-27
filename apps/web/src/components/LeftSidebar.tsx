@@ -171,7 +171,16 @@ export function LeftSidebar({
           tooltipTitle="Select"
           tooltipDescription="Select annotations or drag to move them around the canvas"
           shortcut="V"
-          onClick={() => onToolChange('select')}
+          onClick={() => {
+            // Close bbox-prompt panel when manually switching to select
+            if (activeTool === 'bbox-prompt') {
+              setActiveTool(null)
+              if (onAIPanelActiveChange) onAIPanelActiveChange(false)
+              if (onBboxPromptModeChange) onBboxPromptModeChange(false)
+              if (onPromptBboxesChange) onPromptBboxesChange([])
+            }
+            onToolChange('select')
+          }}
           isActive={selectedTool === 'select'}
           activeColor="emerald"
         />
@@ -182,10 +191,16 @@ export function LeftSidebar({
           tooltipDescription="Click and drag to draw rectangular bounding boxes for object annotation"
           shortcut="R"
           onClick={() => {
-            // Close text-prompt panel when switching to rectangle
+            // Close AI panels when manually switching to rectangle
             if (activeTool === 'text-prompt') {
               setActiveTool(null)
               if (onAIPanelActiveChange) onAIPanelActiveChange(false)
+            }
+            if (activeTool === 'bbox-prompt') {
+              setActiveTool(null)
+              if (onAIPanelActiveChange) onAIPanelActiveChange(false)
+              if (onBboxPromptModeChange) onBboxPromptModeChange(false)
+              if (onPromptBboxesChange) onPromptBboxesChange([])
             }
             onToolChange('rectangle')
           }}

@@ -109,13 +109,6 @@ function AnnotationApp() {
   const [zoomLevel, setZoomLevel] = useState(1)
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 })
 
-  // Clear bbox prompt mode when switching to manual annotation tools
-  useEffect(() => {
-    if (selectedTool === 'rectangle' || selectedTool === 'polygon' || selectedTool === 'select') {
-      setIsBboxPromptMode(false)
-    }
-  }, [selectedTool])
-
   const {
     images,
     labels,
@@ -519,6 +512,13 @@ function AnnotationApp() {
   // Clear selection when navigating between images
   useEffect(() => {
     setSelectedAnnotation(null)
+  }, [currentImageId])
+
+  // Clear prompt bboxes when changing images to avoid confusion
+  useEffect(() => {
+    if (isBboxPromptMode) {
+      setPromptBboxes([])
+    }
   }, [currentImageId])
 
   // Get current image index for display
