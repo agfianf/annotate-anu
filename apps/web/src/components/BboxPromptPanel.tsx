@@ -233,7 +233,7 @@ export function BboxPromptPanel({
                   return (
                     <div
                       key={bbox.id}
-                      className="p-2 bg-gray-600 rounded space-y-1.5"
+                      className="p-2 glass-strong rounded space-y-1.5 shadow-md"
                     >
                       {/* Bbox info and delete button */}
                       <div className="flex items-center justify-between">

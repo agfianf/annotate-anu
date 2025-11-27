@@ -125,18 +125,44 @@ export function useStorage() {
   }, [])
 
   // Reset all data
-  const resetAll = useCallback(async (clearImages: boolean = false) => {
+  const resetAll = useCallback(async (options: {
+    clearAnnotations?: boolean
+    clearLabels?: boolean
+    clearImages?: boolean
+    clearToolConfig?: boolean
+  } = {}) => {
     try {
-      // Always clear annotations and labels
-      await annotationStorage.clear()
-      await labelStorage.clear()
+      // Default to clearing everything if no options provided (backward compatibility)
+      const {
+        clearAnnotations = true,
+        clearLabels = true,
+        clearImages = false,
+        clearToolConfig = false,
+      } = options
 
-      // Optionally clear images
+      // Conditionally clear annotations
+      if (clearAnnotations) {
+        await annotationStorage.clear()
+      }
+
+      // Conditionally clear labels
+      if (clearLabels) {
+        await labelStorage.clear()
+      }
+
+      // Conditionally clear images
       if (clearImages) {
         await imageStorage.clear()
       }
 
-      // Reload data (this will also reinitialize default labels)
+      // Conditionally clear tool configuration from localStorage
+      if (clearToolConfig) {
+        localStorage.removeItem('promptMode')
+        localStorage.removeItem('textPrompt')
+        localStorage.removeItem('GROUP_EXPANDED_STATES')
+      }
+
+      // Reload data (this will also reinitialize default labels if they were cleared)
       await loadData()
     } catch (error) {
       console.error('Failed to reset data:', error)

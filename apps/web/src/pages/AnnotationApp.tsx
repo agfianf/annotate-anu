@@ -8,6 +8,7 @@ import { ExportModal } from '../components/ExportModal'
 import { LeftSidebar } from '../components/LeftSidebar'
 import Sidebar from '../components/Sidebar'
 import { AIModeIndicator } from '../components/ui/AIModeIndicator'
+import { ColorPickerPopup } from '../components/ui/ColorPickerPopup'
 import { Modal } from '../components/ui/Modal'
 import ShortcutsHelpModal from '../components/ui/ShortcutsHelpModal'
 import { useHistory } from '../hooks/useHistory'
@@ -16,7 +17,7 @@ import { useStorage } from '../hooks/useStorage'
 import { DEFAULT_LABEL_COLOR, PRESET_COLORS } from '../lib/colors'
 import { isAllowedImageFile, getRelativePath, getDisplayName, ALLOWED_IMAGE_EXTENSIONS, isFolderUploadSupported } from '../lib/file-utils'
 import { annotationStorage } from '../lib/storage'
-import type { Annotation, ImageData, PolygonAnnotation, PromptMode, RectangleAnnotation, Tool } from '../types/annotations'
+import type { Annotation, ImageData, Label, PolygonAnnotation, PromptMode, RectangleAnnotation, Tool } from '../types/annotations'
 
 // Thumbnail component to prevent re-creating blob URLs on every render
 interface ImageThumbnailProps {
@@ -91,7 +92,12 @@ function AnnotationApp() {
   const [showExportModal, setShowExportModal] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [showShortcutsModal, setShowShortcutsModal] = useState(false)
-  const [resetIncludeImages, setResetIncludeImages] = useState(false)
+  const [resetOptions, setResetOptions] = useState({
+    annotations: true,
+    labels: false,
+    toolConfig: true,
+    images: false,
+  })
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false)
   const [promptBboxes, setPromptBboxes] = useState<Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>>([])
   const [isBboxPromptMode, setIsBboxPromptMode] = useState(false)
@@ -104,6 +110,9 @@ function AnnotationApp() {
   const [isAutoApplyLoading, setIsAutoApplyLoading] = useState(false)
   const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_LABEL_COLOR)
   const [folderUploadSupported] = useState(isFolderUploadSupported())
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null)
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const colorButtonRef = useRef<HTMLButtonElement>(null)
 
   // Zoom and pan state
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -127,6 +136,7 @@ function AnnotationApp() {
     removeManyAnnotations,
     bulkToggleAnnotationVisibility,
     addLabel,
+    updateLabel,
     removeLabel,
     resetAll,
   } = useStorage()
@@ -755,7 +765,7 @@ function AnnotationApp() {
           <button
             onClick={() => setShowExportModal(true)}
             disabled={annotations.length === 0}
-            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 disabled:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-1.5"
             title="Export annotations to COCO JSON or YOLO format"
           >
             <Download className="w-4 h-4" />
@@ -763,7 +773,7 @@ function AnnotationApp() {
           </button>
           <button
             onClick={() => setShowResetModal(true)}
-            className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white text-sm rounded transition-colors flex items-center gap-1.5"
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded transition-colors flex items-center gap-1.5"
             title="Reset all data (annotations and optionally images)"
           >
             <RotateCcw className="w-4 h-4" />
@@ -771,7 +781,7 @@ function AnnotationApp() {
           </button>
           <button
             onClick={() => setShowLabelManager(true)}
-            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm rounded transition-colors"
+            className="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white text-sm rounded transition-colors"
             title="Create, edit, and delete labels"
           >
             Manage Labels
@@ -1014,12 +1024,12 @@ function AnnotationApp() {
             }
           }}
         >
-          <div className="glass-strong rounded-lg shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-200/50 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">
-                Label Management
+          <div className="glass-strong rounded-lg shadow-2xl max-w-md w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-200/50 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Labels
                 {labels.length === 0 && (
-                  <span className="ml-2 text-sm text-emerald-600">(Create at least one label)</span>
+                  <span className="ml-2 text-xs text-emerald-600">(Create one)</span>
                 )}
               </h2>
               {labels.length > 0 && (
@@ -1027,90 +1037,170 @@ function AnnotationApp() {
                   onClick={() => setShowLabelManager(false)}
                   className="text-gray-600 hover:text-gray-900"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               )}
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1">
-              <div className="space-y-3">
+            <div className="p-4 overflow-y-auto flex-1">
+              <div className="space-y-2">
                 {labels.map(label => (
                   <div
                     key={label.id}
-                    className="flex items-center gap-3 p-3 glass rounded-lg border border-gray-200/30"
+                    className="flex items-center gap-2 p-2 glass rounded border border-gray-200/30"
                   >
                     <div
-                      className="w-6 h-6 rounded"
+                      className="w-5 h-5 rounded flex-shrink-0"
                       style={{ backgroundColor: label.color }}
                     />
-                    <span className="flex-1 text-gray-900">{label.name}</span>
+                    <span className="flex-1 text-sm text-gray-900 truncate">{label.name}</span>
+
+                    {/* Edit Button */}
+                    <button
+                      onClick={() => {
+                        setEditingLabelId(label.id)
+                        setSelectedColor(label.color)
+                      }}
+                      className="p-1 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                      title="Edit label"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+
+                    {/* Delete Button */}
                     <button
                       onClick={() => removeLabel(label.id)}
-                      className="text-red-500 hover:text-red-600 text-sm"
+                      className="p-1 text-red-500 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="Delete label"
                     >
-                      Delete
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
                     </button>
                   </div>
                 ))}
               </div>
 
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault()
                   const formData = new FormData(e.currentTarget)
                   const name = formData.get('name') as string
 
-                  if (name) {
-                    const newLabel = {
-                      id: Date.now().toString(),
-                      name,
-                      color: selectedColor,
-                      createdAt: Date.now(),
+                  if (!name.trim()) {
+                    toast.error('Label name is required')
+                    return
+                  }
+
+                  const isEditMode = editingLabelId !== null
+
+                  try {
+                    if (isEditMode) {
+                      // Update existing label
+                      const existingLabel = labels.find(l => l.id === editingLabelId)
+                      if (!existingLabel) return
+
+                      const updatedLabel: Label = {
+                        ...existingLabel,
+                        name: name.trim(),
+                        color: selectedColor,
+                        // Preserve original metadata
+                        id: existingLabel.id,
+                        createdAt: existingLabel.createdAt,
+                      }
+
+                      await updateLabel(updatedLabel)
+                      setEditingLabelId(null)
+                      toast.success('Label updated')
+                    } else {
+                      // Create new label
+                      const newLabel: Label = {
+                        id: Date.now().toString(),
+                        name: name.trim(),
+                        color: selectedColor,
+                        createdAt: Date.now(),
+                      }
+                      await addLabel(newLabel)
+                      toast.success('Label created')
                     }
-                    addLabel(newLabel)
+
+                    // Reset form
                     e.currentTarget.reset()
+                    setSelectedColor(DEFAULT_LABEL_COLOR)
+                    setShowColorPicker(false)
+                  } catch (error) {
+                    console.error('Failed to save label:', error)
+                    toast.error('Failed to save label')
                   }
                 }}
-                className="mt-6 space-y-3"
+                className="mt-4 space-y-2"
               >
-                <h3 className="text-gray-900 font-medium">Add New Label</h3>
-                <input
-                  type="text"
-                  name="name"
-                  placeholder="Label name"
-                  required
-                  className="w-full px-3 py-2 bg-white/80 text-gray-900 rounded border border-gray-300 focus:border-emerald-500 focus:outline-none"
-                />
+                <h3 className="text-sm font-medium text-gray-700">
+                  {editingLabelId ? 'Edit Label' : 'Add New Label'}
+                </h3>
 
-                {/* Color Palette Grid */}
-                <div>
-                  <label className="text-sm text-gray-700 mb-2 block">Choose Color</label>
-                  <div className="grid grid-cols-5 gap-2">
-                    {PRESET_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => setSelectedColor(color)}
-                        className={`w-10 h-10 rounded transition-all ${
-                          selectedColor === color
-                            ? 'ring-2 ring-emerald-600 ring-offset-2 ring-offset-white scale-110'
-                            : 'hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: color }}
-                        title={color}
-                      />
-                    ))}
-                  </div>
+                {/* Label Name + Color Picker Button */}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    name="name"
+                    placeholder="Label name"
+                    defaultValue={editingLabelId ? labels.find(l => l.id === editingLabelId)?.name : ''}
+                    key={editingLabelId || 'create'} // Force re-render on mode change
+                    required
+                    className="flex-1 px-2.5 py-1.5 text-sm bg-white/80 text-gray-900 rounded border border-gray-300 focus:border-emerald-500 focus:outline-none"
+                  />
+
+                  {/* Color Picker Button */}
+                  <button
+                    ref={colorButtonRef}
+                    type="button"
+                    onClick={() => setShowColorPicker(prev => !prev)}
+                    className="w-8 h-8 rounded border-2 border-gray-300 hover:border-emerald-500 transition-colors flex-shrink-0"
+                    style={{ backgroundColor: selectedColor }}
+                    title="Choose color"
+                    aria-label="Choose color"
+                  />
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors"
-                >
-                  Add Label
-                </button>
+                {/* Color Picker Popup */}
+                {showColorPicker && (
+                  <ColorPickerPopup
+                    selectedColor={selectedColor}
+                    onColorChange={setSelectedColor}
+                    isOpen={showColorPicker}
+                    onClose={() => setShowColorPicker(false)}
+                    anchorEl={colorButtonRef.current}
+                  />
+                )}
+
+                {/* Action Buttons */}
+                <div className="space-y-1.5">
+                  <button
+                    type="submit"
+                    className="w-full px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors"
+                  >
+                    {editingLabelId ? 'Update' : 'Add Label'}
+                  </button>
+
+                  {editingLabelId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingLabelId(null)
+                        setSelectedColor(DEFAULT_LABEL_COLOR)
+                        setShowColorPicker(false)
+                      }}
+                      className="w-full px-3 py-1.5 text-sm glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </form>
             </div>
           </div>
@@ -1146,7 +1236,12 @@ function AnnotationApp() {
         isOpen={showResetModal}
         onClose={() => {
           setShowResetModal(false)
-          setResetIncludeImages(false)
+          setResetOptions({
+            annotations: true,
+            labels: false,
+            toolConfig: true,
+            images: false,
+          })
         }}
         title="Reset Confirmation"
         maxWidth="md"
@@ -1156,28 +1251,64 @@ function AnnotationApp() {
             <p className="text-red-600 font-medium">⚠️ Warning: This action cannot be undone!</p>
           </div>
           <p className="text-gray-800">
-            Are you sure you want to reset? This will permanently delete:
+            Select what you want to reset:
           </p>
-          <ul className="list-disc list-inside text-gray-700 space-y-1">
-            <li>All annotations</li>
-            <li>All labels (will reset to defaults)</li>
-            <li>Tool configuration</li>
-            {resetIncludeImages && <li className="text-red-600 font-medium">All loaded images</li>}
-          </ul>
-          <label className="flex items-center gap-2 text-gray-800 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={resetIncludeImages}
-              onChange={(e) => setResetIncludeImages(e.target.checked)}
-              className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white"
-            />
-            Also clear loaded images
-          </label>
+
+          {/* Checklist */}
+          <div className="space-y-2 bg-white/50 rounded-lg p-4">
+            <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
+              <input
+                type="checkbox"
+                checked={resetOptions.annotations}
+                onChange={(e) => setResetOptions(prev => ({ ...prev, annotations: e.target.checked }))}
+                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
+              />
+              <span>All annotations</span>
+            </label>
+
+            <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
+              <input
+                type="checkbox"
+                checked={resetOptions.labels}
+                onChange={(e) => setResetOptions(prev => ({ ...prev, labels: e.target.checked }))}
+                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
+              />
+              <span>All labels (will reset to defaults)</span>
+            </label>
+
+            <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
+              <input
+                type="checkbox"
+                checked={resetOptions.toolConfig}
+                onChange={(e) => setResetOptions(prev => ({ ...prev, toolConfig: e.target.checked }))}
+                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
+              />
+              <span>Tool configuration</span>
+            </label>
+
+            <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
+              <input
+                type="checkbox"
+                checked={resetOptions.images}
+                onChange={(e) => setResetOptions(prev => ({ ...prev, images: e.target.checked }))}
+                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
+              />
+              <span className={resetOptions.images ? 'text-red-600 font-medium' : ''}>
+                Also clear loaded images
+              </span>
+            </label>
+          </div>
+
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200/50">
             <button
               onClick={() => {
                 setShowResetModal(false)
-                setResetIncludeImages(false)
+                setResetOptions({
+                  annotations: true,
+                  labels: false,
+                  toolConfig: true,
+                  images: false,
+                })
               }}
               className="px-4 py-2 glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
             >
@@ -1185,15 +1316,26 @@ function AnnotationApp() {
             </button>
             <button
               onClick={async () => {
-                await resetAll(resetIncludeImages)
+                await resetAll({
+                  clearAnnotations: resetOptions.annotations,
+                  clearLabels: resetOptions.labels,
+                  clearImages: resetOptions.images,
+                  clearToolConfig: resetOptions.toolConfig,
+                })
                 setShowResetModal(false)
-                setResetIncludeImages(false)
+                setResetOptions({
+                  annotations: true,
+                  labels: false,
+                  toolConfig: true,
+                  images: false,
+                })
                 setSelectedAnnotation(null)
                 setSelectedTool('select')
               }}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+              disabled={!resetOptions.annotations && !resetOptions.labels && !resetOptions.toolConfig && !resetOptions.images}
+              className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded transition-colors"
             >
-              Reset All
+              Reset Selected
             </button>
           </div>
         </div>
