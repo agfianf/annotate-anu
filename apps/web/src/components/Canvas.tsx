@@ -87,6 +87,11 @@ const Canvas = React.memo(function Canvas({
     return `rgba(${r}, ${g}, ${b}, ${opacity})`
   }
 
+  // Helper function to adjust sizes for zoom (keep constant screen size when zooming in)
+  const getZoomAdjustedSize = (baseSize: number, zoomLevel: number): number => {
+    return zoomLevel > 1 ? baseSize / zoomLevel : baseSize
+  }
+
   // Get selected label color (default to orange if no label selected)
   const selectedLabelColor = selectedLabelId
     ? labels.find(l => l.id === selectedLabelId)?.color || '#f97316'
@@ -831,7 +836,7 @@ const Canvas = React.memo(function Canvas({
                     width={rect.width * scale}
                     height={rect.height * scale}
                     stroke={color}
-                    strokeWidth={ANNOTATION_STROKE_WIDTH}
+                    strokeWidth={getZoomAdjustedSize(ANNOTATION_STROKE_WIDTH, zoomLevel)}
                     strokeScaleEnabled={false}
                     strokeOpacity={ANNOTATION_STROKE_OPACITY}
                     fill={hexToRgba(
@@ -850,7 +855,7 @@ const Canvas = React.memo(function Canvas({
                     x={rect.x * scale}
                     y={rect.y * scale - 20}
                     text={labelName}
-                    fontSize={14}
+                    fontSize={getZoomAdjustedSize(14, zoomLevel)}
                     fill="white"
                     padding={4}
                     listening={false}
@@ -883,7 +888,7 @@ const Canvas = React.memo(function Canvas({
                     key={`poly-${annotation.id}`}
                     points={points}
                     stroke={color}
-                    strokeWidth={ANNOTATION_STROKE_WIDTH}
+                    strokeWidth={getZoomAdjustedSize(ANNOTATION_STROKE_WIDTH, zoomLevel)}
                     strokeScaleEnabled={false}
                     strokeOpacity={ANNOTATION_STROKE_OPACITY}
                     fill={hexToRgba(
@@ -907,7 +912,7 @@ const Canvas = React.memo(function Canvas({
                       x={displayPoints[0].x * scale}
                       y={displayPoints[0].y * scale - 20}
                       text={labelName}
-                      fontSize={14}
+                      fontSize={getZoomAdjustedSize(14, zoomLevel)}
                       fill="white"
                       padding={4}
                       listening={false}
@@ -919,10 +924,10 @@ const Canvas = React.memo(function Canvas({
                       key={`poly-point-${annotation.id}-${idx}`}
                       x={point.x * scale}
                       y={point.y * scale}
-                      radius={6}
+                      radius={getZoomAdjustedSize(6, zoomLevel)}
                       fill={color}
                       stroke="white"
-                      strokeWidth={2}
+                      strokeWidth={getZoomAdjustedSize(2, zoomLevel)}
                       draggable={true}
                       onDragStart={(e) => {
                         e.cancelBubble = true // Prevent group drag
@@ -970,7 +975,7 @@ const Canvas = React.memo(function Canvas({
                   width={bbox.width * scale}
                   height={bbox.height * scale}
                   stroke={bboxColor}
-                  strokeWidth={2}
+                  strokeWidth={getZoomAdjustedSize(2, zoomLevel)}
                   dash={[10, 5]}
                   fill={`${bboxColor}1A`}
                   listening={false}
@@ -979,7 +984,7 @@ const Canvas = React.memo(function Canvas({
                   x={bbox.x * scale}
                   y={bbox.y * scale - 20}
                   text={`${bboxLabelName} (Prompt)`}
-                  fontSize={12}
+                  fontSize={getZoomAdjustedSize(12, zoomLevel)}
                   fill={bboxColor}
                   padding={4}
                   listening={false}
@@ -998,7 +1003,7 @@ const Canvas = React.memo(function Canvas({
                 width={currentRectangle[2] * scale}
                 height={currentRectangle[3] * scale}
                 stroke={selectedLabelColor}
-                strokeWidth={2}
+                strokeWidth={getZoomAdjustedSize(2, zoomLevel)}
                 dash={[5, 5]}
                 listening={false}
               />
@@ -1007,7 +1012,7 @@ const Canvas = React.memo(function Canvas({
                 key="rect-start-marker"
                 x={rectangleStartPoint.x * scale}
                 y={rectangleStartPoint.y * scale}
-                radius={6}
+                radius={getZoomAdjustedSize(6, zoomLevel)}
                 fill={selectedLabelColor}
                 listening={false}
               />
@@ -1036,7 +1041,7 @@ const Canvas = React.memo(function Canvas({
                 key="poly-lines"
                 points={polygonPoints.flatMap(p => [p.x * scale, p.y * scale])}
                 stroke={selectedLabelColor}
-                strokeWidth={ANNOTATION_STROKE_WIDTH}
+                strokeWidth={getZoomAdjustedSize(ANNOTATION_STROKE_WIDTH, zoomLevel)}
                 strokeScaleEnabled={false}
                 strokeOpacity={ANNOTATION_STROKE_OPACITY}
                 dash={[5, 5]}
@@ -1053,7 +1058,7 @@ const Canvas = React.memo(function Canvas({
                     isNearFirstPoint ? polygonPoints[0].y * scale : mousePosition.y * scale,
                   ]}
                   stroke={selectedLabelColor}
-                  strokeWidth={ANNOTATION_STROKE_WIDTH}
+                  strokeWidth={getZoomAdjustedSize(ANNOTATION_STROKE_WIDTH, zoomLevel)}
                   dash={[3, 3]}
                   opacity={0.6}
                   listening={false}
@@ -1065,10 +1070,10 @@ const Canvas = React.memo(function Canvas({
                   key={`temp-poly-point-${idx}`}
                   x={point.x * scale}
                   y={point.y * scale}
-                  radius={idx === 0 && isNearFirstPoint ? 8 : 5}
+                  radius={getZoomAdjustedSize(idx === 0 && isNearFirstPoint ? 8 : 5, zoomLevel)}
                   fill={idx === 0 && isNearFirstPoint ? '#10b981' : selectedLabelColor}
                   stroke={idx === 0 && isNearFirstPoint ? '#10b981' : undefined}
-                  strokeWidth={idx === 0 && isNearFirstPoint ? 2 : 0}
+                  strokeWidth={idx === 0 && isNearFirstPoint ? getZoomAdjustedSize(2, zoomLevel) : 0}
                   listening={false}
                 />
               ))}
@@ -1078,7 +1083,7 @@ const Canvas = React.memo(function Canvas({
                   key="poly-preview-point"
                   x={mousePosition.x * scale}
                   y={mousePosition.y * scale}
-                  radius={4}
+                  radius={getZoomAdjustedSize(4, zoomLevel)}
                   fill={selectedLabelColor}
                   opacity={0.5}
                   listening={false}
@@ -1095,7 +1100,7 @@ const Canvas = React.memo(function Canvas({
                 key="crosshair-vertical"
                 points={[mousePosition.x * scale, 0, mousePosition.x * scale, dimensions.height]}
                 stroke="white"
-                strokeWidth={1.5}
+                strokeWidth={getZoomAdjustedSize(1.5, zoomLevel)}
                 dash={[8, 4]}
                 opacity={0.8}
                 listening={false}
@@ -1105,7 +1110,7 @@ const Canvas = React.memo(function Canvas({
                 key="crosshair-horizontal"
                 points={[0, mousePosition.y * scale, dimensions.width, mousePosition.y * scale]}
                 stroke="white"
-                strokeWidth={1.5}
+                strokeWidth={getZoomAdjustedSize(1.5, zoomLevel)}
                 dash={[8, 4]}
                 opacity={0.8}
                 listening={false}
