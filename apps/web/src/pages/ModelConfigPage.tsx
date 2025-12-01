@@ -10,6 +10,7 @@ import { useModelRegistry } from '../hooks/useModelRegistry'
 import { byomClient } from '../lib/byom-client'
 import type { ModelRegistrationRequest, ModelCapabilities, ResponseMapping, OutputType } from '../types/byom'
 import { InfoTooltip } from '../components/ui/InfoTooltip'
+import { TagInput } from '../components/ui/TagInput'
 
 export default function ModelConfigPage() {
   const navigate = useNavigate()
@@ -152,9 +153,8 @@ export default function ModelConfigPage() {
     })
   }
 
-  // Handler for classes input (comma-separated)
-  const handleClassesChange = (value: string) => {
-    const classes = value.split(',').map(c => c.trim()).filter(Boolean)
+  // Handler for classes input (tag array)
+  const handleClassesChange = (classes: string[]) => {
     setFormData(prev => ({
       ...prev,
       capabilities: {
@@ -705,17 +705,17 @@ export default function ModelConfigPage() {
                   <div>
                     <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
                       Detectable Classes (Optional)
-                      <InfoTooltip content="List of class names the model can detect. Leave empty if your model doesn't have predefined classes." />
+                      <InfoTooltip content="List of class names the model can detect. Type a class name and press comma or Enter to add. Click X to remove. Leave empty if your model doesn't have predefined classes." />
                     </label>
-                    <input
-                      type="text"
-                      value={formData.capabilities?.classes?.join(', ') || ''}
-                      onChange={(e) => handleClassesChange(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg
-                                 text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                      placeholder="car, person, truck, bicycle (comma-separated)"
+                    <TagInput
+                      value={formData.capabilities?.classes || []}
+                      onChange={handleClassesChange}
+                      placeholder="Type class name and press comma or Enter (e.g., car, person, truck)"
                     />
-                    <p className="text-xs text-gray-600 mt-1">Enter class names separated by commas</p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Press <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">comma</kbd> or{' '}
+                      <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">Enter</kbd> to add tags
+                    </p>
                   </div>
                 </div>
               </div>

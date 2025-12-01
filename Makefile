@@ -135,7 +135,7 @@ frontend-build:
 # Docker commands
 docker-up:
 	@echo "Starting Docker services (development mode)..."
-	docker-compose -f docker/docker-compose.dev.yml up -d --build
+	docker-compose -f docker/docker-compose.dev.yml up -d
 	@echo ""
 	@echo "✓ Services started:"
 	@echo "  Backend API (SAM3): http://localhost:8000"
