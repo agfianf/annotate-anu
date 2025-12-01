@@ -28,6 +28,42 @@ services:
               count: 1
               capabilities: [gpu]
 
+  # API Core - Model Registry Service
+  api-core:
+    build:
+      context: ./apps/api-core
+      dockerfile: Dockerfile
+    container_name: anu-api-core
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./apps/api-core/src:/code/src
+      - api-core-data:/code/data
+    env_file:
+      - ./apps/api-core/.env
+    restart: unless-stopped
+    networks:
+      - anu-network
+    depends_on:
+      - redis
+
+  # Redis - Caching Layer
+  redis:
+    image: redis:7-alpine
+    container_name: anu-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    networks:
+      - anu-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
   # Frontend - React Annotation Platform
   frontend:
     build:
@@ -45,6 +81,7 @@ services:
       - ./apps/web/.env
     depends_on:
       - backend
+      - api-core
     networks:
       - anu-network
     command: npm run dev -- --host 0.0.0.0
@@ -65,6 +102,10 @@ services:
 
 volumes:
   huggingface_cache:
+    driver: local
+  api-core-data:
+    driver: local
+  redis-data:
     driver: local
 
 networks:

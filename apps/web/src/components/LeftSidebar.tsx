@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { MousePointer, Square, Pentagon, ZoomIn, ZoomOut, Maximize2, Undo, Redo, Keyboard } from 'lucide-react'
 import { TextPromptPanel } from './TextPromptPanel'
 import { BboxPromptPanel } from './BboxPromptPanel'
+import { AutoDetectPanel } from './AutoDetectPanel'
 import { ToolButton } from './ui/ToolButton'
 import type { Label, ImageData, Tool, PromptMode } from '@/types/annotations'
+import type { AvailableModel } from '@/types/byom'
 
 interface LeftSidebarProps {
   selectedTool: Tool
@@ -38,9 +40,10 @@ interface LeftSidebarProps {
   canUndo?: boolean
   canRedo?: boolean
   onShowShortcuts?: () => void
+  selectedModel: AvailableModel
 }
 
-type ActiveTool = 'text-prompt' | 'bbox-prompt' | null
+type ActiveTool = 'text-prompt' | 'bbox-prompt' | 'auto-detect' | null
 
 // Custom icon for Text-Prompt tool
 function TextPromptIcon({ className }: { className?: string }) {
@@ -82,6 +85,27 @@ function BboxPromptIcon({ className }: { className?: string }) {
   )
 }
 
+// Custom icon for Auto-Detect tool
+function AutoDetectIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {/* Target/crosshair with sparkle */}
+      <circle cx="12" cy="12" r="10" />
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+    </svg>
+  )
+}
+
 export function LeftSidebar({
   selectedTool,
   onToolChange,
@@ -108,6 +132,7 @@ export function LeftSidebar({
   canUndo = false,
   canRedo = false,
   onShowShortcuts,
+  selectedModel,
 }: LeftSidebarProps) {
   const [activeTool, setActiveTool] = useState<ActiveTool>(null)
 
@@ -242,19 +267,43 @@ export function LeftSidebar({
         <ToolButton
           icon={<TextPromptIcon className="w-5 h-5" />}
           tooltipTitle="Text Prompt"
-          tooltipDescription="AI generates segmentation masks from text descriptions (e.g., 'person', 'car', 'tree')"
+          tooltipDescription={
+            selectedModel?.capabilities.supports_text_prompt
+              ? "AI generates segmentation masks from text descriptions (e.g., 'person', 'car', 'tree')"
+              : `${selectedModel?.name || 'Selected model'} does not support text prompts`
+          }
           onClick={() => handleToolClick('text-prompt')}
           isActive={activeTool === 'text-prompt'}
           activeColor="purple"
+          disabled={!selectedModel?.capabilities.supports_text_prompt}
         />
 
         <ToolButton
           icon={<BboxPromptIcon className="w-5 h-5" />}
           tooltipTitle="Bbox Prompt"
-          tooltipDescription="Draw bounding boxes to prompt AI for precise object segmentation. Supports single, auto-apply, and batch modes"
+          tooltipDescription={
+            selectedModel?.capabilities.supports_bbox_prompt
+              ? "Draw bounding boxes to prompt AI for precise object segmentation. Supports single, auto-apply, and batch modes"
+              : `${selectedModel?.name || 'Selected model'} does not support bbox prompts`
+          }
           onClick={() => handleToolClick('bbox-prompt')}
           isActive={activeTool === 'bbox-prompt'}
           activeColor="blue"
+          disabled={!selectedModel?.capabilities.supports_bbox_prompt}
+        />
+
+        <ToolButton
+          icon={<AutoDetectIcon className="w-5 h-5" />}
+          tooltipTitle="Auto-Detect"
+          tooltipDescription={
+            selectedModel?.capabilities.supports_auto_detect
+              ? "Automatically detect all objects in the image without prompts"
+              : `${selectedModel?.name || 'Selected model'} does not support auto-detection`
+          }
+          onClick={() => handleToolClick('auto-detect')}
+          isActive={activeTool === 'auto-detect'}
+          activeColor="orange"
+          disabled={!selectedModel?.capabilities.supports_auto_detect}
         />
 
         {/* Spacer to push controls to bottom */}
@@ -338,6 +387,7 @@ export function LeftSidebar({
               currentAnnotations={currentAnnotations}
               onLoadingChange={onAutoApplyLoadingChange}
               onTextPromptChange={onTextPromptChange}
+              selectedModel={selectedModel}
             />
           )}
           {activeTool === 'bbox-prompt' && (
@@ -352,6 +402,17 @@ export function LeftSidebar({
               onClose={handlePanelClose}
               promptBboxes={promptBboxes}
               onPromptBboxesChange={onPromptBboxesChange}
+              selectedModel={selectedModel}
+            />
+          )}
+          {activeTool === 'auto-detect' && (
+            <AutoDetectPanel
+              labels={labels}
+              selectedLabelId={selectedLabelId}
+              currentImage={currentImage}
+              onAnnotationsCreated={onAnnotationsCreated}
+              onClose={handlePanelClose}
+              selectedModel={selectedModel}
             />
           )}
         </div>

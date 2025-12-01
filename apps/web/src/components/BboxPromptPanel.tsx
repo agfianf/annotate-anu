@@ -3,7 +3,8 @@ import { Loader2, X, Trash2, Square } from 'lucide-react'
 import { Button } from './ui/button'
 import { PromptModeSelector } from './ui/PromptModeSelector'
 import type { Label, ImageData, PromptMode } from '@/types/annotations'
-import { sam3Client } from '@/lib/sam3-client'
+import type { AvailableModel } from '@/types/byom'
+import { inferenceClient } from '@/lib/inference-client'
 import toast from 'react-hot-toast'
 
 interface BboxPromptPanelProps {
@@ -24,6 +25,7 @@ interface BboxPromptPanelProps {
   onClose: () => void
   promptBboxes?: Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>
   onPromptBboxesChange?: (bboxes: Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>) => void
+  selectedModel: AvailableModel
 }
 
 type AnnotationType = 'bbox' | 'polygon'
@@ -38,6 +40,7 @@ export function BboxPromptPanel({
   onClose,
   promptBboxes = [],
   onPromptBboxesChange,
+  selectedModel,
 }: BboxPromptPanelProps) {
   const [threshold, setThreshold] = useState(0.5)
   const [maskThreshold, setMaskThreshold] = useState(0.5)
@@ -101,8 +104,8 @@ export function BboxPromptPanel({
           return [x1, y1, x2, y2, 1] // Using 1 as the class ID
         })
 
-        // Call bbox prompt API
-        const response = await sam3Client.bboxPrompt({
+        // Call bbox prompt API using unified inference client
+        const result = await inferenceClient.bboxPrompt(selectedModel, {
           image: imageFile,
           bounding_boxes: bboxesForAPI,
           threshold,
@@ -110,7 +113,7 @@ export function BboxPromptPanel({
           return_visualization: false,
         })
 
-        const { num_objects, boxes, masks, scores } = response.data
+        const { num_objects, boxes, masks, scores } = result
 
         if (num_objects > 0) {
           totalDetected += num_objects

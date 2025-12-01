@@ -1,0 +1,120 @@
+/**
+ * BYOM (Bring Your Own Model) type definitions
+ */
+
+export type OutputType = 'bbox' | 'polygon' | 'mask'
+export type ModelType = 'detection' | 'segmentation' | 'hybrid'
+
+export interface ModelCapabilities {
+  supports_text_prompt: boolean
+  supports_bbox_prompt: boolean
+  supports_auto_detect: boolean
+  supports_class_filter: boolean
+  output_types: OutputType[]
+  classes?: string[]
+  model_type?: ModelType  // For easy UI logic
+}
+
+export interface RegisteredModel {
+  id: string
+  name: string
+  endpoint_url: string
+  capabilities: ModelCapabilities | null
+  description: string | null
+  is_active: boolean
+  is_healthy: boolean
+  last_health_check: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ModelRegistrationRequest {
+  name: string
+  endpoint_url: string
+  auth_token?: string
+  description?: string
+  capabilities?: ModelCapabilities
+}
+
+export interface ModelUpdateRequest {
+  name?: string
+  endpoint_url?: string
+  auth_token?: string
+  description?: string
+  capabilities?: ModelCapabilities
+  is_active?: boolean
+}
+
+export interface ModelHealthResponse {
+  model_id: string
+  is_healthy: boolean
+  status_message: string
+  response_time_ms: number | null
+  checked_at: string
+}
+
+export interface ModelListResponse {
+  models: RegisteredModel[]
+  total: number
+}
+
+/**
+ * Unified model interface for runtime use (includes SAM3 built-in)
+ */
+export interface AvailableModel {
+  id: string
+  name: string
+  type: 'builtin' | 'byom'
+  endpoint_url: string
+  auth_token?: string  // Only for BYOM models
+  capabilities: ModelCapabilities
+  is_healthy: boolean
+  description?: string
+}
+
+/**
+ * Inference parameters for different modes
+ */
+export interface BaseInferenceParams {
+  image: File
+  threshold?: number
+  mask_threshold?: number
+  return_visualization?: boolean
+}
+
+export interface TextPromptParams extends BaseInferenceParams {
+  text_prompt: string
+}
+
+export interface BboxPromptParams extends BaseInferenceParams {
+  bounding_boxes: Array<[number, number, number, number, string]>
+}
+
+export interface AutoDetectParams extends BaseInferenceParams {
+  class_filter?: string[]
+}
+
+/**
+ * Inference result structure (compatible with SAM3 and detection models)
+ */
+export interface InferenceResult {
+  num_objects: number
+  boxes: Array<[number, number, number, number]>
+  scores: number[]
+  masks: Array<{
+    polygons: Array<Array<[number, number]>>
+    area: number
+  }>
+  labels?: string[]  // Class labels from detection models
+  processing_time_ms: number
+  visualization_base64?: string
+}
+
+/**
+ * Standard API response wrapper
+ */
+export interface APIResponse<T> {
+  data: T
+  message: string
+  status_code: number
+}

@@ -1,11 +1,12 @@
 import { Copy, Download, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import '../App.css'
 import Canvas from '../components/Canvas'
 import { ExportModal } from '../components/ExportModal'
 import { LeftSidebar } from '../components/LeftSidebar'
+import { ModelSelector } from '../components/ModelSelector'
 import Sidebar from '../components/Sidebar'
 import { AIModeIndicator } from '../components/ui/AIModeIndicator'
 import { ColorPickerPopup } from '../components/ui/ColorPickerPopup'
@@ -13,6 +14,7 @@ import { Modal } from '../components/ui/Modal'
 import ShortcutsHelpModal from '../components/ui/ShortcutsHelpModal'
 import { useHistory } from '../hooks/useHistory'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useModelRegistry } from '../hooks/useModelRegistry'
 import { useStorage } from '../hooks/useStorage'
 import { DEFAULT_LABEL_COLOR, PRESET_COLORS } from '../lib/colors'
 import { isAllowedImageFile, getRelativePath, getDisplayName, ALLOWED_IMAGE_EXTENSIONS, isFolderUploadSupported } from '../lib/file-utils'
@@ -85,6 +87,7 @@ const ImageThumbnail = ({
 }
 
 function AnnotationApp() {
+  const navigate = useNavigate()
   const [selectedTool, setSelectedTool] = useState<Tool>('select')
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null)
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null)
@@ -98,6 +101,9 @@ function AnnotationApp() {
     toolConfig: true,
     images: false,
   })
+
+  // BYOM model registry
+  const { allModels, selectedModel, selectModel, refreshModels } = useModelRegistry()
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false)
   const [promptBboxes, setPromptBboxes] = useState<Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>>([])
   const [isBboxPromptMode, setIsBboxPromptMode] = useState(false)
@@ -784,6 +790,16 @@ function AnnotationApp() {
               Image {currentImageNumber} of {images.length} • {currentAnnotations.length} annotations
             </span>
           )}
+
+          {/* Model Selector */}
+          <ModelSelector
+            selectedModel={selectedModel}
+            allModels={allModels}
+            onSelectModel={selectModel}
+            onOpenSettings={() => navigate('/models')}
+            onRefresh={refreshModels}
+          />
+
           <button
             onClick={() => setShowExportModal(true)}
             disabled={annotations.length === 0}
@@ -841,6 +857,7 @@ function AnnotationApp() {
             canUndo={canUndo}
             canRedo={canRedo}
             onShowShortcuts={() => setShowShortcutsModal(true)}
+            selectedModel={selectedModel}
           />
 
           {/* Canvas */}

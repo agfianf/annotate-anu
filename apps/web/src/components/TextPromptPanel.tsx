@@ -1,5 +1,6 @@
-import { sam3Client } from '@/lib/sam3-client'
+import { inferenceClient } from '@/lib/inference-client'
 import type { ImageData, Label, PromptMode } from '@/types/annotations'
+import type { AvailableModel } from '@/types/byom'
 import { Loader2, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
@@ -27,6 +28,7 @@ interface TextPromptPanelProps {
   currentAnnotations?: any[] // Add annotations to check if image already has AI annotations
   onLoadingChange?: (loading: boolean) => void // Callback to notify parent of loading state
   onTextPromptChange?: (prompt: string) => void // Callback to notify parent of text prompt changes
+  selectedModel: AvailableModel
 }
 
 type AnnotationType = 'bbox' | 'polygon'
@@ -43,6 +45,7 @@ export function TextPromptPanel({
   currentAnnotations = [],
   onLoadingChange,
   onTextPromptChange,
+  selectedModel,
 }: TextPromptPanelProps) {
   const [textPrompt, setTextPrompt] = useState(() => {
     const saved = localStorage.getItem('textPrompt')
@@ -157,18 +160,18 @@ export function TextPromptPanel({
           type: currentImage.blob.type,
         })
 
-        console.log(`[AUTO-APPLY] Calling SAM3 API for "${currentImage.name}"...`)
-        // Call text prompt API
-        const response = await sam3Client.textPrompt({
+        console.log(`[AUTO-APPLY] Calling inference API with ${selectedModel.name} for "${currentImage.name}"...`)
+        // Call text prompt API using unified inference client
+        const result = await inferenceClient.textPrompt(selectedModel, {
           image: imageFile,
           text_prompt: textPrompt,
           threshold,
           mask_threshold: maskThreshold,
           return_visualization: false,
         })
-        console.log(`[AUTO-APPLY] API response received for "${currentImage.name}":`, response.data)
+        console.log(`[AUTO-APPLY] API response received for "${currentImage.name}":`, result)
 
-        const { num_objects, boxes, masks, scores } = response.data
+        const { num_objects, boxes, masks, scores } = result
 
         // Mark this image as processed
         lastProcessedImageIdRef.current = currentImage.id
@@ -231,18 +234,18 @@ export function TextPromptPanel({
         type: currentImage.blob.type,
       })
 
-      console.log(`Calling API manually for "${currentImage.name}"...`)
-      // Call text prompt API
-      const response = await sam3Client.textPrompt({
+      console.log(`Calling API manually with ${selectedModel.name} for "${currentImage.name}"...`)
+      // Call text prompt API using unified inference client
+      const result = await inferenceClient.textPrompt(selectedModel, {
         image: imageFile,
         text_prompt: textPrompt,
         threshold,
         mask_threshold: maskThreshold,
         return_visualization: false,
       })
-      console.log(`Manual API response:`, response.data)
+      console.log(`Manual API response:`, result)
 
-      const { num_objects, boxes, masks, scores } = response.data
+      const { num_objects, boxes, masks, scores } = result
 
       if (num_objects === 0) {
         toast.error('No objects detected. Try adjusting thresholds or prompt.')
@@ -321,8 +324,8 @@ export function TextPromptPanel({
           type: image.blob.type,
         })
 
-        // Call text prompt API
-        const response = await sam3Client.textPrompt({
+        // Call text prompt API using unified inference client
+        const result = await inferenceClient.textPrompt(selectedModel, {
           image: imageFile,
           text_prompt: textPrompt,
           threshold,
@@ -330,7 +333,7 @@ export function TextPromptPanel({
           return_visualization: false,
         })
 
-        const { num_objects, boxes, masks, scores } = response.data
+        const { num_objects, boxes, masks, scores } = result
 
         if (num_objects === 0) {
           setBatchProgress(prev => prev.map((item, idx) =>

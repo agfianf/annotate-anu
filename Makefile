@@ -1,5 +1,6 @@
 .PHONY: help dev install clean \
         backend-install backend-run backend-test backend-format backend-lint \
+        core-install core-run core-test core-format core-lint \
         frontend-install frontend-dev frontend-build \
         docker-up docker-down docker-logs docker-build docker-restart docker-shell \
         docker-up-solo docker-down-solo docker-up-team docker-down-team
@@ -19,6 +20,13 @@ help:
 	@echo "  backend-test     - Run backend tests"
 	@echo "  backend-format   - Format backend code with ruff"
 	@echo "  backend-lint     - Lint backend code with ruff"
+	@echo ""
+	@echo "API Core Commands:"
+	@echo "  core-install     - Install api-core dependencies with uv"
+	@echo "  core-run         - Run api-core service locally"
+	@echo "  core-test        - Run api-core tests"
+	@echo "  core-format      - Format api-core code with ruff"
+	@echo "  core-lint        - Lint api-core code with ruff"
 	@echo ""
 	@echo "Frontend Commands:"
 	@echo "  frontend-install - Install frontend dependencies with npm"
@@ -85,6 +93,30 @@ backend-format:
 backend-lint:
 	@echo "Linting backend code..."
 	@cd apps/api-inference && uv run ruff check src/
+
+# API Core commands
+core-install:
+	@echo "Installing api-core dependencies..."
+	@cd apps/api-core && uv venv || true
+	@cd apps/api-core && uv sync
+	@echo "✓ API Core dependencies installed"
+
+core-run:
+	@echo "Starting API Core service..."
+	@cd apps/api-core/src && PYTHONPATH=. uv run python app/main.py
+
+core-test:
+	@echo "Running api-core tests..."
+	@cd apps/api-core && uv run pytest src/tests/ -v
+
+core-format:
+	@echo "Formatting api-core code..."
+	@cd apps/api-core && uv run ruff check --fix src/
+	@cd apps/api-core && uv run ruff format src/
+
+core-lint:
+	@echo "Linting api-core code..."
+	@cd apps/api-core && uv run ruff check src/
 
 # Frontend commands
 frontend-install:
