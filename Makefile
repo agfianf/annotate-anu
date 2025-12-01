@@ -40,16 +40,16 @@ help:
 	@echo "  docker-down-solo - Stop SOLO mode services"
 	@echo "  docker-up-team   - Start TEAM mode (full stack: Postgres, MinIO, Redis, Workers)"
 	@echo "  docker-down-team - Stop TEAM mode services"
-	@echo "  docker-logs      - View logs (usage: make docker-logs service=backend|frontend)"
+	@echo "  docker-logs      - View logs (usage: make docker-logs service=backend|api-core|frontend)"
 	@echo "  docker-build     - Rebuild all Docker images"
-	@echo "  docker-restart   - Restart services (usage: make docker-restart service=backend|frontend)"
-	@echo "  docker-shell     - Open shell in container (usage: make docker-shell service=backend|frontend)"
+	@echo "  docker-restart   - Restart services (usage: make docker-restart service=backend|api-core|frontend)"
+	@echo "  docker-shell     - Open shell in container (usage: make docker-shell service=backend|api-core|frontend)"
 
 # Development
 dev:
 	@echo "Starting development environment..."
 	@echo "This will start both backend and frontend services using Docker Compose"
-	docker-compose up
+	docker-compose -f docker/docker-compose.dev.yml up
 
 install:
 	@echo "Installing frontend dependencies..."
@@ -135,12 +135,15 @@ frontend-build:
 # Docker commands
 docker-up:
 	@echo "Starting Docker services (development mode)..."
-	docker-compose -f docker/docker-compose.dev.yml up -d
+	docker-compose -f docker/docker-compose.dev.yml up -d --build
 	@echo ""
 	@echo "✓ Services started:"
-	@echo "  Backend API: http://localhost:8000"
-	@echo "  API Docs: http://localhost:8000/docs"
+	@echo "  Backend API (SAM3): http://localhost:8000"
+	@echo "  Backend Docs: http://localhost:8000/docs"
+	@echo "  API Core (BYOM): http://localhost:8001"
+	@echo "  API Core Docs: http://localhost:8001/docs"
 	@echo "  Frontend: http://localhost:5173"
+	@echo "  Redis: localhost:6379 (internal)"
 
 docker-down:
 	@echo "Stopping Docker services..."
@@ -178,29 +181,29 @@ docker-down-team:
 docker-logs:
 ifdef service
 	@echo "Viewing logs for $(service)..."
-	docker-compose logs -f $(service)
+	docker-compose -f docker/docker-compose.dev.yml logs -f $(service)
 else
 	@echo "Viewing all logs..."
-	docker-compose logs -f
+	docker-compose -f docker/docker-compose.dev.yml logs -f
 endif
 
 docker-build:
 	@echo "Building Docker images..."
-	docker-compose build
+	docker-compose -f docker/docker-compose.dev.yml build
 
 docker-restart:
 ifdef service
 	@echo "Restarting $(service) service..."
-	docker-compose restart $(service)
+	docker-compose -f docker/docker-compose.dev.yml restart $(service)
 else
 	@echo "Restarting all services..."
-	docker-compose restart
+	docker-compose -f docker/docker-compose.dev.yml restart
 endif
 
 docker-shell:
 ifdef service
 	@echo "Opening shell in $(service) container..."
-	docker-compose exec $(service) sh
+	docker-compose -f docker/docker-compose.dev.yml exec $(service) sh
 else
 	@echo "Error: Please specify service (e.g., make docker-shell service=backend)"
 endif
