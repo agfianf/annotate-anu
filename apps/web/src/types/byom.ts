@@ -15,11 +15,25 @@ export interface ModelCapabilities {
   model_type?: ModelType  // For easy UI logic
 }
 
+export interface ResponseMapping {
+  boxes_field: string
+  scores_field: string
+  masks_field?: string | null
+  labels_field?: string | null
+  num_objects_field?: string | null
+}
+
+export interface EndpointConfig {
+  inference_path: string
+  response_mapping?: ResponseMapping | null
+}
+
 export interface RegisteredModel {
   id: string
   name: string
   endpoint_url: string
   capabilities: ModelCapabilities | null
+  endpoint_config?: EndpointConfig | null
   description: string | null
   is_active: boolean
   is_healthy: boolean
@@ -34,6 +48,7 @@ export interface ModelRegistrationRequest {
   auth_token?: string
   description?: string
   capabilities?: ModelCapabilities
+  endpoint_config?: EndpointConfig | null
 }
 
 export interface ModelUpdateRequest {
@@ -42,6 +57,7 @@ export interface ModelUpdateRequest {
   auth_token?: string
   description?: string
   capabilities?: ModelCapabilities
+  endpoint_config?: EndpointConfig | null
   is_active?: boolean
 }
 
