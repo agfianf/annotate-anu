@@ -26,6 +26,12 @@ class Settings(BaseSettings):
         description="Database connection URL"
     )
 
+    # Redis settings
+    REDIS_URL: str = Field(
+        default="redis://localhost:6379/0",
+        description="Redis connection URL"
+    )
+
     # CORS settings
     CORS_ORIGINS: list[str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"],

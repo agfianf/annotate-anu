@@ -43,8 +43,7 @@ async def lifespan(app: FastAPI):
     logger.info("Database tables ensured")
 
     # Initialize Redis
-    redis_url = getattr(settings, "REDIS_URL", "redis://localhost:6379/0")
-    redis_client = RedisClient(redis_url)
+    redis_client = RedisClient(settings.REDIS_URL)
 
     # Initialize health checker
     health_checker = HealthChecker()
@@ -87,33 +86,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# Middleware to inject services into request state
-@app.middleware("http")
-async def inject_state(request: Request, call_next):
-    """Inject lifespan state into request.
-
-    Parameters
-    ----------
-    request : Request
-        FastAPI request
-    call_next : callable
-        Next middleware/endpoint
-
-    Returns
-    -------
-    Response
-        HTTP response
-    """
-    request.state.engine = app.state.engine
-    request.state.model_service = app.state.model_service
-    request.state.redis_client = app.state.redis_client
-    request.state.health_checker = app.state.health_checker
-    request.state.inference_proxy = app.state.inference_proxy
-
-    response = await call_next(request)
-    return response
 
 
 # Exception handlers
