@@ -1,5 +1,5 @@
 import Konva from 'konva'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva'
 import type { Annotation, Label, PolygonAnnotation, RectangleAnnotation, Tool } from '../types/annotations'
@@ -61,6 +61,8 @@ const Canvas = React.memo(function Canvas({
   } | null>(null)
   // Track which annotation is being dragged (to hide points/label/coordinates during drag)
   const [draggingAnnotationId, setDraggingAnnotationId] = useState<string | null>(null)
+  // Track if we're waiting for annotation data to update after drag end
+  const pendingDragEndRef = useRef<{ annotationId: string; node: any } | null>(null)
   const [isDraggingStage, setIsDraggingStage] = useState(false)
   const [stageDragStart, setStageDragStart] = useState<{ x: number; y: number } | null>(null)
   const [isPanMode, setIsPanMode] = useState(false) // Space key hold-to-pan mode
@@ -75,6 +77,40 @@ const Canvas = React.memo(function Canvas({
       annotations: annotations.map(a => ({ id: a.id, type: a.type, labelId: a.labelId, imageId: a.imageId }))
     })
   }, [annotations])
+
+  // Clear dragging state when annotations update (after drag end)
+  // useLayoutEffect runs synchronously after DOM mutations but BEFORE browser paint
+  // This prevents any visual flicker by resetting node position before the user sees the frame
+  useLayoutEffect(() => {
+    if (pendingDragEndRef.current) {
+      const { annotationId, node } = pendingDragEndRef.current
+
+      // Find the updated annotation to get its new coordinates
+      const updatedAnnotation = annotations.find(a => a.id === annotationId)
+
+      if (node && updatedAnnotation) {
+        if (updatedAnnotation.type === 'rectangle') {
+          // For rectangles, set the node position to match the new annotation coordinates
+          // This ensures the visual position matches the data
+          const rect = updatedAnnotation as RectangleAnnotation
+          node.x(rect.x * scale)
+          node.y(rect.y * scale)
+          node.width(rect.width * scale)
+          node.height(rect.height * scale)
+        } else if (updatedAnnotation.type === 'polygon') {
+          // For polygons, reset to 0,0 since points contain absolute coordinates
+          node.x(0)
+          node.y(0)
+        }
+        console.log('[DRAG] Reset node position for:', annotationId, updatedAnnotation.type)
+      }
+
+      // Clear pending state
+      pendingDragEndRef.current = null
+      // Clear dragging UI state
+      setDraggingAnnotationId(null)
+    }
+  }, [annotations, scale])
 
   // Annotation appearance constants - adjust these to customize look
   const ANNOTATION_FILL_OPACITY_SELECTED = 0.2  // Fill opacity when selected
@@ -785,14 +821,18 @@ const Canvas = React.memo(function Canvas({
     setCursorScreenPosition(null)
   }, [image])
 
+  // Handle drag start - initialize dragging state
+  const handleDragStart = (annotation: Annotation) => {
+    setDraggingAnnotationId(annotation.id)
+  }
+
   const handleDragEnd = (annotation: Annotation, e: any) => {
     console.log('[DRAG] handleDragEnd called for:', annotation.type, 'id:', annotation.id)
     const node = e.target
-    console.log('[DRAG] Node position:', { x: node.x(), y: node.y() })
     const scaleX = node.scaleX()
     const scaleY = node.scaleY()
 
-    // Reset scale to 1 and adjust dimensions
+    // Reset scale to 1
     node.scaleX(1)
     node.scaleY(1)
 
@@ -800,14 +840,16 @@ const Canvas = React.memo(function Canvas({
     const imageWidth = konvaImageRef.current?.width
     const imageHeight = konvaImageRef.current?.height
 
-    // Note: Only divide by 'scale' (autofit scale), not zoomLevel
-    // The Stage handles zoomLevel transform, so node positions are in Layer coordinates
-
     if (annotation.type === 'rectangle') {
+      // For Rect, node.x() and node.y() are the ABSOLUTE position on canvas after drag
+      // We need to convert from canvas coordinates back to image coordinates
+      // Canvas coords = image coords * scale, so image coords = canvas coords / scale
       const newX = node.x() / scale
       const newY = node.y() / scale
       const newWidth = (node.width() * scaleX) / scale
       const newHeight = (node.height() * scaleY) / scale
+
+      console.log('[DRAG] Rectangle new position:', { newX, newY, newWidth, newHeight })
 
       // Apply CVAT-like clipping if image dimensions available
       let clippedX = newX
@@ -837,16 +879,22 @@ const Canvas = React.memo(function Canvas({
         width: clippedWidth,
         height: clippedHeight,
       }
-      onUpdateAnnotation(updatedAnnotation)
 
-      // Clear dragging state AFTER React processes the update to prevent flicker
-      setTimeout(() => {
-        setDraggingAnnotationId(null)
-      }, 0)
+      // Store ref to clear dragging state after React updates
+      pendingDragEndRef.current = { annotationId: annotation.id, node }
+
+      // Update annotation - this triggers parent state update
+      // The useLayoutEffect watching annotations will reset node position and clear dragging state
+      onUpdateAnnotation(updatedAnnotation)
     } else if (annotation.type === 'polygon') {
       const poly = annotation as PolygonAnnotation
+
+      // For Polygon (Line), node.x() and node.y() are the OFFSET from the original position
+      // (since we render the Line at position 0,0 with points containing absolute coords)
       const offsetX = node.x() / scale
       const offsetY = node.y() / scale
+
+      console.log('[DRAG] Polygon offset:', { offsetX, offsetY })
 
       // Update all polygon points with the offset
       let updatedPoints = poly.points.map(point => ({
@@ -865,16 +913,12 @@ const Canvas = React.memo(function Canvas({
         updatedAt: Date.now(),
       }
 
-      // Update annotation first
-      onUpdateAnnotation(updatedAnnotation)
+      // Store ref to clear dragging state after React updates
+      pendingDragEndRef.current = { annotationId: annotation.id, node }
 
-      // Reset node position and show points/label AFTER React processes the update
-      // Using setTimeout(0) to defer until after the current event loop and React render
-      setTimeout(() => {
-        node.x(0)
-        node.y(0)
-        setDraggingAnnotationId(null)
-      }, 0)
+      // Update annotation - this triggers parent state update
+      // The useLayoutEffect watching annotations will reset node position and clear dragging state
+      onUpdateAnnotation(updatedAnnotation)
     }
   }
 
@@ -1181,6 +1225,8 @@ const Canvas = React.memo(function Canvas({
 
             if (annotation.type === 'rectangle') {
               const rect = annotation as RectangleAnnotation
+              const isDragging = draggingAnnotationId === annotation.id
+
               return (
                 <React.Fragment key={`rect-group-${annotation.id}`}>
                   <Rect
@@ -1201,12 +1247,12 @@ const Canvas = React.memo(function Canvas({
                     onClick={() => onSelectAnnotation(annotation.id)}
                     onTap={() => onSelectAnnotation(annotation.id)}
                     draggable={selectedTool === 'select'}
-                    onDragStart={() => setDraggingAnnotationId(annotation.id)}
+                    onDragStart={() => handleDragStart(annotation)}
                     onDragEnd={(e) => handleDragEnd(annotation, e)}
                     onTransformEnd={(e) => handleTransformEnd(annotation, e)}
                   />
                   {/* Label text above rectangle - hide during drag */}
-                  {draggingAnnotationId !== annotation.id && (
+                  {!isDragging && (
                     <Text
                       key={`rect-label-${annotation.id}`}
                       x={rect.x * scale}
@@ -1222,6 +1268,7 @@ const Canvas = React.memo(function Canvas({
               )
             } else if (annotation.type === 'polygon') {
               const poly = annotation as PolygonAnnotation
+              const isDragging = draggingAnnotationId === annotation.id
 
               // Use dragging point if this polygon point is being edited (individual point drag)
               let displayPoints = poly.points
@@ -1253,7 +1300,7 @@ const Canvas = React.memo(function Canvas({
                     )}
                     closed
                     draggable={selectedTool === 'select'}
-                    onDragStart={() => setDraggingAnnotationId(annotation.id)}
+                    onDragStart={() => handleDragStart(annotation)}
                     onDragEnd={(e) => handleDragEnd(annotation, e)}
                     onClick={(e) => {
                       if (isCtrlPressed && isSelected) {
@@ -1265,7 +1312,7 @@ const Canvas = React.memo(function Canvas({
                     onTap={() => onSelectAnnotation(annotation.id)}
                   />
                   {/* Label text above polygon - hide during drag */}
-                  {displayPoints.length > 0 && draggingAnnotationId !== annotation.id && (
+                  {displayPoints.length > 0 && !isDragging && (
                     <Text
                       key={`poly-label-${annotation.id}`}
                       x={displayPoints[0].x * scale}
@@ -1278,7 +1325,7 @@ const Canvas = React.memo(function Canvas({
                     />
                   )}
                   {/* Show polygon points as small circles - hide during drag */}
-                  {isSelected && draggingAnnotationId !== annotation.id && poly.points.map((point, idx) => (
+                  {isSelected && !isDragging && poly.points.map((point, idx) => (
                     <Circle
                       key={`poly-point-${annotation.id}-${idx}`}
                       x={point.x * scale}
