@@ -64,6 +64,7 @@ const Canvas = React.memo(function Canvas({
   const [isDraggingStage, setIsDraggingStage] = useState(false)
   const [stageDragStart, setStageDragStart] = useState<{ x: number; y: number } | null>(null)
   const [isPanMode, setIsPanMode] = useState(false) // Space key hold-to-pan mode
+  const [copiedAnnotation, setCopiedAnnotation] = useState<Annotation | null>(null) // Clipboard for copy-paste
 
   const SNAP_DISTANCE = 10 // pixels in original image coordinates
 
@@ -489,6 +490,99 @@ const Canvas = React.memo(function Canvas({
         // Only if not typing in an input field
         e.preventDefault() // Prevent page scrolling
         setIsPanMode(true)
+      } else if (e.key === 'c' && (e.ctrlKey || e.metaKey) && !isTyping) {
+        // Copy selected annotation (Ctrl+C / Cmd+C)
+        if (selectedAnnotation) {
+          const annotationToCopy = annotations.find(a => a.id === selectedAnnotation)
+          if (annotationToCopy) {
+            setCopiedAnnotation(annotationToCopy)
+            toast.success('Annotation copied')
+          }
+        }
+      } else if (e.key === 'v' && (e.ctrlKey || e.metaKey) && !isTyping) {
+        // Paste annotation (Ctrl+V / Cmd+V)
+        e.preventDefault() // Prevent default paste behavior
+        if (copiedAnnotation && stageRef.current) {
+          const newId = Date.now().toString()
+          
+          // Get current mouse position on stage
+          const stage = stageRef.current
+          const pointerPos = stage.getPointerPosition()
+          
+          // Convert to original image coordinates if cursor is on canvas
+          let pasteX: number
+          let pasteY: number
+          
+          if (pointerPos) {
+            // Convert screen position to image coordinates
+            pasteX = (pointerPos.x - stagePosition.x) / (scale * zoomLevel)
+            pasteY = (pointerPos.y - stagePosition.y) / (scale * zoomLevel)
+          } else {
+            // Fallback: use offset from original position if cursor not available
+            const PASTE_OFFSET = 20
+            if (copiedAnnotation.type === 'rectangle') {
+              const rect = copiedAnnotation as RectangleAnnotation
+              pasteX = rect.x + PASTE_OFFSET
+              pasteY = rect.y + PASTE_OFFSET
+            } else {
+              pasteX = 0
+              pasteY = 0
+            }
+          }
+          
+          if (copiedAnnotation.type === 'rectangle') {
+            const rect = copiedAnnotation as RectangleAnnotation
+            // If we have cursor position, place top-left at cursor
+            // Otherwise pasteX/pasteY already has the fallback offset applied
+            const newAnnotation: Omit<RectangleAnnotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'> = {
+              id: newId,
+              type: 'rectangle',
+              x: pointerPos ? pasteX : pasteX,
+              y: pointerPos ? pasteY : pasteY,
+              width: rect.width,
+              height: rect.height,
+            }
+            onAddAnnotation(newAnnotation)
+            toast.success('Annotation pasted')
+          } else if (copiedAnnotation.type === 'polygon') {
+            const poly = copiedAnnotation as PolygonAnnotation
+            
+            if (pointerPos) {
+              // Calculate the center of the original polygon (bounding box center)
+              const xs = poly.points.map(p => p.x)
+              const ys = poly.points.map(p => p.y)
+              const centerX = (Math.min(...xs) + Math.max(...xs)) / 2
+              const centerY = (Math.min(...ys) + Math.max(...ys)) / 2
+              
+              // Offset to move center to cursor position
+              const offsetX = pasteX - centerX
+              const offsetY = pasteY - centerY
+              
+              const newAnnotation: Omit<PolygonAnnotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'> = {
+                id: newId,
+                type: 'polygon',
+                points: poly.points.map(p => ({
+                  x: p.x + offsetX,
+                  y: p.y + offsetY,
+                })),
+              }
+              onAddAnnotation(newAnnotation)
+            } else {
+              // Fallback: use fixed offset
+              const PASTE_OFFSET = 20
+              const newAnnotation: Omit<PolygonAnnotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'> = {
+                id: newId,
+                type: 'polygon',
+                points: poly.points.map(p => ({
+                  x: p.x + PASTE_OFFSET,
+                  y: p.y + PASTE_OFFSET,
+                })),
+              }
+              onAddAnnotation(newAnnotation)
+            }
+            toast.success('Annotation pasted')
+          }
+        }
       }
     }
 
@@ -518,7 +612,7 @@ const Canvas = React.memo(function Canvas({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [selectedTool, isPanMode])
+  }, [selectedTool, isPanMode, selectedAnnotation, annotations, copiedAnnotation, onAddAnnotation])
 
   // Reset drawing states when image changes
   useEffect(() => {
