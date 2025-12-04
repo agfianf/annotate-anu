@@ -331,10 +331,29 @@ const Canvas = React.memo(function Canvas({
 
         if (Math.abs(width) > 5 && Math.abs(height) > 5) {
           // Normalize rectangle (handle negative width/height)
-          const normalizedX = width < 0 ? rectangleStartPoint.x + width : rectangleStartPoint.x
-          const normalizedY = height < 0 ? rectangleStartPoint.y + height : rectangleStartPoint.y
-          const normalizedWidth = Math.abs(width)
-          const normalizedHeight = Math.abs(height)
+          let normalizedX = width < 0 ? rectangleStartPoint.x + width : rectangleStartPoint.x
+          let normalizedY = height < 0 ? rectangleStartPoint.y + height : rectangleStartPoint.y
+          let normalizedWidth = Math.abs(width)
+          let normalizedHeight = Math.abs(height)
+
+          // Apply CVAT-like clipping if image dimensions available
+          const imageWidth = konvaImageRef.current?.width
+          const imageHeight = konvaImageRef.current?.height
+
+          if (imageWidth && imageHeight) {
+            const clipped = clipRectangleToBounds(
+              normalizedX,
+              normalizedY,
+              normalizedWidth,
+              normalizedHeight,
+              imageWidth,
+              imageHeight
+            )
+            normalizedX = clipped.x
+            normalizedY = clipped.y
+            normalizedWidth = clipped.width
+            normalizedHeight = clipped.height
+          }
 
           const newAnnotation: Omit<RectangleAnnotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'> = {
             id: Date.now().toString(),
@@ -358,11 +377,20 @@ const Canvas = React.memo(function Canvas({
     } else if (selectedTool === 'polygon') {
       // Check if clicking near the first point to close polygon
       if (polygonPoints.length >= 3 && isNearFirstPoint) {
+        // Apply CVAT-like clipping if image dimensions available
+        const imageWidth = konvaImageRef.current?.width
+        const imageHeight = konvaImageRef.current?.height
+
+        let finalPoints = polygonPoints
+        if (imageWidth && imageHeight) {
+          finalPoints = clipPolygonPointsToBounds(polygonPoints, imageWidth, imageHeight)
+        }
+
         // Close the polygon
         const newAnnotation: Omit<PolygonAnnotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'> = {
           id: Date.now().toString(),
           type: 'polygon',
-          points: polygonPoints,
+          points: finalPoints,
         }
         onAddAnnotation(newAnnotation)
         setPolygonPoints([])
@@ -452,15 +480,117 @@ const Canvas = React.memo(function Canvas({
 
   const handleDoubleClick = () => {
     if (selectedTool === 'polygon' && polygonPoints.length >= 3) {
+      // Apply CVAT-like clipping if image dimensions available
+      const imageWidth = konvaImageRef.current?.width
+      const imageHeight = konvaImageRef.current?.height
+
+      let finalPoints = polygonPoints
+      if (imageWidth && imageHeight) {
+        finalPoints = clipPolygonPointsToBounds(polygonPoints, imageWidth, imageHeight)
+      }
+
       // Create polygon annotation
       const newAnnotation: Omit<PolygonAnnotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'> = {
         id: Date.now().toString(),
         type: 'polygon',
-        points: polygonPoints,
+        points: finalPoints,
       }
       onAddAnnotation(newAnnotation)
       setPolygonPoints([])
       setIsNearFirstPoint(false)
+    }
+  }
+
+  /**
+   * Clips a rectangle to stay within image bounds (CVAT-like behavior)
+   * Cuts off any part that extends beyond the boundary
+   * @param x - Rectangle X position
+   * @param y - Rectangle Y position
+   * @param width - Rectangle width
+   * @param height - Rectangle height
+   * @param imageWidth - Image width in pixels
+   * @param imageHeight - Image height in pixels
+   * @returns Clipped rectangle {x, y, width, height}
+   */
+  const clipRectangleToBounds = (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    imageWidth: number,
+    imageHeight: number
+  ): { x: number; y: number; width: number; height: number } => {
+    // Clip left edge
+    let clippedX = Math.max(0, x)
+    // Clip top edge
+    let clippedY = Math.max(0, y)
+
+    // Calculate how much was clipped from left/top
+    const leftClip = clippedX - x
+    const topClip = clippedY - y
+
+    // Adjust width/height for left/top clipping
+    let clippedWidth = width - leftClip
+    let clippedHeight = height - topClip
+
+    // Clip right edge
+    if (clippedX + clippedWidth > imageWidth) {
+      clippedWidth = imageWidth - clippedX
+    }
+
+    // Clip bottom edge
+    if (clippedY + clippedHeight > imageHeight) {
+      clippedHeight = imageHeight - clippedY
+    }
+
+    // Ensure minimum size of 1 pixel
+    clippedWidth = Math.max(1, clippedWidth)
+    clippedHeight = Math.max(1, clippedHeight)
+
+    return {
+      x: clippedX,
+      y: clippedY,
+      width: clippedWidth,
+      height: clippedHeight,
+    }
+  }
+
+  /**
+   * Clips polygon points to stay within image bounds (CVAT-like behavior)
+   * Each point is individually clamped to the boundary
+   * @param points - Array of polygon points
+   * @param imageWidth - Image width in pixels
+   * @param imageHeight - Image height in pixels
+   * @returns Clipped array of points
+   */
+  const clipPolygonPointsToBounds = (
+    points: Array<{ x: number; y: number }>,
+    imageWidth: number,
+    imageHeight: number
+  ): Array<{ x: number; y: number }> => {
+    return points.map(point => ({
+      x: Math.max(0, Math.min(point.x, imageWidth)),
+      y: Math.max(0, Math.min(point.y, imageHeight)),
+    }))
+  }
+
+  /**
+   * Clips a single point to stay within image bounds
+   * @param x - Point X position
+   * @param y - Point Y position
+   * @param imageWidth - Image width in pixels
+   * @param imageHeight - Image height in pixels
+   * @returns Clipped point {x, y}
+   */
+  const clipPointToBounds = (
+    x: number,
+    y: number,
+    imageWidth: number,
+    imageHeight: number
+  ): { x: number; y: number } => {
+    return {
+      x: Math.max(0, Math.min(x, imageWidth)),
+      y: Math.max(0, Math.min(y, imageHeight)),
     }
   }
 
@@ -532,54 +662,85 @@ const Canvas = React.memo(function Canvas({
           
           if (copiedAnnotation.type === 'rectangle') {
             const rect = copiedAnnotation as RectangleAnnotation
-            // If we have cursor position, place top-left at cursor
-            // Otherwise pasteX/pasteY already has the fallback offset applied
+
+            // Get image dimensions
+            const imageWidth = konvaImageRef.current?.width
+            const imageHeight = konvaImageRef.current?.height
+
+            if (!imageWidth || !imageHeight) {
+              toast.error('Cannot paste: Image dimensions unavailable')
+              return
+            }
+
+            // Apply CVAT-like clipping to paste position and dimensions
+            const clipped = clipRectangleToBounds(
+              pasteX,
+              pasteY,
+              rect.width,
+              rect.height,
+              imageWidth,
+              imageHeight
+            )
+
+            // Create annotation with clipped position and dimensions
             const newAnnotation: Omit<RectangleAnnotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'> = {
               id: newId,
               type: 'rectangle',
-              x: pointerPos ? pasteX : pasteX,
-              y: pointerPos ? pasteY : pasteY,
-              width: rect.width,
-              height: rect.height,
+              x: clipped.x,
+              y: clipped.y,
+              width: clipped.width,
+              height: clipped.height,
             }
             onAddAnnotation(newAnnotation)
             toast.success('Annotation pasted')
           } else if (copiedAnnotation.type === 'polygon') {
             const poly = copiedAnnotation as PolygonAnnotation
-            
+
+            // Get image dimensions
+            const imageWidth = konvaImageRef.current?.width
+            const imageHeight = konvaImageRef.current?.height
+
+            if (!imageWidth || !imageHeight) {
+              toast.error('Cannot paste: Image dimensions unavailable')
+              return
+            }
+
+            // Calculate the center of the original polygon (bounding box center)
+            const xs = poly.points.map(p => p.x)
+            const ys = poly.points.map(p => p.y)
+            const originalCenterX = (Math.min(...xs) + Math.max(...xs)) / 2
+            const originalCenterY = (Math.min(...ys) + Math.max(...ys)) / 2
+
+            // Calculate offset to move polygon
+            let offsetX: number
+            let offsetY: number
+
             if (pointerPos) {
-              // Calculate the center of the original polygon (bounding box center)
-              const xs = poly.points.map(p => p.x)
-              const ys = poly.points.map(p => p.y)
-              const centerX = (Math.min(...xs) + Math.max(...xs)) / 2
-              const centerY = (Math.min(...ys) + Math.max(...ys)) / 2
-              
-              // Offset to move center to cursor position
-              const offsetX = pasteX - centerX
-              const offsetY = pasteY - centerY
-              
-              const newAnnotation: Omit<PolygonAnnotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'> = {
-                id: newId,
-                type: 'polygon',
-                points: poly.points.map(p => ({
-                  x: p.x + offsetX,
-                  y: p.y + offsetY,
-                })),
-              }
-              onAddAnnotation(newAnnotation)
+              // Move center to cursor position
+              offsetX = pasteX - originalCenterX
+              offsetY = pasteY - originalCenterY
             } else {
               // Fallback: use fixed offset
               const PASTE_OFFSET = 20
-              const newAnnotation: Omit<PolygonAnnotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'> = {
-                id: newId,
-                type: 'polygon',
-                points: poly.points.map(p => ({
-                  x: p.x + PASTE_OFFSET,
-                  y: p.y + PASTE_OFFSET,
-                })),
-              }
-              onAddAnnotation(newAnnotation)
+              offsetX = PASTE_OFFSET
+              offsetY = PASTE_OFFSET
             }
+
+            // Apply offset to all points
+            const movedPoints = poly.points.map(p => ({
+              x: p.x + offsetX,
+              y: p.y + offsetY,
+            }))
+
+            // Apply CVAT-like clipping to all points
+            const clippedPoints = clipPolygonPointsToBounds(movedPoints, imageWidth, imageHeight)
+
+            const newAnnotation: Omit<PolygonAnnotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'> = {
+              id: newId,
+              type: 'polygon',
+              points: clippedPoints,
+            }
+            onAddAnnotation(newAnnotation)
             toast.success('Annotation pasted')
           }
         }
@@ -635,19 +796,49 @@ const Canvas = React.memo(function Canvas({
     node.scaleX(1)
     node.scaleY(1)
 
+    // Get image dimensions for boundary constraints
+    const imageWidth = konvaImageRef.current?.width
+    const imageHeight = konvaImageRef.current?.height
+
     // Note: Only divide by 'scale' (autofit scale), not zoomLevel
     // The Stage handles zoomLevel transform, so node positions are in Layer coordinates
 
     if (annotation.type === 'rectangle') {
+      const newX = node.x() / scale
+      const newY = node.y() / scale
+      const newWidth = (node.width() * scaleX) / scale
+      const newHeight = (node.height() * scaleY) / scale
+
+      // Apply CVAT-like clipping if image dimensions available
+      let clippedX = newX
+      let clippedY = newY
+      let clippedWidth = newWidth
+      let clippedHeight = newHeight
+
+      if (imageWidth && imageHeight) {
+        const clipped = clipRectangleToBounds(
+          newX,
+          newY,
+          newWidth,
+          newHeight,
+          imageWidth,
+          imageHeight
+        )
+        clippedX = clipped.x
+        clippedY = clipped.y
+        clippedWidth = clipped.width
+        clippedHeight = clipped.height
+      }
+
       const updatedAnnotation: RectangleAnnotation = {
         ...annotation,
-        x: node.x() / scale,
-        y: node.y() / scale,
-        width: (node.width() * scaleX) / scale,
-        height: (node.height() * scaleY) / scale,
+        x: clippedX,
+        y: clippedY,
+        width: clippedWidth,
+        height: clippedHeight,
       }
       onUpdateAnnotation(updatedAnnotation)
-      
+
       // Clear dragging state AFTER React processes the update to prevent flicker
       setTimeout(() => {
         setDraggingAnnotationId(null)
@@ -658,10 +849,15 @@ const Canvas = React.memo(function Canvas({
       const offsetY = node.y() / scale
 
       // Update all polygon points with the offset
-      const updatedPoints = poly.points.map(point => ({
+      let updatedPoints = poly.points.map(point => ({
         x: point.x + offsetX,
         y: point.y + offsetY,
       }))
+
+      // Apply CVAT-like clipping if image dimensions available
+      if (imageWidth && imageHeight) {
+        updatedPoints = clipPolygonPointsToBounds(updatedPoints, imageWidth, imageHeight)
+      }
 
       const updatedAnnotation: PolygonAnnotation = {
         ...poly,
@@ -671,7 +867,7 @@ const Canvas = React.memo(function Canvas({
 
       // Update annotation first
       onUpdateAnnotation(updatedAnnotation)
-      
+
       // Reset node position and show points/label AFTER React processes the update
       // Using setTimeout(0) to defer until after the current event loop and React render
       setTimeout(() => {
@@ -691,16 +887,46 @@ const Canvas = React.memo(function Canvas({
     node.scaleX(1)
     node.scaleY(1)
 
+    // Get image dimensions for boundary constraints
+    const imageWidth = konvaImageRef.current?.width
+    const imageHeight = konvaImageRef.current?.height
+
     // Note: Only divide by 'scale' (autofit scale), not zoomLevel
     // The Stage handles zoomLevel transform, so node positions are in Layer coordinates
 
     if (annotation.type === 'rectangle') {
+      const newX = node.x() / scale
+      const newY = node.y() / scale
+      const newWidth = (node.width() * scaleX) / scale
+      const newHeight = (node.height() * scaleY) / scale
+
+      // Apply CVAT-like clipping if image dimensions available
+      let clippedX = newX
+      let clippedY = newY
+      let clippedWidth = newWidth
+      let clippedHeight = newHeight
+
+      if (imageWidth && imageHeight) {
+        const clipped = clipRectangleToBounds(
+          newX,
+          newY,
+          newWidth,
+          newHeight,
+          imageWidth,
+          imageHeight
+        )
+        clippedX = clipped.x
+        clippedY = clipped.y
+        clippedWidth = clipped.width
+        clippedHeight = clipped.height
+      }
+
       const updatedAnnotation: RectangleAnnotation = {
         ...annotation,
-        x: node.x() / scale,
-        y: node.y() / scale,
-        width: (node.width() * scaleX) / scale,
-        height: (node.height() * scaleY) / scale,
+        x: clippedX,
+        y: clippedY,
+        width: clippedWidth,
+        height: clippedHeight,
       }
       onUpdateAnnotation(updatedAnnotation)
     }
@@ -735,8 +961,22 @@ const Canvas = React.memo(function Canvas({
     const newX = node.x() / scale
     const newY = node.y() / scale
 
+    // Get image dimensions for boundary constraints
+    const imageWidth = konvaImageRef.current?.width
+    const imageHeight = konvaImageRef.current?.height
+
+    // Apply CVAT-like clipping if image dimensions available
+    let clippedX = newX
+    let clippedY = newY
+
+    if (imageWidth && imageHeight) {
+      const clipped = clipPointToBounds(newX, newY, imageWidth, imageHeight)
+      clippedX = clipped.x
+      clippedY = clipped.y
+    }
+
     const updatedPoints = [...annotation.points]
-    updatedPoints[pointIndex] = { x: newX, y: newY }
+    updatedPoints[pointIndex] = { x: clippedX, y: clippedY }
 
     const updatedAnnotation: PolygonAnnotation = {
       ...annotation,
@@ -914,6 +1154,21 @@ const Canvas = React.memo(function Canvas({
               image={konvaImage}
               width={dimensions.width}
               height={dimensions.height}
+            />
+          )}
+
+          {/* Image boundary border */}
+          {konvaImage && (
+            <Rect
+              key="image-boundary"
+              x={0}
+              y={0}
+              width={dimensions.width}
+              height={dimensions.height}
+              stroke="#4b5563"
+              strokeWidth={getZoomAdjustedSize(2, zoomLevel)}
+              fill="transparent"
+              listening={false}
             />
           )}
 
