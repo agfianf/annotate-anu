@@ -16,8 +16,8 @@ import { useHistory } from '../hooks/useHistory'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useModelRegistry } from '../hooks/useModelRegistry'
 import { useStorage } from '../hooks/useStorage'
-import { DEFAULT_LABEL_COLOR, PRESET_COLORS } from '../lib/colors'
-import { isAllowedImageFile, getRelativePath, getDisplayName, ALLOWED_IMAGE_EXTENSIONS, isFolderUploadSupported } from '../lib/file-utils'
+import { DEFAULT_LABEL_COLOR } from '../lib/colors'
+import { ALLOWED_IMAGE_EXTENSIONS, getDisplayName, getRelativePath, isAllowedImageFile, isFolderUploadSupported } from '../lib/file-utils'
 import { annotationStorage } from '../lib/storage'
 import type { Annotation, ImageData, Label, PolygonAnnotation, PromptMode, RectangleAnnotation, Tool } from '../types/annotations'
 
@@ -416,10 +416,17 @@ function AnnotationApp() {
   // Annotation bulk operation handlers
   const handleBulkChangeLabel = async (annotationIds: string[], newLabelId: string) => {
     try {
-      await annotationStorage.bulkChangeLabel(annotationIds, newLabelId)
+      // Get the annotations that need to be updated
+      const annotationsToUpdate = annotations
+        .filter(a => annotationIds.includes(a.id))
+        .map(a => ({
+          ...a,
+          labelId: newLabelId,
+          updatedAt: Date.now(),
+        }))
 
-      // Reload annotations via useStorage reload
-      window.location.reload() // Temporary - ideally update state directly
+      // Update state directly without page reload
+      await updateManyAnnotations(annotationsToUpdate)
 
       const label = labels.find(l => l.id === newLabelId)
       toast.success(`${annotationIds.length} annotation(s) moved to "${label?.name}"`)
