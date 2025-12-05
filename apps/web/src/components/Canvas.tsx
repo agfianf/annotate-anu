@@ -1816,6 +1816,7 @@ const Canvas = React.memo(function Canvas({
               key="transformer"
               ref={transformerRef}
               keepRatio={isShiftPressed}
+              rotateEnabled={false}
               enabledAnchors={[
                 'top-left',
                 'top-right',
