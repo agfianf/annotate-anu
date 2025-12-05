@@ -1556,7 +1556,7 @@ const Canvas = React.memo(function Canvas({
                     )}
                     onClick={() => handleAnnotationClick(annotation.id)}
                     onTap={() => handleAnnotationClick(annotation.id)}
-                    draggable={selectedTool === 'select'}
+                    draggable={selectedTool === 'select' && isSelected}
                     onDragStart={(e) => handleDragStart(annotation, e)}
                     onDragMove={(e) => handleDragMove(annotation, e)}
                     onDragEnd={(e) => handleDragEnd(annotation, e)}
@@ -1613,7 +1613,7 @@ const Canvas = React.memo(function Canvas({
                       isSelected ? ANNOTATION_FILL_OPACITY_SELECTED : ANNOTATION_FILL_OPACITY_UNSELECTED
                     )}
                     closed
-                    draggable={selectedTool === 'select'}
+                    draggable={selectedTool === 'select' && isSelected}
                     onDragStart={(e) => handleDragStart(annotation, e)}
                     onDragMove={(e) => handleDragMove(annotation, e)}
                     onDragEnd={(e) => handleDragEnd(annotation, e)}
