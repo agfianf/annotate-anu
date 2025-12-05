@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { ChevronDown, ChevronLeft, ChevronRight, Circle, Eye, EyeOff, Filter, Shapes, SortDesc, Sparkles, Square as SquareIcon, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Trash2, Eye, EyeOff, ChevronDown, ChevronRight, Square as SquareIcon, Shapes, Circle, Filter, SortDesc, Sparkles, ChevronLeft } from 'lucide-react'
-import { Modal } from './ui/Modal'
 import type { Annotation, Label } from '../types/annotations'
+import { Modal } from './ui/Modal'
 
 type FilterMode = 'all' | 'manual' | 'auto'
 type SortMode = 'newest' | 'confidence-high' | 'confidence-low'
@@ -57,6 +57,21 @@ export default function Sidebar({
   const getLabel = (labelId: string) => {
     return labels.find(l => l.id === labelId)
   }
+
+  // Sync sidebar selection with canvas selection (bidirectional sync)
+  useEffect(() => {
+    // When canvas selection changes, update sidebar's internal selection to match
+    const canvasSelection = new Set(selectedAnnotations)
+    
+    // Only update if they're different to avoid infinite loops
+    const currentIds = Array.from(selectedIds)
+    const isSame = currentIds.length === selectedAnnotations.length && 
+                   currentIds.every(id => canvasSelection.has(id))
+    
+    if (!isSame) {
+      setSelectedIds(canvasSelection)
+    }
+  }, [selectedAnnotations])
 
   // Filter annotations
   const filteredAnnotations = annotations.filter(ann => {
@@ -113,6 +128,8 @@ export default function Sidebar({
       newSelection.add(id)
     }
     setSelectedIds(newSelection)
+    // Also update canvas selection to keep both in sync
+    onSelectAnnotations(Array.from(newSelection))
   }
 
   // Toggle all annotations under a label
@@ -130,6 +147,8 @@ export default function Sidebar({
       labelAnnotationIds.forEach(id => newSelection.add(id))
     }
     setSelectedIds(newSelection)
+    // Also update canvas selection to keep both in sync
+    onSelectAnnotations(Array.from(newSelection))
   }
 
   // Handle bulk delete
