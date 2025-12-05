@@ -65,6 +65,8 @@ const Canvas = React.memo(function Canvas({
   const [draggingAnnotationId, setDraggingAnnotationId] = useState<string | null>(null)
   // Track if we're waiting for annotation data to update after drag end
   const pendingDragEndRef = useRef<{ annotationId: string; node: any } | null>(null)
+  // Track if we're waiting for annotation data to update after polygon point drag end
+  const pendingPointDragEndRef = useRef<{ annotationId: string; pointIndex: number; finalX: number; finalY: number } | null>(null)
   // Track drag start position to detect click vs drag
   const dragStartPosRef = useRef<{ x: number; y: number } | null>(null)
   // Track original positions of all selected annotations for multi-drag
@@ -117,6 +119,25 @@ const Canvas = React.memo(function Canvas({
       pendingDragEndRef.current = null
       // Clear dragging UI state
       setDraggingAnnotationId(null)
+    }
+
+    // Handle pending polygon point drag end - clear draggingPoint only after annotation updates
+    if (pendingPointDragEndRef.current) {
+      const { annotationId, pointIndex, finalX, finalY } = pendingPointDragEndRef.current
+      const updatedAnnotation = annotations.find(a => a.id === annotationId) as PolygonAnnotation | undefined
+
+      // Check if the annotation has been updated with the new point position
+      if (updatedAnnotation && updatedAnnotation.type === 'polygon') {
+        const updatedPoint = updatedAnnotation.points[pointIndex]
+        // Verify the point position matches what we expect (with small tolerance for floating point)
+        if (updatedPoint && 
+            Math.abs(updatedPoint.x - finalX) < 0.01 && 
+            Math.abs(updatedPoint.y - finalY) < 0.01) {
+          console.log('[POINT DRAG] Annotation updated, clearing dragging state:', annotationId, pointIndex)
+          pendingPointDragEndRef.current = null
+          setDraggingPoint(null)
+        }
+      }
     }
   }, [annotations, scale])
 
@@ -1307,8 +1328,16 @@ const Canvas = React.memo(function Canvas({
       updatedAt: Date.now(),
     }
 
+    // Set pending state to delay clearing draggingPoint until annotation updates
+    // This prevents flickering when the component re-renders
+    pendingPointDragEndRef.current = {
+      annotationId: annotation.id,
+      pointIndex,
+      finalX: clippedX,
+      finalY: clippedY,
+    }
+
     onUpdateAnnotation(updatedAnnotation)
-    setDraggingPoint(null)
   }
 
   const handlePolygonPointDelete = (annotation: PolygonAnnotation, pointIndex: number) => {
@@ -1611,42 +1640,51 @@ const Canvas = React.memo(function Canvas({
                     />
                   )}
                   {/* Show polygon points as small circles - hide during drag */}
-                  {isSelected && !shouldHidePoints && poly.points.map((point, idx) => (
-                    <Circle
-                      key={`poly-point-${annotation.id}-${idx}`}
-                      x={point.x * scale}
-                      y={point.y * scale}
-                      radius={getZoomAdjustedSize(6, zoomLevel)}
-                      fill={color}
-                      stroke="white"
-                      strokeWidth={getZoomAdjustedSize(2, zoomLevel)}
-                      draggable={true}
-                      onDragStart={(e) => {
-                        e.cancelBubble = true // Prevent group drag
-                        handlePolygonPointDragStart(poly, idx)
-                      }}
-                      onDragMove={(e) => {
-                        e.cancelBubble = true // Prevent group drag
-                        handlePolygonPointDragMove(poly, idx, e)
-                      }}
-                      onDragEnd={(e) => {
-                        e.cancelBubble = true // Prevent group drag
-                        handlePolygonPointDragEnd(poly, idx, e)
-                      }}
-                      onDblClick={(e) => {
-                        e.cancelBubble = true // Prevent double-click propagation
-                        handlePolygonPointDelete(poly, idx)
-                      }}
-                      onMouseEnter={(e) => {
-                        const container = e.target.getStage()?.container()
-                        if (container) container.style.cursor = 'pointer'
-                      }}
-                      onMouseLeave={(e) => {
-                        const container = e.target.getStage()?.container()
-                        if (container) container.style.cursor = getCursorStyle()
-                      }}
-                    />
-                  ))}
+                  {isSelected && !shouldHidePoints && displayPoints.map((point, idx) => {
+                    return (
+                      <Circle
+                        key={`poly-point-${annotation.id}-${idx}`}
+                        x={point.x * scale}
+                        y={point.y * scale}
+                        radius={getZoomAdjustedSize(6, zoomLevel)}
+                        fill={color}
+                        stroke="white"
+                        strokeWidth={getZoomAdjustedSize(2, zoomLevel)}
+                        draggable={true}
+                        onDragStart={(e) => {
+                          e.cancelBubble = true // Prevent group drag
+                          handlePolygonPointDragStart(poly, idx)
+                        }}
+                        onDragMove={(e) => {
+                          e.cancelBubble = true // Prevent group drag
+                          handlePolygonPointDragMove(poly, idx, e)
+                        }}
+                        onDragEnd={(e) => {
+                          e.cancelBubble = true // Prevent group drag
+                          // Reset circle position to scaled coordinates before updating annotation
+                          // This prevents visual flickering when the annotation data updates
+                          const node = e.target
+                          const newX = node.x() / scale
+                          const newY = node.y() / scale
+                          node.x(newX * scale)
+                          node.y(newY * scale)
+                          handlePolygonPointDragEnd(poly, idx, e)
+                        }}
+                        onDblClick={(e) => {
+                          e.cancelBubble = true // Prevent double-click propagation
+                          handlePolygonPointDelete(poly, idx)
+                        }}
+                        onMouseEnter={(e) => {
+                          const container = e.target.getStage()?.container()
+                          if (container) container.style.cursor = 'pointer'
+                        }}
+                        onMouseLeave={(e) => {
+                          const container = e.target.getStage()?.container()
+                          if (container) container.style.cursor = getCursorStyle()
+                        }}
+                      />
+                    )
+                  })}
                 </Group>
               )
             }

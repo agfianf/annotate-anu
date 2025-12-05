@@ -205,3 +205,4 @@ IndexedDB state inspection:
 Backend tests: Use pytest in `apps/api-inference/src/tests/` (directory structure exists but tests not yet implemented)
 
 Frontend: No test suite currently configured (Vite default setup doesn't include testing framework)
+- always see inside container, see make comamnds
