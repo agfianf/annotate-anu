@@ -10,9 +10,9 @@ type SortMode = 'newest' | 'confidence-high' | 'confidence-low'
 interface SidebarProps {
   annotations: Annotation[]
   labels: Label[]
-  selectedAnnotation: string | null
+  selectedAnnotations: string[]
   selectedLabelId: string | null
-  onSelectAnnotation: (id: string) => void
+  onSelectAnnotations: (ids: string[]) => void
   onSelectLabel: (id: string) => void
   onDeleteAnnotation: (id: string) => void
   onBulkDeleteAnnotations: (ids: string[]) => void
@@ -26,9 +26,9 @@ interface SidebarProps {
 export default function Sidebar({
   annotations,
   labels,
-  selectedAnnotation,
+  selectedAnnotations,
   selectedLabelId,
-  onSelectAnnotation,
+  onSelectAnnotations,
   onSelectLabel,
   onDeleteAnnotation,
   onBulkDeleteAnnotations,
@@ -523,7 +523,7 @@ export default function Sidebar({
                       ) : (
                         labelAnnotations.map((ann, index) => {
                           const isSelected = selectedIds.has(ann.id)
-                          const isActiveAnnotation = selectedAnnotation === ann.id
+                          const isActiveAnnotation = selectedAnnotations.includes(ann.id)
                           const isVisible = ann.isVisible ?? true
 
                           return (
@@ -559,9 +559,9 @@ export default function Sidebar({
                                 {getAnnotationIcon(ann.type)}
                               </div>
 
-                              {/* Annotation Number */}
+                              {/* Annotation Number - click to select in canvas */}
                               <button
-                                onClick={() => onSelectAnnotation(ann.id)}
+                                onClick={() => onSelectAnnotations([ann.id])}
                                 className="flex-1 text-left text-sm text-gray-700 hover:text-gray-900 transition-colors flex items-center gap-1"
                                 title="Select and focus this annotation"
                               >

@@ -12,8 +12,8 @@ interface CanvasProps {
   selectedLabelId: string | null
   onAddAnnotation: (annotation: Omit<Annotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'>) => void
   onUpdateAnnotation: (annotation: Annotation) => void
-  selectedAnnotation: string | null
-  onSelectAnnotation: (id: string | null) => void
+  selectedAnnotations: string[]
+  onSelectAnnotations: (ids: string[]) => void
   promptBboxes?: Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>
   zoomLevel?: number
   onZoomChange?: (zoom: number) => void
@@ -29,8 +29,8 @@ const Canvas = React.memo(function Canvas({
   selectedLabelId,
   onAddAnnotation,
   onUpdateAnnotation,
-  selectedAnnotation,
-  onSelectAnnotation,
+  selectedAnnotations,
+  onSelectAnnotations,
   promptBboxes = [],
   zoomLevel = 1,
   onZoomChange,
@@ -210,15 +210,22 @@ const Canvas = React.memo(function Canvas({
   // Update transformer when selection changes (only for rectangles)
   useEffect(() => {
     if (transformerRef.current && stageRef.current && selectedTool === 'select') {
-      if (selectedAnnotation) {
-        const annotation = annotations.find(a => a.id === selectedAnnotation)
-        // Only attach transformer to rectangles, polygons use point-based editing
-        if (annotation && annotation.type === 'rectangle') {
-          const node = stageRef.current.findOne(`#ann-${selectedAnnotation}`)
-          if (node) {
-            transformerRef.current.nodes([node])
-            transformerRef.current.getLayer()?.batchDraw()
-          }
+      if (selectedAnnotations.length > 0) {
+        // For multi-select, attach transformer to all selected rectangles
+        const selectedNodes = selectedAnnotations
+          .map(id => {
+            const annotation = annotations.find(a => a.id === id)
+            // Only attach transformer to rectangles, polygons use point-based editing
+            if (annotation && annotation.type === 'rectangle') {
+              return stageRef.current?.findOne(`#ann-${id}`)
+            }
+            return null
+          })
+          .filter((node): node is Konva.Node => node !== null && node !== undefined)
+
+        if (selectedNodes.length > 0) {
+          transformerRef.current.nodes(selectedNodes)
+          transformerRef.current.getLayer()?.batchDraw()
         } else {
           transformerRef.current.nodes([])
           transformerRef.current.getLayer()?.batchDraw()
@@ -228,7 +235,7 @@ const Canvas = React.memo(function Canvas({
         transformerRef.current.getLayer()?.batchDraw()
       }
     }
-  }, [selectedAnnotation, selectedTool, annotations])
+  }, [selectedAnnotations, selectedTool, annotations])
 
   // Create label lookup map for O(1) access instead of O(n) search
   const labelMap = useMemo(() => {
@@ -323,7 +330,11 @@ const Canvas = React.memo(function Canvas({
     // Deselect when clicking on stage or image (empty area)
     const clickedOnEmpty = e.target === e.target.getStage() || e.target.attrs?.image
     if (clickedOnEmpty && selectedTool === 'select') {
-      onSelectAnnotation(null)
+      // Clear selection unless Shift is pressed
+      if (!isShiftPressed) {
+        onSelectAnnotations([]
+)
+      }
       // Start manual stage panning only when clicking on empty space
       const stage = e.target.getStage()
       const pos = stage.getPointerPosition()
@@ -657,12 +668,12 @@ const Canvas = React.memo(function Canvas({
         e.preventDefault() // Prevent page scrolling
         setIsPanMode(true)
       } else if (e.key === 'c' && (e.ctrlKey || e.metaKey) && !isTyping) {
-        // Copy selected annotation (Ctrl+C / Cmd+C)
-        if (selectedAnnotation) {
-          const annotationToCopy = annotations.find(a => a.id === selectedAnnotation)
+        // Copy selected annotation (Ctrl+C / Cmd+C) - only copy first if multiple selected
+        if (selectedAnnotations.length > 0) {
+          const annotationToCopy = annotations.find(a => a.id === selectedAnnotations[0])
           if (annotationToCopy) {
             setCopiedAnnotation(annotationToCopy)
-            toast.success('Annotation copied')
+            toast.success(selectedAnnotations.length === 1 ? 'Annotation copied' : 'First annotation copied')
           }
         }
       } else if (e.key === 'v' && (e.ctrlKey || e.metaKey) && !isTyping) {
@@ -809,7 +820,7 @@ const Canvas = React.memo(function Canvas({
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [selectedTool, isPanMode, selectedAnnotation, annotations, copiedAnnotation, onAddAnnotation])
+  }, [selectedTool, isPanMode, selectedAnnotations, annotations, copiedAnnotation, onAddAnnotation])
 
   // Reset drawing states when image changes
   useEffect(() => {
@@ -820,6 +831,23 @@ const Canvas = React.memo(function Canvas({
     setMousePosition(null)
     setCursorScreenPosition(null)
   }, [image])
+
+  // Handle annotation selection with Shift+Click support for multi-select
+  const handleAnnotationClick = useCallback((annotationId: string) => {
+    if (isShiftPressed) {
+      // Shift+Click: Toggle annotation in selection
+      if (selectedAnnotations.includes(annotationId)) {
+        // Deselect if already selected
+        onSelectAnnotations(selectedAnnotations.filter(id => id !== annotationId))
+      } else {
+        // Add to selection
+        onSelectAnnotations([...selectedAnnotations, annotationId])
+      }
+    } else {
+      // Normal click: Select only this annotation
+      onSelectAnnotations([annotationId])
+    }
+  }, [isShiftPressed, selectedAnnotations, onSelectAnnotations])
 
   // Handle drag start - initialize dragging state
   const handleDragStart = (annotation: Annotation) => {
@@ -1221,7 +1249,7 @@ const Canvas = React.memo(function Canvas({
             const label = getLabel(annotation.labelId)
             const color = label?.color || '#f97316'
             const labelName = label?.name || 'Unknown'
-            const isSelected = selectedAnnotation === annotation.id
+            const isSelected = selectedAnnotations.includes(annotation.id)
 
             if (annotation.type === 'rectangle') {
               const rect = annotation as RectangleAnnotation
@@ -1244,8 +1272,8 @@ const Canvas = React.memo(function Canvas({
                       color,
                       isSelected ? ANNOTATION_FILL_OPACITY_SELECTED : ANNOTATION_FILL_OPACITY_UNSELECTED
                     )}
-                    onClick={() => onSelectAnnotation(annotation.id)}
-                    onTap={() => onSelectAnnotation(annotation.id)}
+                    onClick={() => handleAnnotationClick(annotation.id)}
+                    onTap={() => handleAnnotationClick(annotation.id)}
                     draggable={selectedTool === 'select'}
                     onDragStart={() => handleDragStart(annotation)}
                     onDragEnd={(e) => handleDragEnd(annotation, e)}
@@ -1306,10 +1334,10 @@ const Canvas = React.memo(function Canvas({
                       if (isCtrlPressed && isSelected) {
                         handlePolygonLineClick(poly, e)
                       } else {
-                        onSelectAnnotation(annotation.id)
+                        handleAnnotationClick(annotation.id)
                       }
                     }}
-                    onTap={() => onSelectAnnotation(annotation.id)}
+                    onTap={() => handleAnnotationClick(annotation.id)}
                   />
                   {/* Label text above polygon - hide during drag */}
                   {displayPoints.length > 0 && !isDragging && (
@@ -1558,9 +1586,10 @@ const Canvas = React.memo(function Canvas({
         </div>
       )}
 
-      {/* Bounding box coordinates for selected annotation - hide during drag */}
-      {selectedAnnotation && draggingAnnotationId !== selectedAnnotation && (() => {
-        const annotation = annotations.find(a => a.id === selectedAnnotation)
+      {/* Bounding box coordinates for selected annotations - hide during drag */}
+      {/* Only show coordinates if exactly one annotation is selected */}
+      {selectedAnnotations.length === 1 && draggingAnnotationId !== selectedAnnotations[0] && (() => {
+        const annotation = annotations.find(a => a.id === selectedAnnotations[0])
         if (!annotation) return null
 
         let topLeft: { x: number; y: number } | null = null

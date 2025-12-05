@@ -89,7 +89,7 @@ const ImageThumbnail = ({
 function AnnotationApp() {
   const navigate = useNavigate()
   const [selectedTool, setSelectedTool] = useState<Tool>('select')
-  const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null)
+  const [selectedAnnotations, setSelectedAnnotations] = useState<string[]>([])
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null)
   const [showLabelManager, setShowLabelManager] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
@@ -379,9 +379,8 @@ function AnnotationApp() {
 
   const handleDeleteAnnotation = async (id: string) => {
     await removeAnnotation(id)
-    if (selectedAnnotation === id) {
-      setSelectedAnnotation(null)
-    }
+    // Remove from selection if it was selected
+    setSelectedAnnotations(prev => prev.filter(selectedId => selectedId !== id))
     // Record history after user action (not during undo/redo)
     if (!isUndoingRef.current) {
       recordChange(currentAnnotations.filter(a => a.id !== id))
@@ -390,9 +389,8 @@ function AnnotationApp() {
 
   const handleBulkDeleteAnnotations = async (ids: string[]) => {
     await removeManyAnnotations(ids)
-    if (selectedAnnotation && ids.includes(selectedAnnotation)) {
-      setSelectedAnnotation(null)
-    }
+    // Remove deleted annotations from selection
+    setSelectedAnnotations(prev => prev.filter(selectedId => !ids.includes(selectedId)))
     // Record history after user action (not during undo/redo)
     if (!isUndoingRef.current) {
       recordChange(currentAnnotations.filter(a => !ids.includes(a.id)))
@@ -544,12 +542,12 @@ function AnnotationApp() {
       setCurrentImageUrl(null)
     }
     // Clear selection when image changes
-    setSelectedAnnotation(null)
+    setSelectedAnnotations([])
   }, [currentImage])
 
   // Clear selection when navigating between images
   useEffect(() => {
-    setSelectedAnnotation(null)
+    setSelectedAnnotations([])
   }, [currentImageId])
 
   // Clear prompt bboxes when changing images to avoid confusion
@@ -734,8 +732,13 @@ function AnnotationApp() {
   useKeyboardShortcuts({
     onSelectTool: setSelectedTool,
     onDelete: () => {
-      if (selectedAnnotation) {
-        handleDeleteAnnotation(selectedAnnotation)
+      // Delete all selected annotations
+      if (selectedAnnotations.length > 0) {
+        if (selectedAnnotations.length === 1) {
+          handleDeleteAnnotation(selectedAnnotations[0])
+        } else {
+          handleBulkDeleteAnnotations(selectedAnnotations)
+        }
       }
     },
     onNewAnnotation: () => {
@@ -902,8 +905,8 @@ function AnnotationApp() {
                 selectedLabelId={selectedLabelId}
                 onAddAnnotation={handleAddAnnotation}
                 onUpdateAnnotation={handleUpdateAnnotation}
-                selectedAnnotation={selectedAnnotation}
-                onSelectAnnotation={setSelectedAnnotation}
+                selectedAnnotations={selectedAnnotations}
+                onSelectAnnotations={setSelectedAnnotations}
                 promptBboxes={promptBboxes}
                 zoomLevel={zoomLevel}
                 onZoomChange={setZoomLevel}
@@ -926,9 +929,9 @@ function AnnotationApp() {
           <Sidebar
             annotations={currentAnnotations}
             labels={labels}
-            selectedAnnotation={selectedAnnotation}
+            selectedAnnotations={selectedAnnotations}
             selectedLabelId={selectedLabelId}
-            onSelectAnnotation={setSelectedAnnotation}
+            onSelectAnnotations={setSelectedAnnotations}
             onSelectLabel={setSelectedLabelId}
             onDeleteAnnotation={handleDeleteAnnotation}
             onBulkDeleteAnnotations={handleBulkDeleteAnnotations}
@@ -1595,7 +1598,7 @@ function AnnotationApp() {
                   toolConfig: true,
                   images: false,
                 })
-                setSelectedAnnotation(null)
+                setSelectedAnnotations([])
                 setSelectedTool('select')
               }}
               disabled={!resetOptions.annotations && !resetOptions.labels && !resetOptions.toolConfig && !resetOptions.images}

@@ -3,67 +3,8 @@
   <head>
     <meta charset="UTF-8" />
 
-    <!-- React Grab - Development Only -->
-    <script type="module">
-      // STEP 1: Check if this script even runs
-      console.log("🔍 STEP 1: Script is executing");
-      console.log("🔍 import.meta:", import.meta);
-      console.log("🔍 import.meta.env:", import.meta.env);
-      console.log("🔍 import.meta.env.DEV:", import.meta.env.DEV);
-      console.log("🔍 import.meta.env.MODE:", import.meta.env.MODE);
-
-      // STEP 2: Try loading react-grab regardless of env
-      console.log("🔍 STEP 2: Attempting to import react-grab...");
-
-      import("react-grab")
-        .then((module) => {
-          console.log("✅ SUCCESS: react-grab imported");
-          console.log("✅ Module:", module);
-          console.log("✅ Module.default:", module.default);
-
-          // STEP 3: Check for API on window
-          setTimeout(() => {
-            console.log("🔍 STEP 3: Checking window objects...");
-            console.log("window.__REACT_GRAB__:", window.__REACT_GRAB__);
-            console.log("window.ReactGrab:", window.ReactGrab);
-
-            // List all window properties containing 'react' or 'grab'
-            const relevantProps = Object.keys(window).filter(key =>
-              key.toLowerCase().includes('react') || key.toLowerCase().includes('grab')
-            );
-            console.log("🔍 Relevant window properties:", relevantProps);
-
-            // STEP 4: Try to access API
-            const api = window.__REACT_GRAB__;
-            if (api) {
-              console.log("✅ API FOUND!");
-              console.log("API structure:", api);
-              console.log("API keys:", Object.keys(api));
-
-              // STEP 5: Check if API has methods
-              if (typeof api.init === 'function') {
-                console.log("✅ api.init is a function");
-              }
-              if (typeof api.activate === 'function') {
-                console.log("✅ api.activate is a function");
-              }
-              if (typeof api.copyElement === 'function') {
-                console.log("✅ api.copyElement is a function");
-              }
-            } else {
-              console.error("❌ NO API FOUND on window.__REACT_GRAB__");
-            }
-          }, 2000);
-        })
-        .catch((err) => {
-          console.error("❌ FAILED to import react-grab");
-          console.error("Error:", err);
-          console.error("Error message:", err.message);
-          console.error("Error stack:", err.stack);
-        });
-
-      console.log("🔍 Script finished (async operations may still be running)");
-    </script>
+    <!-- React Grab - Development Only (CDN) -->
+    <script src="//www.react-grab.com/script.js" crossorigin="anonymous"></script>
 
     <!-- Favicons for cross-browser compatibility -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
