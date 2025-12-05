@@ -83,6 +83,15 @@ export function useStorage() {
     )
   }, [])
 
+  const updateManyAnnotations = useCallback(async (annotationsToUpdate: Annotation[]) => {
+    if (annotationsToUpdate.length === 0) return
+    await annotationStorage.updateMany(annotationsToUpdate)
+    setAnnotations(prev => {
+      const updateMap = new Map(annotationsToUpdate.map(a => [a.id, a]))
+      return prev.map(ann => updateMap.has(ann.id) ? updateMap.get(ann.id)! : ann)
+    })
+  }, [])
+
   const removeAnnotation = useCallback(async (id: string) => {
     await annotationStorage.remove(id)
     setAnnotations(prev => prev.filter(ann => ann.id !== id))
@@ -192,6 +201,7 @@ export function useStorage() {
     addAnnotation,
     addManyAnnotations,
     updateAnnotation,
+    updateManyAnnotations,
     removeAnnotation,
     removeManyAnnotations,
     bulkToggleAnnotationVisibility,

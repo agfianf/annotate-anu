@@ -148,6 +148,7 @@ function AnnotationApp() {
     addAnnotation,
     addManyAnnotations,
     updateAnnotation,
+    updateManyAnnotations,
     removeAnnotation,
     removeManyAnnotations,
     bulkToggleAnnotationVisibility,
@@ -374,6 +375,21 @@ function AnnotationApp() {
     // Record history after user action (not during undo/redo)
     if (!isUndoingRef.current) {
       recordChange(currentAnnotations.map(a => a.id === annotation.id ? updatedAnnotation : a))
+    }
+  }
+
+  const handleUpdateManyAnnotations = async (annotationsToUpdate: Annotation[]) => {
+    console.log('[APP] handleUpdateManyAnnotations called for', annotationsToUpdate.length, 'annotations')
+    const updatedAnnotations = annotationsToUpdate.map(ann => ({
+      ...ann,
+      updatedAt: Date.now(),
+    }))
+    await updateManyAnnotations(updatedAnnotations)
+    console.log('[APP] updateManyAnnotations completed')
+    // Record history after user action (not during undo/redo)
+    if (!isUndoingRef.current) {
+      const updateMap = new Map(updatedAnnotations.map(a => [a.id, a]))
+      recordChange(currentAnnotations.map(a => updateMap.has(a.id) ? updateMap.get(a.id)! : a))
     }
   }
 
@@ -905,6 +921,7 @@ function AnnotationApp() {
                 selectedLabelId={selectedLabelId}
                 onAddAnnotation={handleAddAnnotation}
                 onUpdateAnnotation={handleUpdateAnnotation}
+                onUpdateManyAnnotations={handleUpdateManyAnnotations}
                 selectedAnnotations={selectedAnnotations}
                 onSelectAnnotations={setSelectedAnnotations}
                 promptBboxes={promptBboxes}

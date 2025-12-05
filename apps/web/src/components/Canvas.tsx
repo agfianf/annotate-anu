@@ -12,6 +12,7 @@ interface CanvasProps {
   selectedLabelId: string | null
   onAddAnnotation: (annotation: Omit<Annotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'>) => void
   onUpdateAnnotation: (annotation: Annotation) => void
+  onUpdateManyAnnotations?: (annotations: Annotation[]) => void
   selectedAnnotations: string[]
   onSelectAnnotations: (ids: string[]) => void
   promptBboxes?: Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>
@@ -29,6 +30,7 @@ const Canvas = React.memo(function Canvas({
   selectedLabelId,
   onAddAnnotation,
   onUpdateAnnotation,
+  onUpdateManyAnnotations,
   selectedAnnotations,
   onSelectAnnotations,
   promptBboxes = [],
@@ -63,6 +65,12 @@ const Canvas = React.memo(function Canvas({
   const [draggingAnnotationId, setDraggingAnnotationId] = useState<string | null>(null)
   // Track if we're waiting for annotation data to update after drag end
   const pendingDragEndRef = useRef<{ annotationId: string; node: any } | null>(null)
+  // Track drag start position to detect click vs drag
+  const dragStartPosRef = useRef<{ x: number; y: number } | null>(null)
+  // Track original positions of all selected annotations for multi-drag
+  const dragOriginalPositionsRef = useRef<Map<string, { annotation: Annotation }> | null>(null)
+  // Track current multi-drag delta for real-time visual updates
+  const multiDragDeltaRef = useRef<{ deltaX: number; deltaY: number } | null>(null)
   const [isDraggingStage, setIsDraggingStage] = useState(false)
   const [stageDragStart, setStageDragStart] = useState<{ x: number; y: number } | null>(null)
   const [isPanMode, setIsPanMode] = useState(false) // Space key hold-to-pan mode
@@ -850,8 +858,112 @@ const Canvas = React.memo(function Canvas({
   }, [isShiftPressed, selectedAnnotations, onSelectAnnotations])
 
   // Handle drag start - initialize dragging state
-  const handleDragStart = (annotation: Annotation) => {
+  const handleDragStart = (annotation: Annotation, e: any) => {
     setDraggingAnnotationId(annotation.id)
+    // Store initial position to detect click vs drag
+    const node = e.target
+    dragStartPosRef.current = {
+      x: node.x(),
+      y: node.y()
+    }
+
+    // Multi-drag: Store original positions of ALL selected annotations
+    if (selectedAnnotations.length > 1 && selectedAnnotations.includes(annotation.id)) {
+      const originalPositions = new Map<string, { annotation: Annotation }>()
+
+      selectedAnnotations.forEach(id => {
+        const ann = annotations.find(a => a.id === id)
+        if (ann) {
+          // Store a deep copy of the annotation to preserve original state
+          if (ann.type === 'rectangle') {
+            const rect = ann as RectangleAnnotation
+            originalPositions.set(id, {
+              annotation: {
+                ...rect,
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+              }
+            })
+          } else if (ann.type === 'polygon') {
+            const poly = ann as PolygonAnnotation
+            originalPositions.set(id, {
+              annotation: {
+                ...poly,
+                points: poly.points.map(p => ({ x: p.x, y: p.y })) // Deep copy points
+              }
+            })
+          }
+        }
+      })
+
+      dragOriginalPositionsRef.current = originalPositions
+      multiDragDeltaRef.current = { deltaX: 0, deltaY: 0 } // Initialize delta
+      console.log('[MULTI-DRAG] Stored original positions for', originalPositions.size, 'annotations')
+    } else {
+      // Single annotation drag - no need to store positions
+      dragOriginalPositionsRef.current = null
+      multiDragDeltaRef.current = null
+    }
+  }
+
+  const handleDragMove = (annotation: Annotation, e: any) => {
+    // Multi-drag: Calculate and store delta for real-time visual updates
+    if (dragOriginalPositionsRef.current && dragOriginalPositionsRef.current.size > 1) {
+      const node = e.target
+      const originalPositions = dragOriginalPositionsRef.current
+      const draggedOriginal = originalPositions.get(annotation.id)
+
+      if (!draggedOriginal) return
+
+      // Calculate current delta
+      let deltaX = 0
+      let deltaY = 0
+
+      if (annotation.type === 'rectangle') {
+        const currentX = node.x() / scale
+        const currentY = node.y() / scale
+        const originalRect = draggedOriginal.annotation as RectangleAnnotation
+        deltaX = currentX - originalRect.x
+        deltaY = currentY - originalRect.y
+      } else if (annotation.type === 'polygon') {
+        deltaX = node.x() / scale
+        deltaY = node.y() / scale
+      }
+
+      // Store delta for later use
+      multiDragDeltaRef.current = { deltaX, deltaY }
+
+      // Update visual position of all other selected nodes (rectangles and polygons)
+      selectedAnnotations.forEach(id => {
+        if (id === annotation.id) return // Skip the dragged one (it's already moving)
+
+        const original = originalPositions.get(id)
+        if (!original) return
+
+        const targetNode = stageRef.current?.findOne(`#ann-${id}`) as any
+        if (!targetNode) return
+
+        if (original.annotation.type === 'rectangle') {
+          const origRect = original.annotation as RectangleAnnotation
+          // Update visual position only (not state)
+          targetNode.x((origRect.x + deltaX) * scale)
+          targetNode.y((origRect.y + deltaY) * scale)
+        } else if (original.annotation.type === 'polygon') {
+          const origPoly = original.annotation as PolygonAnnotation
+          // Update polygon points directly on the Konva Line node
+          const adjustedPoints = origPoly.points.flatMap(p => [
+            (p.x + deltaX) * scale,
+            (p.y + deltaY) * scale
+          ])
+          targetNode.points(adjustedPoints)
+        }
+      })
+
+      // Redraw the layer
+      node.getLayer()?.batchDraw()
+    }
   }
 
   const handleDragEnd = (annotation: Annotation, e: any) => {
@@ -859,6 +971,30 @@ const Canvas = React.memo(function Canvas({
     const node = e.target
     const scaleX = node.scaleX()
     const scaleY = node.scaleY()
+
+    // Check if this was actually a click (minimal movement)
+    const CLICK_THRESHOLD = 3 // pixels
+    if (dragStartPosRef.current) {
+      const deltaX = Math.abs(node.x() - dragStartPosRef.current.x)
+      const deltaY = Math.abs(node.y() - dragStartPosRef.current.y)
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY)
+
+      if (distance < CLICK_THRESHOLD) {
+        // This was a click, not a drag - trigger selection
+        console.log('[DRAG] Detected click (distance:', distance, 'px)')
+        // Reset node position to prevent any visual shift
+        node.x(dragStartPosRef.current.x)
+        node.y(dragStartPosRef.current.y)
+        setDraggingAnnotationId(null)
+        dragStartPosRef.current = null
+        // Clear multi-drag state
+        dragOriginalPositionsRef.current = null
+        multiDragDeltaRef.current = null
+        // Trigger the click handler
+        handleAnnotationClick(annotation.id)
+        return
+      }
+    }
 
     // Reset scale to 1
     node.scaleX(1)
@@ -868,7 +1004,122 @@ const Canvas = React.memo(function Canvas({
     const imageWidth = konvaImageRef.current?.width
     const imageHeight = konvaImageRef.current?.height
 
-    if (annotation.type === 'rectangle') {
+    // CHECK: Is this a multi-drag operation?
+    const isMultiDrag = dragOriginalPositionsRef.current !== null &&
+                        dragOriginalPositionsRef.current.size > 1
+
+    if (isMultiDrag) {
+      // === MULTI-DRAG PATH ===
+      console.log('[MULTI-DRAG] Processing group movement')
+
+      const originalPositions = dragOriginalPositionsRef.current!
+      const draggedOriginal = originalPositions.get(annotation.id)
+
+      if (!draggedOriginal) {
+        console.error('[MULTI-DRAG] Original position not found for dragged annotation')
+        return
+      }
+
+      // Calculate delta based on annotation type
+      let deltaX = 0
+      let deltaY = 0
+
+      if (annotation.type === 'rectangle') {
+        // For rectangles: delta = current position - original position
+        const currentX = node.x() / scale
+        const currentY = node.y() / scale
+        const originalRect = draggedOriginal.annotation as RectangleAnnotation
+        deltaX = currentX - originalRect.x
+        deltaY = currentY - originalRect.y
+        console.log('[MULTI-DRAG] Rectangle delta:', { deltaX, deltaY })
+      } else if (annotation.type === 'polygon') {
+        // For polygons: node offset is the delta (since Line renders at 0,0)
+        deltaX = node.x() / scale
+        deltaY = node.y() / scale
+        console.log('[MULTI-DRAG] Polygon delta:', { deltaX, deltaY })
+      }
+
+      // Apply delta to ALL selected annotations
+      const updatedAnnotations: Annotation[] = []
+
+      selectedAnnotations.forEach(id => {
+        const ann = annotations.find(a => a.id === id)
+        const original = originalPositions.get(id)
+
+        if (!ann || !original) return
+
+        if (ann.type === 'rectangle') {
+          const origRect = original.annotation as RectangleAnnotation
+
+          // Apply delta to original position
+          let newX = origRect.x + deltaX
+          let newY = origRect.y + deltaY
+          let newWidth = origRect.width
+          let newHeight = origRect.height
+
+          // Individual clipping for this rectangle
+          if (imageWidth && imageHeight) {
+            const clipped = clipRectangleToBounds(
+              newX, newY, newWidth, newHeight,
+              imageWidth, imageHeight
+            )
+            newX = clipped.x
+            newY = clipped.y
+            newWidth = clipped.width
+            newHeight = clipped.height
+          }
+
+          updatedAnnotations.push({
+            ...ann,
+            x: newX,
+            y: newY,
+            width: newWidth,
+            height: newHeight,
+          } as RectangleAnnotation)
+
+        } else if (ann.type === 'polygon') {
+          const origPoly = original.annotation as PolygonAnnotation
+
+          // Apply delta to all points
+          let newPoints = origPoly.points.map(p => ({
+            x: p.x + deltaX,
+            y: p.y + deltaY,
+          }))
+
+          // Individual clipping for this polygon
+          if (imageWidth && imageHeight) {
+            newPoints = clipPolygonPointsToBounds(newPoints, imageWidth, imageHeight)
+          }
+
+          updatedAnnotations.push({
+            ...ann,
+            points: newPoints,
+            updatedAt: Date.now(),
+          } as PolygonAnnotation)
+        }
+      })
+
+      // Batch update all annotations
+      if (updatedAnnotations.length > 0) {
+        console.log('[MULTI-DRAG] Updating', updatedAnnotations.length, 'annotations')
+        if (onUpdateManyAnnotations) {
+          // Use batch update if available
+          onUpdateManyAnnotations(updatedAnnotations)
+        } else {
+          // Fallback: sequential updates (less efficient)
+          updatedAnnotations.forEach(ann => onUpdateAnnotation(ann))
+        }
+
+        // Store pending drag end for the dragged node
+        pendingDragEndRef.current = { annotationId: annotation.id, node }
+      }
+
+      // Clear multi-drag state
+      dragOriginalPositionsRef.current = null
+      multiDragDeltaRef.current = null
+
+    } else if (annotation.type === 'rectangle') {
+      // === SINGLE-DRAG PATH (rectangles) ===
       // For Rect, node.x() and node.y() are the ABSOLUTE position on canvas after drag
       // We need to convert from canvas coordinates back to image coordinates
       // Canvas coords = image coords * scale, so image coords = canvas coords / scale
@@ -1254,6 +1505,8 @@ const Canvas = React.memo(function Canvas({
             if (annotation.type === 'rectangle') {
               const rect = annotation as RectangleAnnotation
               const isDragging = draggingAnnotationId === annotation.id
+              const isInMultiDrag = draggingAnnotationId !== null && selectedAnnotations.includes(annotation.id)
+              const shouldHideLabel = isDragging || isInMultiDrag
 
               return (
                 <React.Fragment key={`rect-group-${annotation.id}`}>
@@ -1275,12 +1528,13 @@ const Canvas = React.memo(function Canvas({
                     onClick={() => handleAnnotationClick(annotation.id)}
                     onTap={() => handleAnnotationClick(annotation.id)}
                     draggable={selectedTool === 'select'}
-                    onDragStart={() => handleDragStart(annotation)}
+                    onDragStart={(e) => handleDragStart(annotation, e)}
+                    onDragMove={(e) => handleDragMove(annotation, e)}
                     onDragEnd={(e) => handleDragEnd(annotation, e)}
                     onTransformEnd={(e) => handleTransformEnd(annotation, e)}
                   />
                   {/* Label text above rectangle - hide during drag */}
-                  {!isDragging && (
+                  {!shouldHideLabel && (
                     <Text
                       key={`rect-label-${annotation.id}`}
                       x={rect.x * scale}
@@ -1297,6 +1551,9 @@ const Canvas = React.memo(function Canvas({
             } else if (annotation.type === 'polygon') {
               const poly = annotation as PolygonAnnotation
               const isDragging = draggingAnnotationId === annotation.id
+              const isInMultiDrag = draggingAnnotationId !== null && selectedAnnotations.includes(annotation.id)
+              const shouldHideLabel = isDragging || isInMultiDrag
+              const shouldHidePoints = isDragging || isInMultiDrag
 
               // Use dragging point if this polygon point is being edited (individual point drag)
               let displayPoints = poly.points
@@ -1328,7 +1585,8 @@ const Canvas = React.memo(function Canvas({
                     )}
                     closed
                     draggable={selectedTool === 'select'}
-                    onDragStart={() => handleDragStart(annotation)}
+                    onDragStart={(e) => handleDragStart(annotation, e)}
+                    onDragMove={(e) => handleDragMove(annotation, e)}
                     onDragEnd={(e) => handleDragEnd(annotation, e)}
                     onClick={(e) => {
                       if (isCtrlPressed && isSelected) {
@@ -1340,7 +1598,7 @@ const Canvas = React.memo(function Canvas({
                     onTap={() => handleAnnotationClick(annotation.id)}
                   />
                   {/* Label text above polygon - hide during drag */}
-                  {displayPoints.length > 0 && !isDragging && (
+                  {displayPoints.length > 0 && !shouldHideLabel && (
                     <Text
                       key={`poly-label-${annotation.id}`}
                       x={displayPoints[0].x * scale}
@@ -1353,7 +1611,7 @@ const Canvas = React.memo(function Canvas({
                     />
                   )}
                   {/* Show polygon points as small circles - hide during drag */}
-                  {isSelected && !isDragging && poly.points.map((point, idx) => (
+                  {isSelected && !shouldHidePoints && poly.points.map((point, idx) => (
                     <Circle
                       key={`poly-point-${annotation.id}-${idx}`}
                       x={point.x * scale}
