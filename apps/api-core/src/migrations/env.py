@@ -1,4 +1,4 @@
-"""Alembic migration environment configuration."""
+"""Alembic migration environment configuration for PostgreSQL."""
 
 from logging.config import fileConfig
 
@@ -7,7 +7,25 @@ from sqlalchemy import engine_from_config, pool
 
 from app.config import settings
 from app.helpers.database import metadata
-from app.models.byom import registered_models  # noqa: F401 - Import to register tables
+
+# Import all models to register them with metadata
+from app.models import (  # noqa: F401
+    annotation_events,
+    detections,
+    image_tags,
+    images,
+    jobs,
+    keypoints,
+    labels,
+    pose_skeletons,
+    project_members,
+    projects,
+    refresh_tokens,
+    segmentations,
+    tasks,
+    users,
+    version_snapshots,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -18,8 +36,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set sqlalchemy.url from settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Set sqlalchemy.url from settings (sync version for Alembic)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
@@ -69,9 +87,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

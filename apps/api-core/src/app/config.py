@@ -20,44 +20,72 @@ class Settings(BaseSettings):
     API_CORE_DEBUG: bool = Field(default=False, description="Debug mode")
     API_CORE_VERSION: str = Field(default="0.1.0", description="API version")
 
-    # Database settings
+    # Database settings (PostgreSQL)
     DATABASE_URL: str = Field(
-        default="sqlite:///data/byom.db",
-        description="Database connection URL"
+        default="postgresql+asyncpg://annotateanu:annotateanu_dev@localhost:5432/annotateanu",
+        description="PostgreSQL connection URL (async)",
+    )
+    DATABASE_URL_SYNC: str = Field(
+        default="postgresql://annotateanu:annotateanu_dev@localhost:5432/annotateanu",
+        description="PostgreSQL connection URL (sync for Alembic)",
     )
 
     # Redis settings
     REDIS_URL: str = Field(
         default="redis://localhost:6379/0",
-        description="Redis connection URL"
+        description="Redis connection URL",
     )
 
     # CORS settings
     CORS_ORIGINS: list[str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"],
-        description="Allowed CORS origins"
+        description="Allowed CORS origins",
     )
 
     # Logging
     LOG_LEVEL: str = Field(default="INFO", description="Logging level")
 
-    # Security
-    SECRET_KEY: str = Field(default="change-me-in-production", description="Secret key for signing")
+    # JWT Authentication
+    JWT_SECRET_KEY: str = Field(
+        default="dev-secret-key-change-in-production-please",
+        description="Secret key for JWT signing",
+    )
+    JWT_ALGORITHM: str = Field(default="HS256", description="JWT algorithm")
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=30, description="Access token expiry in minutes"
+    )
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = Field(
+        default=7, description="Refresh token expiry in days"
+    )
+
+    # Password hashing
+    BCRYPT_ROUNDS: int = Field(default=12, description="Bcrypt hashing rounds")
+
+    # Security (legacy - for encryption)
+    SECRET_KEY: str = Field(
+        default="change-me-in-production", description="Secret key for signing"
+    )
     ENCRYPTION_KEY: str = Field(
         default="change-me-in-production-32-chars",
-        description="Key for encrypting sensitive data"
+        description="Key for encrypting sensitive data",
     )
 
     # Health check settings
-    HEALTH_CHECK_TIMEOUT: int = Field(default=10, description="Health check timeout in seconds")
-    HEALTH_CHECK_INTERVAL: int = Field(default=300, description="Health check interval in seconds")
+    HEALTH_CHECK_TIMEOUT: int = Field(
+        default=10, description="Health check timeout in seconds"
+    )
+    HEALTH_CHECK_INTERVAL: int = Field(
+        default=300, description="Health check interval in seconds"
+    )
 
     # Inference proxy settings
     SAM3_API_URL: str = Field(
         default="http://localhost:8000",
-        description="SAM3 API inference service URL"
+        description="SAM3 API inference service URL",
     )
-    INFERENCE_TIMEOUT: int = Field(default=120, description="Inference request timeout in seconds")
+    INFERENCE_TIMEOUT: int = Field(
+        default=120, description="Inference request timeout in seconds"
+    )
 
 
 settings = Settings()

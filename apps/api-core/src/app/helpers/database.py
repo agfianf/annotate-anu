@@ -1,13 +1,11 @@
-"""Database engine and metadata configuration."""
-
-from pathlib import Path
+"""Database engine and metadata configuration for PostgreSQL."""
 
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.config import settings
 
-# Naming convention for constraints (PostgreSQL/SQLite)
+# Naming convention for constraints (PostgreSQL)
 naming_convention = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -20,29 +18,19 @@ metadata = MetaData(naming_convention=naming_convention)
 
 
 def get_async_engine() -> AsyncEngine:
-    """Create and configure async database engine.
+    """Create and configure async PostgreSQL database engine.
 
     Returns
     -------
     AsyncEngine
-        Configured async database engine
+        Configured async database engine using asyncpg
     """
-    # Ensure data directory exists for SQLite
-    if settings.DATABASE_URL.startswith("sqlite"):
-        db_path = Path(settings.DATABASE_URL.replace("sqlite:///", "").replace("sqlite+aiosqlite:///", ""))
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Convert SQLite URL to async version
-    database_url = settings.DATABASE_URL
-    if database_url.startswith("sqlite:///"):
-        database_url = database_url.replace("sqlite:///", "sqlite+aiosqlite:///")
-
     return create_async_engine(
-        database_url,
+        settings.DATABASE_URL,
         echo=settings.API_CORE_DEBUG,
         pool_pre_ping=True,
-        pool_size=5,
-        max_overflow=10,
+        pool_size=10,
+        max_overflow=20,
     )
 
 
@@ -52,14 +40,9 @@ def get_sync_engine():
     Returns
     -------
     Engine
-        Sync database engine
+        Sync database engine using psycopg2
     """
-    # Ensure data directory exists for SQLite
-    if settings.DATABASE_URL.startswith("sqlite"):
-        db_path = Path(settings.DATABASE_URL.replace("sqlite:///", ""))
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-
     return create_engine(
-        settings.DATABASE_URL,
+        settings.DATABASE_URL_SYNC,
         echo=settings.API_CORE_DEBUG,
     )

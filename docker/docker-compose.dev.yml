@@ -44,7 +44,29 @@ services:
     networks:
       - anu-network
     depends_on:
+      - postgres
       - redis
+
+  # PostgreSQL - Primary Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: anu-postgres-dev
+    environment:
+      POSTGRES_USER: annotateanu
+      POSTGRES_PASSWORD: annotateanu_dev
+      POSTGRES_DB: annotateanu
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - anu-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U annotateanu"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Redis - Caching Layer
   redis:
@@ -90,6 +112,8 @@ volumes:
   api-core-data:
     driver: local
   redis-data:
+    driver: local
+  postgres-data:
     driver: local
 
 networks:

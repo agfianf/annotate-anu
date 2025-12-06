@@ -1,0 +1,284 @@
+"""Project router with CRUD operations."""
+
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncConnection
+
+from app.dependencies.auth import get_current_active_user
+from app.dependencies.database import get_async_transaction_conn
+from app.dependencies.rbac import ProjectPermission
+from app.helpers.response_api import JsonResponse
+from app.repositories.project import LabelRepository, ProjectMemberRepository, ProjectRepository
+from app.schemas.auth import UserBase
+from app.schemas.project import (
+    LabelCreate,
+    LabelResponse,
+    LabelUpdate,
+    ProjectCreate,
+    ProjectDetailResponse,
+    ProjectMemberCreate,
+    ProjectMemberResponse,
+    ProjectMemberUpdate,
+    ProjectResponse,
+    ProjectUpdate,
+)
+
+router = APIRouter(prefix="/api/v1/projects", tags=["Projects"])
+
+
+# ============================================================================
+# Project CRUD
+# ============================================================================
+@router.get("", response_model=JsonResponse[list[ProjectResponse], None])
+async def list_projects(
+    current_user: Annotated[UserBase, Depends(get_current_active_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+    include_archived: bool = False,
+):
+    """List projects accessible to current user."""
+    projects = await ProjectRepository.list_for_user(
+        connection, current_user.id, include_archived
+    )
+    return JsonResponse(
+        data=[ProjectResponse(**p) for p in projects],
+        message=f"Found {len(projects)} project(s)",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post("", response_model=JsonResponse[ProjectResponse, None])
+async def create_project(
+    payload: ProjectCreate,
+    current_user: Annotated[UserBase, Depends(get_current_active_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Create a new project."""
+    project_data = payload.model_dump()
+    project_data["owner_id"] = current_user.id
+    
+    try:
+        project = await ProjectRepository.create(connection, project_data)
+        return JsonResponse(
+            data=ProjectResponse(**project),
+            message="Project created successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/{project_id}", response_model=JsonResponse[ProjectDetailResponse, None])
+async def get_project(
+    project: Annotated[dict, Depends(ProjectPermission("viewer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Get project details with labels and counts."""
+    # Get labels
+    project_id = project["id"]
+    labels = await LabelRepository.list_for_project(connection, project_id)
+    member_count = await ProjectMemberRepository.get_member_count(connection, project_id)
+    task_count = await ProjectRepository.get_task_count(connection, project_id)
+    
+    response = ProjectDetailResponse(
+        **{k: v for k, v in project.items() if not k.startswith("_")},
+        labels=[LabelResponse(**lb) for lb in labels],
+        member_count=member_count,
+        task_count=task_count,
+    )
+    
+    return JsonResponse(
+        data=response,
+        message="Project retrieved successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.patch("/{project_id}", response_model=JsonResponse[ProjectResponse, None])
+async def update_project(
+    payload: ProjectUpdate,
+    project: Annotated[dict, Depends(ProjectPermission("maintainer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Update a project. Requires maintainer role."""
+    update_data = payload.model_dump(exclude_unset=True)
+    if not update_data:
+        return JsonResponse(
+            data=ProjectResponse(**{k: v for k, v in project.items() if not k.startswith("_")}),
+            message="No changes",
+            status_code=status.HTTP_200_OK,
+        )
+    
+    updated = await ProjectRepository.update(connection, project["id"], update_data)
+    return JsonResponse(
+        data=ProjectResponse(**updated),
+        message="Project updated successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.delete("/{project_id}")
+async def delete_project(
+    project: Annotated[dict, Depends(ProjectPermission("owner"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Delete a project. Requires owner role."""
+    await ProjectRepository.delete(connection, project["id"])
+    return JsonResponse(
+        data={"deleted": True},
+        message="Project deleted successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+# ============================================================================
+# Labels
+# ============================================================================
+@router.get("/{project_id}/labels", response_model=JsonResponse[list[LabelResponse], None])
+async def list_labels(
+    project: Annotated[dict, Depends(ProjectPermission("viewer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """List all labels for a project."""
+    labels = await LabelRepository.list_for_project(connection, project["id"])
+    return JsonResponse(
+        data=[LabelResponse(**lb) for lb in labels],
+        message=f"Found {len(labels)} label(s)",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post("/{project_id}/labels", response_model=JsonResponse[LabelResponse, None])
+async def create_label(
+    payload: LabelCreate,
+    project: Annotated[dict, Depends(ProjectPermission("maintainer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Create a new label. Requires maintainer role."""
+    try:
+        label = await LabelRepository.create(
+            connection, project["id"], payload.model_dump()
+        )
+        return JsonResponse(
+            data=LabelResponse(**label),
+            message="Label created successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.patch("/{project_id}/labels/{label_id}", response_model=JsonResponse[LabelResponse, None])
+async def update_label(
+    label_id: UUID,
+    payload: LabelUpdate,
+    project: Annotated[dict, Depends(ProjectPermission("maintainer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Update a label. Requires maintainer role."""
+    label = await LabelRepository.get_by_id(connection, label_id)
+    if not label or label["project_id"] != project["id"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Label not found")
+    
+    update_data = payload.model_dump(exclude_unset=True)
+    if not update_data:
+        return JsonResponse(data=LabelResponse(**label), message="No changes", status_code=status.HTTP_200_OK)
+    
+    updated = await LabelRepository.update(connection, label_id, update_data)
+    return JsonResponse(
+        data=LabelResponse(**updated),
+        message="Label updated successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.delete("/{project_id}/labels/{label_id}")
+async def delete_label(
+    label_id: UUID,
+    project: Annotated[dict, Depends(ProjectPermission("maintainer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Delete a label. Requires maintainer role."""
+    label = await LabelRepository.get_by_id(connection, label_id)
+    if not label or label["project_id"] != project["id"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Label not found")
+    
+    await LabelRepository.delete(connection, label_id)
+    return JsonResponse(data={"deleted": True}, message="Label deleted", status_code=status.HTTP_200_OK)
+
+
+# ============================================================================
+# Members
+# ============================================================================
+@router.get("/{project_id}/members", response_model=JsonResponse[list[ProjectMemberResponse], None])
+async def list_members(
+    project: Annotated[dict, Depends(ProjectPermission("viewer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """List all members of a project."""
+    members = await ProjectMemberRepository.list_for_project(connection, project["id"])
+    return JsonResponse(
+        data=[ProjectMemberResponse(**m) for m in members],
+        message=f"Found {len(members)} member(s)",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post("/{project_id}/members", response_model=JsonResponse[ProjectMemberResponse, None])
+async def add_member(
+    payload: ProjectMemberCreate,
+    project: Annotated[dict, Depends(ProjectPermission("owner"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Add a member to a project. Requires owner role."""
+    try:
+        member = await ProjectMemberRepository.create(
+            connection, project["id"], payload.model_dump()
+        )
+        return JsonResponse(
+            data=ProjectMemberResponse(**member),
+            message="Member added successfully",
+            status_code=status.HTTP_201_CREATED,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.patch("/{project_id}/members/{member_id}", response_model=JsonResponse[ProjectMemberResponse, None])
+async def update_member(
+    member_id: UUID,
+    payload: ProjectMemberUpdate,
+    project: Annotated[dict, Depends(ProjectPermission("owner"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Update a member's role. Requires owner role."""
+    member = await ProjectMemberRepository.get_by_id(connection, member_id)
+    if not member or member["project_id"] != project["id"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+    
+    update_data = payload.model_dump(exclude_unset=True)
+    if not update_data:
+        return JsonResponse(data=ProjectMemberResponse(**member), message="No changes", status_code=status.HTTP_200_OK)
+    
+    updated = await ProjectMemberRepository.update(connection, member_id, update_data)
+    return JsonResponse(
+        data=ProjectMemberResponse(**updated),
+        message="Member updated successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.delete("/{project_id}/members/{member_id}")
+async def remove_member(
+    member_id: UUID,
+    project: Annotated[dict, Depends(ProjectPermission("owner"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Remove a member from a project. Requires owner role."""
+    member = await ProjectMemberRepository.get_by_id(connection, member_id)
+    if not member or member["project_id"] != project["id"]:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
+    
+    await ProjectMemberRepository.delete(connection, member_id)
+    return JsonResponse(data={"deleted": True}, message="Member removed", status_code=status.HTTP_200_OK)
