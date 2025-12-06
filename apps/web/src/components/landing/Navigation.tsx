@@ -1,18 +1,25 @@
-import { Menu, X } from 'lucide-react'
+import { LayoutDashboard, LogIn, LogOut, Menu, UserPlus, X } from 'lucide-react'
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 import { Link } from 'react-router-dom'
-import { markAsVisited } from '../../lib/navigation'
+import { useAuth } from '../../contexts/AuthContext'
 
 function Navigation() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-
-  const handleLaunchApp = () => {
-    markAsVisited()
-    setIsMobileMenuOpen(false)
-  }
+  const { user, isAuthenticated, logout } = useAuth()
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false)
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+      toast.success('Logged out')
+      closeMobileMenu()
+    } catch {
+      toast.error('Failed to logout')
+    }
   }
 
   return (
@@ -50,14 +57,47 @@ function Navigation() {
           </a>
         </div>
 
-        {/* Desktop CTA */}
-        <Link
-          to="/app"
-          onClick={handleLaunchApp}
-          className="hidden md:inline-block px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
-        >
-          Launch App
-        </Link>
+        {/* Desktop Auth Buttons */}
+        <div className="hidden md:flex items-center gap-3">
+          {isAuthenticated ? (
+            <>
+              <Link
+                to="/dashboard"
+                className="px-4 py-2 text-emerald-600 hover:text-emerald-700 font-medium transition-colors flex items-center gap-2"
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                Dashboard
+              </Link>
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-sm">
+                <span className="font-medium">{user?.full_name || user?.username}</span>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 text-gray-600 hover:text-red-600 font-medium transition-colors flex items-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                className="px-4 py-2 text-gray-600 hover:text-emerald-600 font-medium transition-colors flex items-center gap-2"
+              >
+                <LogIn className="w-4 h-4" />
+                Login
+              </Link>
+              <Link
+                to="/register"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                <UserPlus className="w-4 h-4" />
+                Register
+              </Link>
+            </>
+          )}
+        </div>
 
         {/* Mobile Hamburger Button */}
         <button
@@ -96,13 +136,53 @@ function Navigation() {
             >
               GitHub
             </a>
-            <Link
-              to="/app"
-              onClick={handleLaunchApp}
-              className="mt-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors text-center"
-            >
-              Launch App
-            </Link>
+
+            <div className="border-t border-gray-200 pt-4 mt-2">
+              {isAuthenticated ? (
+                <>
+                  <div className="flex items-center gap-2 mb-3 px-2">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-semibold text-sm">
+                      {user?.full_name?.charAt(0).toUpperCase() || user?.username?.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="font-medium text-gray-900">{user?.full_name || user?.username}</span>
+                  </div>
+                  <Link
+                    to="/dashboard"
+                    onClick={closeMobileMenu}
+                    className="flex items-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors mb-2"
+                  >
+                    <LayoutDashboard className="w-5 h-5" />
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-2 px-4 py-3 text-gray-600 hover:text-red-600 font-medium transition-colors w-full"
+                  >
+                    <LogOut className="w-5 h-5" />
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    onClick={closeMobileMenu}
+                    className="flex items-center gap-2 px-4 py-3 text-gray-700 hover:text-emerald-600 font-medium transition-colors"
+                  >
+                    <LogIn className="w-5 h-5" />
+                    Login
+                  </Link>
+                  <Link
+                    to="/register"
+                    onClick={closeMobileMenu}
+                    className="mt-2 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors"
+                  >
+                    <UserPlus className="w-5 h-5" />
+                    Register
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

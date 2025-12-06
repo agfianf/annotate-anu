@@ -34,6 +34,11 @@ class UserRegister(BaseModel):
     password: str = Field(..., min_length=8, max_length=100, description="Password")
     confirm_password: str = Field(..., description="Password confirmation")
     full_name: str = Field(..., min_length=1, max_length=255, description="Full name")
+    role: str | None = Field(
+        None,
+        pattern=r"^(member|annotator)$",
+        description="Role (member or annotator) - ignored for first user who becomes admin",
+    )
 
 
 class UserLogin(BaseModel):

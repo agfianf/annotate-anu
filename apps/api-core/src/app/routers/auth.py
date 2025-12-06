@@ -58,6 +58,41 @@ async def register(
         )
 
 
+@router.get("/first-user-check", response_model=JsonResponse[dict, None])
+async def check_first_user(
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Check if this will be the first user in the system.
+
+    Used by registration UI to determine if role selection should be shown.
+    First user always becomes admin, subsequent users can choose member/annotator.
+
+    Returns
+    -------
+    JsonResponse[dict, None]
+        is_first_user boolean
+
+    Example Response
+    ----------------
+    ```json
+    {
+        "data": {"is_first_user": true},
+        "message": "First user check completed",
+        "status_code": 200,
+        "meta": null
+    }
+    ```
+    """
+    from app.repositories.user import UserAsyncRepository
+    
+    user_count = await UserAsyncRepository.get_user_count(connection)
+    return JsonResponse(
+        data={"is_first_user": user_count == 0},
+        message="First user check completed",
+        status_code=status.HTTP_200_OK,
+    )
+
+
 @router.post("/login", response_model=JsonResponse[TokenResponse, None])
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],

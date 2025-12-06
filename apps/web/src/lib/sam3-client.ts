@@ -23,7 +23,7 @@ interface APIResponse<T> {
 
 export type SAM3Response = APIResponse<InferenceResult>
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_SAM3_API_URL || 'http://localhost:8000'
 
 export const sam3Client = {
   /**

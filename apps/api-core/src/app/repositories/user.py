@@ -288,6 +288,25 @@ class UserAsyncRepository:
 
         return UserBase(**dict(row._mapping))
 
+    @staticmethod
+    async def get_user_count(connection: AsyncConnection) -> int:
+        """Get total count of non-deleted users.
+
+        Parameters
+        ----------
+        connection : AsyncConnection
+            Database connection
+
+        Returns
+        -------
+        int
+            Total count of users
+        """
+        from sqlalchemy import func
+        stmt = select(func.count()).select_from(users).where(users.c.deleted_at.is_(None))
+        result = await connection.execute(stmt)
+        return result.scalar() or 0
+
 
 class RefreshTokenRepository:
     """Repository for refresh token operations."""

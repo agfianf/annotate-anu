@@ -1,10 +1,20 @@
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import { markAsVisited } from '../../lib/navigation'
 import HeroIllustration from './HeroIllustration'
 
 function Hero() {
+  const navigate = useNavigate()
+  const { isAuthenticated } = useAuth()
+
   const handleGetStarted = () => {
     markAsVisited()
+    // Navigate based on auth status
+    if (isAuthenticated) {
+      navigate('/dashboard/projects')
+    } else {
+      navigate('/login')
+    }
   }
 
   return (
@@ -25,13 +35,12 @@ function Hero() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
-              <Link
-                to="/app"
+              <button
                 onClick={handleGetStarted}
                 className="px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl"
               >
                 Start Annotating Now
-              </Link>
+              </button>
               <a
                 href="https://github.com/agfianf/annotate-anu.git"
                 target="_blank"

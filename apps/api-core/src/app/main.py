@@ -10,6 +10,7 @@ from app.config import settings
 from app.helpers.database import get_async_engine, metadata
 from app.helpers.logger import logger
 from app.integrations.redis import RedisClient
+from app.routers import admin as admin_router
 from app.routers import auth as auth_router
 from app.routers import annotations as annotations_router
 from app.routers import images as images_router
@@ -113,6 +114,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(auth_router.router)
+app.include_router(admin_router.router)
 app.include_router(projects_router.router)
 app.include_router(tasks_router.router)
 app.include_router(jobs_router.router)

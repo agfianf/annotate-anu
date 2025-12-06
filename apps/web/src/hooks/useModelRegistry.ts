@@ -2,13 +2,13 @@
  * Hook for managing model registry state
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { byomClient } from '../lib/byom-client'
-import type { AvailableModel, RegisteredModel, ModelCapabilities } from '../types/byom'
+import type { AvailableModel, RegisteredModel } from '../types/byom'
 
 const STORAGE_KEY = 'selected_model_id'
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = import.meta.env.VITE_SAM3_API_URL || 'http://localhost:8000'
 
 /**
  * SAM3 built-in model definition

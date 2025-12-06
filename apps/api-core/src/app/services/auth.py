@@ -122,18 +122,33 @@ class AuthService:
         if existing:
             raise ValueError(f"Username '{payload.username}' is already taken")
 
+        # Check if first user
+        user_count = await self.user_repo.get_user_count(connection)
+        is_first_user = user_count == 0
+
+        if is_first_user:
+            # First user becomes admin and is active
+            role = "admin"
+            is_active = True
+            logger.info("Registering first user as admin")
+        else:
+            # Subsequent users get their selected role (default to annotator) but are inactive
+            role = payload.role if payload.role in ["member", "annotator"] else "annotator"
+            is_active = False
+            logger.info(f"Registering user with role '{role}' (inactive, needs admin approval)")
+
         # Hash password and create user
         user_data = {
             "email": payload.email,
             "username": payload.username,
             "hashed_password": hash_password(payload.password),
             "full_name": payload.full_name,
-            "role": "annotator",  # Default role
-            "is_active": True,
+            "role": role,
+            "is_active": is_active,
         }
 
         user = await self.user_repo.create(connection, user_data)
-        logger.info(f"User registered: {user.email} (@{user.username})")
+        logger.info(f"User registered: {user.email} (@{user.username}) as {role}")
 
         # Generate tokens
         return await self._generate_tokens(connection, user)
