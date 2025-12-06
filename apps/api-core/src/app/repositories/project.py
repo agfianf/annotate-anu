@@ -47,13 +47,13 @@ class ProjectRepository:
             .where(project_members.c.user_id == user_id)
         )
         
-        # Union both queries
-        combined = owner_query.union(member_query)
-        
+        # Apply archived filter before union (CompoundSelect doesn't support .where())
         if not include_archived:
-            combined = combined.where(projects.c.is_archived == False)  # noqa: E712
+            owner_query = owner_query.where(projects.c.is_archived == False)  # noqa: E712
+            member_query = member_query.where(projects.c.is_archived == False)  # noqa: E712
         
-        combined = combined.order_by(projects.c.created_at.desc())
+        # Union both queries
+        combined = owner_query.union(member_query).order_by(projects.c.created_at.desc())
         
         result = await connection.execute(combined)
         return [dict(row._mapping) for row in result.fetchall()]

@@ -42,6 +42,7 @@ export interface Project {
   id: string;
   name: string;
   description: string | null;
+  readme: string | null;
   is_archived: boolean;
   created_at: string;
   updated_at: string;
@@ -334,11 +335,21 @@ export const projectsApi = {
   },
 
   async create(data: { name: string; description?: string }): Promise<Project> {
-    const response = await apiClient.post<ApiResponse<Project>>('/api/v1/projects', data);
+    // Auto-generate slug from name: lowercase, replace spaces/special chars with hyphens
+    const slug = data.name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    
+    const response = await apiClient.post<ApiResponse<Project>>('/api/v1/projects', {
+      ...data,
+      slug,
+    });
     return response.data.data;
   },
 
-  async update(projectId: string, data: { name?: string; description?: string }): Promise<Project> {
+  async update(projectId: string, data: { name?: string; description?: string; readme?: string }): Promise<Project> {
     const response = await apiClient.patch<ApiResponse<Project>>(`/api/v1/projects/${projectId}`, data);
     return response.data.data;
   },

@@ -362,15 +362,37 @@ class AuthService:
         Raises
         ------
         ValueError
-            If user not found
+            If user not found or password validation fails
         """
         update_data = {}
 
         if payload.full_name is not None:
             update_data["full_name"] = payload.full_name
 
-        if payload.password is not None:
-            update_data["hashed_password"] = hash_password(payload.password)
+        # Handle password change
+        if payload.new_password is not None:
+            from app.core.password import PasswordValidator
+
+            # Validate new password
+            is_valid, errors = PasswordValidator.validate(
+                password=payload.new_password,
+                confirm_password=payload.confirm_new_password,
+            )
+            if not is_valid:
+                raise ValueError(errors[0] if len(errors) == 1 else "; ".join(errors))
+
+            # Verify current password
+            if not payload.current_password:
+                raise ValueError("Current password is required to change password")
+
+            user = await self.user_repo.get_by_id(connection, user_id)
+            if not user:
+                raise ValueError("User not found")
+
+            if not verify_password(payload.current_password, user.hashed_password):
+                raise ValueError("Current password is incorrect")
+
+            update_data["hashed_password"] = hash_password(payload.new_password)
 
         if not update_data:
             # Nothing to update, return current user
@@ -380,6 +402,7 @@ class AuthService:
             return UserResponse(
                 id=user.id,
                 email=user.email,
+                username=user.username,
                 full_name=user.full_name,
                 role=user.role,
                 is_active=user.is_active,
@@ -393,6 +416,7 @@ class AuthService:
         return UserResponse(
             id=user.id,
             email=user.email,
+            username=user.username,
             full_name=user.full_name,
             role=user.role,
             is_active=user.is_active,

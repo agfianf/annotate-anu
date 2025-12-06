@@ -20,6 +20,7 @@ import AdminPage from './pages/AdminPage'
 import DashboardPage from './pages/DashboardPage'
 import JobsPage from './pages/JobsPage'
 import ProfilePage from './pages/ProfilePage'
+import ProjectDetailPage from './pages/ProjectDetailPage'
 import ProjectsPage from './pages/ProjectsPage'
 import TasksPage from './pages/TasksPage'
 
@@ -55,6 +56,7 @@ function App() {
           }
         />
         <Route path="projects" element={<ProjectsPage />} />
+        <Route path="projects/:projectId" element={<ProjectDetailPage />} />
         <Route path="projects/:projectId/tasks" element={<TasksPage />} />
         <Route path="tasks/:taskId/jobs" element={<JobsPage />} />
       </Route>

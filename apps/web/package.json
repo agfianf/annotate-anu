@@ -11,6 +11,7 @@
     "clean": "rm -rf dist node_modules .vite"
   },
   "dependencies": {
+    "@mdxeditor/editor": "^3.52.0",
     "@tailwindcss/postcss": "^4.1.17",
     "axios": "^1.13.2",
     "class-variance-authority": "^0.7.1",
@@ -38,7 +39,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "postcss": "^8.5.6",
-    "react-grab": "^0.0.67",
+    "react-grab": "^0.0.72",
     "tailwindcss": "^4.1.17",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.1",
