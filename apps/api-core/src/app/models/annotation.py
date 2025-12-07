@@ -6,6 +6,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
+    Integer,
     String,
     Table,
     Text,
@@ -329,7 +330,7 @@ pose_skeletons = Table(
     ),
     Column(
         "project_id",
-        UUID(as_uuid=True),
+        Integer,
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
     ),

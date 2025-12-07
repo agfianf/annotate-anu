@@ -31,7 +31,7 @@ images = Table(
     ),
     Column(
         "job_id",
-        UUID(as_uuid=True),
+        Integer,
         ForeignKey("jobs.id", ondelete="CASCADE"),
         nullable=False,
         comment="Parent job",

@@ -14,7 +14,7 @@ class TaskRepository:
     """Async repository for task operations."""
 
     @staticmethod
-    async def get_by_id(connection: AsyncConnection, task_id: UUID) -> dict | None:
+    async def get_by_id(connection: AsyncConnection, task_id: int) -> dict | None:
         """Get task by ID."""
         stmt = select(tasks).where(tasks.c.id == task_id)
         result = await connection.execute(stmt)
@@ -24,7 +24,7 @@ class TaskRepository:
     @staticmethod
     async def list_for_project(
         connection: AsyncConnection,
-        project_id: UUID,
+        project_id: int,
         status: str | None = None,
     ) -> list[dict]:
         """List all tasks for a project."""
@@ -54,7 +54,7 @@ class TaskRepository:
         return [dict(row._mapping) for row in result.fetchall()]
 
     @staticmethod
-    async def create(connection: AsyncConnection, project_id: UUID, data: dict) -> dict:
+    async def create(connection: AsyncConnection, project_id: int, data: dict) -> dict:
         """Create a new task."""
         data["project_id"] = project_id
         stmt = insert(tasks).values(**data).returning(tasks)
@@ -63,7 +63,7 @@ class TaskRepository:
         return dict(row._mapping)
 
     @staticmethod
-    async def update(connection: AsyncConnection, task_id: UUID, data: dict) -> dict | None:
+    async def update(connection: AsyncConnection, task_id: int, data: dict) -> dict | None:
         """Update a task."""
         data["updated_at"] = datetime.now(timezone.utc)
         stmt = update(tasks).where(tasks.c.id == task_id).values(**data).returning(tasks)
@@ -72,21 +72,21 @@ class TaskRepository:
         return dict(row._mapping) if row else None
 
     @staticmethod
-    async def delete(connection: AsyncConnection, task_id: UUID) -> bool:
+    async def delete(connection: AsyncConnection, task_id: int) -> bool:
         """Delete a task (cascade deletes jobs)."""
         stmt = delete(tasks).where(tasks.c.id == task_id)
         result = await connection.execute(stmt)
         return result.rowcount > 0
 
     @staticmethod
-    async def get_job_count(connection: AsyncConnection, task_id: UUID) -> int:
+    async def get_job_count(connection: AsyncConnection, task_id: int) -> int:
         """Get count of jobs in task."""
         stmt = select(func.count()).select_from(jobs).where(jobs.c.task_id == task_id)
         result = await connection.execute(stmt)
         return result.scalar() or 0
 
     @staticmethod
-    async def increment_version(connection: AsyncConnection, task_id: UUID) -> None:
+    async def increment_version(connection: AsyncConnection, task_id: int) -> None:
         """Increment task version (called on annotation changes)."""
         stmt = (
             update(tasks)
@@ -101,7 +101,7 @@ class TaskRepository:
     @staticmethod
     async def update_image_counts(
         connection: AsyncConnection,
-        task_id: UUID,
+        task_id: int,
         total: int,
         annotated: int,
     ) -> None:

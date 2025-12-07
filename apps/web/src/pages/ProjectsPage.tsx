@@ -112,7 +112,7 @@ export default function ProjectsPage() {
                 </div>
                 <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
               </div>
-              <h3 className="font-semibold text-gray-900 text-lg mb-1">{project.name}</h3>
+              <h3 className="font-semibold text-gray-900 text-lg mb-1"><span className="text-gray-400 font-normal">#{project.id}</span> {project.name}</h3>
               <p className="text-gray-500 text-sm line-clamp-2">
                 {project.description || 'No description'}
               </p>

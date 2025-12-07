@@ -15,6 +15,7 @@ import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link, useParams } from 'react-router-dom';
+import CreateTaskWizard from '../components/CreateTaskWizard';
 import type { ProjectDetail, Task } from '../lib/api-client';
 import { projectsApi, tasksApi } from '../lib/api-client';
 
@@ -25,6 +26,7 @@ export default function TasksPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [newTask, setNewTask] = useState({ name: '', description: '' });
 
   useEffect(() => {
@@ -105,16 +107,25 @@ export default function TasksPage() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">{project?.name}</h1>
+          <h1 className="text-2xl font-bold text-gray-900"><span className="text-gray-400 font-normal">#{project?.id}</span> {project?.name}</h1>
           <p className="text-gray-500 text-sm">{project?.description || 'No description'}</p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/25"
-        >
-          <Plus className="w-5 h-5" />
-          New Task
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-xl transition-all flex items-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Quick Create
+          </button>
+          <button
+            onClick={() => setShowWizard(true)}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/25"
+          >
+            <Plus className="w-5 h-5" />
+            Create with Images
+          </button>
+        </div>
       </div>
 
       {/* Tasks list */}
@@ -144,7 +155,7 @@ export default function TasksPage() {
                   <ClipboardList className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">{task.name}</h3>
+                  <h3 className="font-semibold text-gray-900"><span className="text-gray-400 font-normal">#{task.id}</span> {task.name}</h3>
                   <p className="text-sm text-gray-500">{task.description || 'No description'}</p>
                 </div>
               </div>
@@ -227,6 +238,16 @@ export default function TasksPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Create Task Wizard */}
+      {showWizard && project && (
+        <CreateTaskWizard
+          projectId={projectId!}
+          projectName={project.name}
+          onClose={() => setShowWizard(false)}
+          onSuccess={() => loadData()}
+        />
       )}
     </div>
   );

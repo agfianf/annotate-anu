@@ -149,6 +149,9 @@ export default function ProjectDetailPage() {
 
   const hasReadme = project.readme && project.readme.trim().length > 0;
 
+  // Permission checks based on user role
+  const canEdit = project.user_role === 'owner' || project.user_role === 'maintainer';
+
   // Render README tab content
   const renderReadmeTab = () => (
     <div className="glass-strong rounded-2xl shadow-lg overflow-hidden">
@@ -180,7 +183,7 @@ export default function ProjectDetailPage() {
                 Save
               </button>
             </>
-          ) : (
+          ) : canEdit ? (
             <button
               onClick={handleStartEdit}
               className="px-3 py-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium rounded-lg transition-all flex items-center gap-1.5"
@@ -188,7 +191,7 @@ export default function ProjectDetailPage() {
               <Edit3 className="w-4 h-4" />
               Edit
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -198,15 +201,20 @@ export default function ProjectDetailPage() {
             <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-700 mb-2">No README yet</h3>
             <p className="text-gray-500 mb-6">
-              Add project documentation to help annotators understand the guidelines
+              {canEdit 
+                ? 'Add project documentation to help annotators understand the guidelines'
+                : 'Project documentation has not been added yet'
+              }
             </p>
-            <button
-              onClick={handleInitializeReadme}
-              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all inline-flex items-center gap-2"
-            >
-              <Edit3 className="w-5 h-5" />
-              Create README
-            </button>
+            {canEdit && (
+              <button
+                onClick={handleInitializeReadme}
+                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all inline-flex items-center gap-2"
+              >
+                <Edit3 className="w-5 h-5" />
+                Create README
+              </button>
+            )}
           </div>
         ) : (
           <ProjectReadmeEditor
@@ -226,7 +234,7 @@ export default function ProjectDetailPage() {
       case 'readme':
         return renderReadmeTab();
       case 'tasks':
-        return <ProjectTasksTab projectId={projectId!} />;
+        return <ProjectTasksTab projectId={projectId!} projectName={project.name} userRole={project.user_role} />;
       case 'configuration':
         return <ProjectConfigurationTab project={project} onUpdate={loadProject} />;
       case 'history':
@@ -252,7 +260,7 @@ export default function ProjectDetailPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <FolderKanban className="w-7 h-7 text-emerald-600" />
-              {project.name}
+              <span className="text-gray-400 font-normal">#{project.id}</span> {project.name}
             </h1>
             {project.description && (
               <p className="text-gray-500 mt-1">{project.description}</p>

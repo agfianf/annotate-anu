@@ -10,7 +10,7 @@ class ProjectActivityResponse(BaseModel):
     """Response schema for project activity."""
 
     id: UUID
-    project_id: UUID
+    project_id: int
     entity_type: str = Field(..., description="Type: task, job, label, member, project")
     entity_id: UUID
     entity_name: str | None = Field(None, description="Name of the entity at time of action")

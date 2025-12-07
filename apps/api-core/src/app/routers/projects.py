@@ -88,6 +88,7 @@ async def get_project(
         labels=[LabelResponse(**lb) for lb in labels],
         member_count=member_count,
         task_count=task_count,
+        user_role=project.get("_user_role", "viewer"),
     )
     
     return JsonResponse(
@@ -218,11 +219,91 @@ async def list_members(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
-    """List all members of a project."""
-    members = await ProjectMemberRepository.list_for_project(connection, project["id"])
+    """List all members of a project with user info."""
+    from sqlalchemy import select
+    from app.models.user import users
+    from app.schemas.project import MemberUserInfo
+    
+    members_raw = await ProjectMemberRepository.list_for_project(connection, project["id"])
+    
+    # Fetch user info for each member
+    members_with_users = []
+    for m in members_raw:
+        # Get user data
+        stmt = select(users.c.email, users.c.username, users.c.full_name).where(users.c.id == m["user_id"])
+        result = await connection.execute(stmt)
+        user_row = result.fetchone()
+        
+        user_info = None
+        if user_row:
+            user_info = MemberUserInfo(
+                email=user_row.email,
+                username=user_row.username,
+                full_name=user_row.full_name,
+            )
+        
+        members_with_users.append(ProjectMemberResponse(**m, user=user_info))
+    
     return JsonResponse(
-        data=[ProjectMemberResponse(**m) for m in members],
-        message=f"Found {len(members)} member(s)",
+        data=members_with_users,
+        message=f"Found {len(members_with_users)} member(s)",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+# Schema for available user (minimal info for dropdown)
+from pydantic import BaseModel
+
+class AvailableUser(BaseModel):
+    id: str
+    email: str
+    username: str
+    full_name: str | None
+
+
+@router.get("/{project_id}/available-users", response_model=JsonResponse[list[AvailableUser], None])
+async def list_available_users(
+    project: Annotated[dict, Depends(ProjectPermission("maintainer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """List active users not already members of the project. Requires maintainer role."""
+    from sqlalchemy import select, and_, not_
+    from app.models.user import users
+    from app.models.project import project_members
+    
+    # Get user IDs already in the project
+    existing_member_ids_stmt = select(project_members.c.user_id).where(
+        project_members.c.project_id == project["id"]
+    )
+    
+    # Get active users not in the project
+    stmt = select(
+        users.c.id,
+        users.c.email,
+        users.c.username,
+        users.c.full_name,
+    ).where(
+        and_(
+            users.c.is_active == True,
+            users.c.deleted_at.is_(None),
+            not_(users.c.id.in_(existing_member_ids_stmt)),
+        )
+    ).order_by(users.c.full_name, users.c.username)
+    
+    result = await connection.execute(stmt)
+    rows = result.fetchall()
+    
+    return JsonResponse(
+        data=[
+            AvailableUser(
+                id=str(row.id),
+                email=row.email,
+                username=row.username,
+                full_name=row.full_name,
+            )
+            for row in rows
+        ],
+        message=f"Found {len(rows)} available user(s)",
         status_code=status.HTTP_200_OK,
     )
 

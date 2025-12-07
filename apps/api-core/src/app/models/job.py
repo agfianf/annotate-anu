@@ -24,14 +24,14 @@ jobs = Table(
     metadata,
     Column(
         "id",
-        UUID(as_uuid=True),
+        Integer,
         primary_key=True,
-        server_default=text("gen_random_uuid()"),
-        comment="UUID primary key",
+        autoincrement=True,
+        comment="Auto-incrementing primary key",
     ),
     Column(
         "task_id",
-        UUID(as_uuid=True),
+        Integer,
         ForeignKey("tasks.id", ondelete="CASCADE"),
         nullable=False,
         comment="Parent task",

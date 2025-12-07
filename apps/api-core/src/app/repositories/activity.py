@@ -14,7 +14,7 @@ class ProjectActivityRepository:
     @staticmethod
     async def list_for_project(
         connection: AsyncConnection,
-        project_id: UUID,
+        project_id: int,
         limit: int = 365,
         offset: int = 0,
     ) -> list[dict]:
@@ -32,7 +32,7 @@ class ProjectActivityRepository:
     @staticmethod
     async def count_for_project(
         connection: AsyncConnection,
-        project_id: UUID,
+        project_id: int,
     ) -> int:
         """Count total activity entries for a project."""
         query = select(func.count()).where(
@@ -44,7 +44,7 @@ class ProjectActivityRepository:
     @staticmethod
     async def create(
         connection: AsyncConnection,
-        project_id: UUID,
+        project_id: int,
         actor_id: UUID | None,
         actor_name: str | None,
         data: dict,
@@ -69,7 +69,7 @@ class ProjectActivityRepository:
     @staticmethod
     async def cleanup_old(
         connection: AsyncConnection,
-        project_id: UUID,
+        project_id: int,
         keep_count: int = 365,
     ) -> int:
         """Delete oldest entries beyond keep_count for a project."""

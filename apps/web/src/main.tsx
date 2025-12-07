@@ -58,6 +58,7 @@ function App() {
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:projectId" element={<ProjectDetailPage />} />
         <Route path="projects/:projectId/tasks" element={<TasksPage />} />
+        <Route path="projects/:projectId/tasks/:taskId" element={<JobsPage />} />
         <Route path="tasks/:taskId/jobs" element={<JobsPage />} />
       </Route>
 

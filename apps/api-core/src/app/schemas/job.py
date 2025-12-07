@@ -30,8 +30,8 @@ class JobApprove(BaseModel):
 class JobResponse(BaseModel):
     """Job response schema."""
 
-    id: UUID
-    task_id: UUID
+    id: int
+    task_id: int
     sequence_number: int
     assignee_id: UUID | None
     status: str
@@ -52,3 +52,9 @@ class JobDetailResponse(JobResponse):
     """Job response with image count."""
 
     image_count: int = 0
+
+
+class JobAssign(BaseModel):
+    """Schema for assigning a job to a user."""
+
+    assignee_id: UUID = Field(..., description="User ID to assign the job to")

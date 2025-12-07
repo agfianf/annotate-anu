@@ -15,7 +15,7 @@ class ProjectRepository:
     """Async repository for project operations."""
 
     @staticmethod
-    async def get_by_id(connection: AsyncConnection, project_id: UUID) -> dict | None:
+    async def get_by_id(connection: AsyncConnection, project_id: int) -> dict | None:
         """Get project by ID."""
         stmt = select(projects).where(projects.c.id == project_id)
         result = await connection.execute(stmt)
@@ -70,7 +70,7 @@ class ProjectRepository:
             raise ValueError(f"Project with slug '{data.get('slug')}' already exists")
 
     @staticmethod
-    async def update(connection: AsyncConnection, project_id: UUID, data: dict) -> dict | None:
+    async def update(connection: AsyncConnection, project_id: int, data: dict) -> dict | None:
         """Update a project."""
         data["updated_at"] = datetime.now(timezone.utc)
         stmt = (
@@ -84,14 +84,14 @@ class ProjectRepository:
         return dict(row._mapping) if row else None
 
     @staticmethod
-    async def delete(connection: AsyncConnection, project_id: UUID) -> bool:
+    async def delete(connection: AsyncConnection, project_id: int) -> bool:
         """Delete a project (cascade deletes tasks, jobs, etc.)."""
         stmt = delete(projects).where(projects.c.id == project_id)
         result = await connection.execute(stmt)
         return result.rowcount > 0
 
     @staticmethod
-    async def get_task_count(connection: AsyncConnection, project_id: UUID) -> int:
+    async def get_task_count(connection: AsyncConnection, project_id: int) -> int:
         """Get count of tasks in project."""
         stmt = select(func.count()).select_from(tasks).where(tasks.c.project_id == project_id)
         result = await connection.execute(stmt)
@@ -110,7 +110,7 @@ class LabelRepository:
         return dict(row._mapping) if row else None
 
     @staticmethod
-    async def list_for_project(connection: AsyncConnection, project_id: UUID) -> list[dict]:
+    async def list_for_project(connection: AsyncConnection, project_id: int) -> list[dict]:
         """List all labels for a project."""
         stmt = (
             select(labels)
@@ -121,7 +121,7 @@ class LabelRepository:
         return [dict(row._mapping) for row in result.fetchall()]
 
     @staticmethod
-    async def create(connection: AsyncConnection, project_id: UUID, data: dict) -> dict:
+    async def create(connection: AsyncConnection, project_id: int, data: dict) -> dict:
         """Create a new label."""
         data["project_id"] = project_id
         try:
@@ -162,7 +162,7 @@ class ProjectMemberRepository:
     @staticmethod
     async def get_by_project_and_user(
         connection: AsyncConnection,
-        project_id: UUID,
+        project_id: int,
         user_id: UUID,
     ) -> dict | None:
         """Get membership for a user in a project."""
@@ -175,7 +175,7 @@ class ProjectMemberRepository:
         return dict(row._mapping) if row else None
 
     @staticmethod
-    async def list_for_project(connection: AsyncConnection, project_id: UUID) -> list[dict]:
+    async def list_for_project(connection: AsyncConnection, project_id: int) -> list[dict]:
         """List all members of a project."""
         stmt = (
             select(project_members)
@@ -186,7 +186,7 @@ class ProjectMemberRepository:
         return [dict(row._mapping) for row in result.fetchall()]
 
     @staticmethod
-    async def get_member_count(connection: AsyncConnection, project_id: UUID) -> int:
+    async def get_member_count(connection: AsyncConnection, project_id: int) -> int:
         """Get count of members in project."""
         stmt = (
             select(func.count())
@@ -197,7 +197,7 @@ class ProjectMemberRepository:
         return result.scalar() or 0
 
     @staticmethod
-    async def create(connection: AsyncConnection, project_id: UUID, data: dict) -> dict:
+    async def create(connection: AsyncConnection, project_id: int, data: dict) -> dict:
         """Add a member to a project."""
         data["project_id"] = project_id
         data["updated_at"] = datetime.now(timezone.utc)

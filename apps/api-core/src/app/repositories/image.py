@@ -23,7 +23,7 @@ class ImageRepository:
     @staticmethod
     async def list_for_job(
         connection: AsyncConnection,
-        job_id: UUID,
+        job_id: int,
         page: int = 1,
         page_size: int = 50,
         annotated_only: bool | None = None,
@@ -52,7 +52,7 @@ class ImageRepository:
         return items, total
 
     @staticmethod
-    async def create(connection: AsyncConnection, job_id: UUID, data: dict) -> dict:
+    async def create(connection: AsyncConnection, job_id: int, data: dict) -> dict:
         """Create a new image."""
         data["job_id"] = job_id
         stmt = insert(images).values(**data).returning(images)
@@ -63,7 +63,7 @@ class ImageRepository:
     @staticmethod
     async def create_bulk(
         connection: AsyncConnection,
-        job_id: UUID,
+        job_id: int,
         image_list: list[dict],
     ) -> list[dict]:
         """Bulk create images for a job."""
@@ -112,7 +112,7 @@ class ImageRepository:
     @staticmethod
     async def get_annotation_stats(
         connection: AsyncConnection,
-        job_id: UUID,
+        job_id: int,
     ) -> tuple[int, int]:
         """Get total and annotated image counts for a job."""
         total_stmt = (

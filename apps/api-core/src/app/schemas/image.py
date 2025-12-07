@@ -39,7 +39,7 @@ class ImageResponse(BaseModel):
     """Image response schema."""
 
     id: UUID
-    job_id: UUID
+    job_id: int
     filename: str
     s3_key: str
     s3_bucket: str

@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Table,
     Text,
@@ -23,10 +24,10 @@ projects = Table(
     metadata,
     Column(
         "id",
-        UUID(as_uuid=True),
+        Integer,
         primary_key=True,
-        server_default=text("gen_random_uuid()"),
-        comment="UUID primary key",
+        autoincrement=True,
+        comment="Auto-incrementing primary key",
     ),
     Column(
         "name",
@@ -111,7 +112,7 @@ project_members = Table(
     ),
     Column(
         "project_id",
-        UUID(as_uuid=True),
+        Integer,
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
     ),
@@ -130,13 +131,13 @@ project_members = Table(
     ),
     Column(
         "allowed_task_ids",
-        ARRAY(UUID(as_uuid=True)),
+        ARRAY(Integer),
         nullable=True,
         comment="Scoped access to specific tasks (null = all)",
     ),
     Column(
         "allowed_job_ids",
-        ARRAY(UUID(as_uuid=True)),
+        ARRAY(Integer),
         nullable=True,
         comment="Scoped access to specific jobs (null = all)",
     ),
@@ -172,7 +173,7 @@ labels = Table(
     ),
     Column(
         "project_id",
-        UUID(as_uuid=True),
+        Integer,
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
     ),

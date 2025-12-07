@@ -5,6 +5,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Table,
     text,
@@ -28,7 +29,7 @@ project_activity = Table(
     ),
     Column(
         "project_id",
-        UUID(as_uuid=True),
+        Integer,
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
         comment="Parent project",

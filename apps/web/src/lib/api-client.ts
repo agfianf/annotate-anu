@@ -52,6 +52,7 @@ export interface ProjectDetail extends Project {
   labels: Label[];
   task_count: number;
   member_count: number;
+  user_role: 'owner' | 'maintainer' | 'annotator' | 'viewer';
 }
 
 export interface Label {
@@ -62,11 +63,12 @@ export interface Label {
 }
 
 export interface Task {
-  id: string;
+  id: number;
   name: string;
   description: string | null;
   status: string;
-  project_id: string;
+  assignee_id: string | null;
+  project_id: number;
   created_at: string;
   updated_at: string;
 }
@@ -87,6 +89,57 @@ export interface Job {
 
 export interface JobDetail extends Job {
   image_count: number;
+}
+
+// Types for Task Creation Flow
+export interface MockImage {
+  filename: string;
+  width?: number;
+  height?: number;
+  file_size_bytes?: number;
+  checksum_sha256?: string;
+}
+
+export interface TaskCreateWithImages {
+  name: string;
+  description?: string;
+  assignee_id?: string;
+  chunk_size: number;
+  distribution_order: 'sequential' | 'random';
+  images: MockImage[];
+}
+
+export interface JobPreview {
+  sequence_number: number;
+  image_count: number;
+}
+
+export interface TaskCreationPreview {
+  task_name: string;
+  total_images: number;
+  chunk_size: number;
+  distribution_order: string;
+  jobs: JobPreview[];
+}
+
+export interface TaskWithJobsResponse {
+  task: Task;
+  jobs: Job[];
+  total_images: number;
+  duplicate_count: number;
+  duplicate_filenames: string[];
+}
+
+export interface ProjectMember {
+  id: string;
+  user_id: string;
+  project_id: string;
+  role: string;
+  allowed_task_ids: number[] | null;
+  allowed_job_ids: number[] | null;
+  created_at: string;
+  updated_at: string;
+  user?: User;
 }
 
 export interface ProjectActivity {
@@ -449,6 +502,22 @@ export const tasksApi = {
     const response = await apiClient.post<ApiResponse<Task>>(`/api/v1/projects/${projectId}/tasks`, data);
     return response.data.data;
   },
+
+  async preview(projectId: string, data: TaskCreateWithImages): Promise<TaskCreationPreview> {
+    const response = await apiClient.post<ApiResponse<TaskCreationPreview>>(
+      `/api/v1/projects/${projectId}/tasks/preview`,
+      data
+    );
+    return response.data.data;
+  },
+
+  async createWithImages(projectId: string, data: TaskCreateWithImages): Promise<TaskWithJobsResponse> {
+    const response = await apiClient.post<ApiResponse<TaskWithJobsResponse>>(
+      `/api/v1/projects/${projectId}/tasks/create-with-images`,
+      data
+    );
+    return response.data.data;
+  },
 };
 
 // ============================================================================
@@ -467,6 +536,61 @@ export const jobsApi = {
     const response = await apiClient.get<ApiResponse<JobDetail>>(`/api/v1/jobs/${jobId}`);
     return response.data.data;
   },
+
+  async assign(jobId: string, assigneeId: string): Promise<Job> {
+    const response = await apiClient.post<ApiResponse<Job>>(`/api/v1/jobs/${jobId}/assign`, {
+      assignee_id: assigneeId,
+    });
+    return response.data.data;
+  },
+
+  async unassign(jobId: string): Promise<Job> {
+    const response = await apiClient.post<ApiResponse<Job>>(`/api/v1/jobs/${jobId}/unassign`);
+    return response.data.data;
+  },
+
+  async start(jobId: string): Promise<Job> {
+    const response = await apiClient.post<ApiResponse<Job>>(`/api/v1/jobs/${jobId}/start`);
+    return response.data.data;
+  },
+
+  async complete(jobId: string): Promise<Job> {
+    const response = await apiClient.post<ApiResponse<Job>>(`/api/v1/jobs/${jobId}/complete`);
+    return response.data.data;
+  },
+};
+
+// ============================================================================
+// Project Members API
+// ============================================================================
+
+export interface AvailableUser {
+  id: string;
+  email: string;
+  username: string;
+  full_name: string | null;
+}
+
+export const membersApi = {
+  async list(projectId: string): Promise<ProjectMember[]> {
+    const response = await apiClient.get<ApiResponse<ProjectMember[]>>(`/api/v1/projects/${projectId}/members`);
+    return response.data.data;
+  },
+
+  async listAvailable(projectId: string): Promise<AvailableUser[]> {
+    const response = await apiClient.get<ApiResponse<AvailableUser[]>>(`/api/v1/projects/${projectId}/available-users`);
+    return response.data.data;
+  },
+
+  async add(projectId: string, data: { user_id: string; role: string }): Promise<ProjectMember> {
+    const response = await apiClient.post<ApiResponse<ProjectMember>>(`/api/v1/projects/${projectId}/members`, data);
+    return response.data.data;
+  },
+
+  async remove(projectId: string, memberId: string): Promise<void> {
+    await apiClient.delete(`/api/v1/projects/${projectId}/members/${memberId}`);
+  },
 };
 
 export default apiClient;
+

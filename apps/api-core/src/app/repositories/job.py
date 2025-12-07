@@ -14,7 +14,7 @@ class JobRepository:
     """Async repository for job operations."""
 
     @staticmethod
-    async def get_by_id(connection: AsyncConnection, job_id: UUID) -> dict | None:
+    async def get_by_id(connection: AsyncConnection, job_id: int) -> dict | None:
         """Get job by ID."""
         stmt = select(jobs).where(jobs.c.id == job_id)
         result = await connection.execute(stmt)
@@ -24,7 +24,7 @@ class JobRepository:
     @staticmethod
     async def list_for_task(
         connection: AsyncConnection,
-        task_id: UUID,
+        task_id: int,
         status: str | None = None,
     ) -> list[dict]:
         """List all jobs for a task."""
@@ -54,7 +54,7 @@ class JobRepository:
         return [dict(row._mapping) for row in result.fetchall()]
 
     @staticmethod
-    async def create(connection: AsyncConnection, task_id: UUID, data: dict) -> dict:
+    async def create(connection: AsyncConnection, task_id: int, data: dict) -> dict:
         """Create a new job."""
         data["task_id"] = task_id
         stmt = insert(jobs).values(**data).returning(jobs)
@@ -65,7 +65,7 @@ class JobRepository:
     @staticmethod
     async def create_bulk(
         connection: AsyncConnection,
-        task_id: UUID,
+        task_id: int,
         job_count: int,
     ) -> list[dict]:
         """Create multiple jobs for a task (chunking)."""
@@ -79,7 +79,7 @@ class JobRepository:
         return created_jobs
 
     @staticmethod
-    async def update(connection: AsyncConnection, job_id: UUID, data: dict) -> dict | None:
+    async def update(connection: AsyncConnection, job_id: int, data: dict) -> dict | None:
         """Update a job."""
         data["updated_at"] = datetime.now(timezone.utc)
         stmt = update(jobs).where(jobs.c.id == job_id).values(**data).returning(jobs)
@@ -88,21 +88,21 @@ class JobRepository:
         return dict(row._mapping) if row else None
 
     @staticmethod
-    async def delete(connection: AsyncConnection, job_id: UUID) -> bool:
+    async def delete(connection: AsyncConnection, job_id: int) -> bool:
         """Delete a job."""
         stmt = delete(jobs).where(jobs.c.id == job_id)
         result = await connection.execute(stmt)
         return result.rowcount > 0
 
     @staticmethod
-    async def get_image_count(connection: AsyncConnection, job_id: UUID) -> int:
+    async def get_image_count(connection: AsyncConnection, job_id: int) -> int:
         """Get count of images in job."""
         stmt = select(func.count()).select_from(images).where(images.c.job_id == job_id)
         result = await connection.execute(stmt)
         return result.scalar() or 0
 
     @staticmethod
-    async def increment_version(connection: AsyncConnection, job_id: UUID) -> None:
+    async def increment_version(connection: AsyncConnection, job_id: int) -> None:
         """Increment job version (called on annotation changes)."""
         stmt = (
             update(jobs)
@@ -115,7 +115,7 @@ class JobRepository:
         await connection.execute(stmt)
 
     @staticmethod
-    async def start_work(connection: AsyncConnection, job_id: UUID) -> dict | None:
+    async def start_work(connection: AsyncConnection, job_id: int) -> dict | None:
         """Mark job as started."""
         data = {
             "status": "in_progress",
@@ -128,7 +128,7 @@ class JobRepository:
         return dict(row._mapping) if row else None
 
     @staticmethod
-    async def complete_work(connection: AsyncConnection, job_id: UUID) -> dict | None:
+    async def complete_work(connection: AsyncConnection, job_id: int) -> dict | None:
         """Mark job as completed."""
         data = {
             "status": "completed",
@@ -143,7 +143,7 @@ class JobRepository:
     @staticmethod
     async def approve(
         connection: AsyncConnection,
-        job_id: UUID,
+        job_id: int,
         approved_by: UUID,
         is_approved: bool,
         rejection_reason: str | None = None,
@@ -161,3 +161,51 @@ class JobRepository:
         result = await connection.execute(stmt)
         row = result.fetchone()
         return dict(row._mapping) if row else None
+
+    @staticmethod
+    async def assign(
+        connection: AsyncConnection,
+        job_id: int,
+        assignee_id: UUID,
+    ) -> dict | None:
+        """Assign a job to a user. Updates status to 'assigned' if pending."""
+        # Get current job to check status
+        current = await JobRepository.get_by_id(connection, job_id)
+        if not current:
+            return None
+        
+        data = {
+            "assignee_id": assignee_id,
+            "updated_at": datetime.now(timezone.utc),
+        }
+        
+        # Only change status to assigned if currently pending
+        if current["status"] == "pending":
+            data["status"] = "assigned"
+        
+        stmt = update(jobs).where(jobs.c.id == job_id).values(**data).returning(jobs)
+        result = await connection.execute(stmt)
+        row = result.fetchone()
+        return dict(row._mapping) if row else None
+
+    @staticmethod
+    async def unassign(connection: AsyncConnection, job_id: int) -> dict | None:
+        """Remove assignment from a job. Reverts status to 'pending' if 'assigned'."""
+        current = await JobRepository.get_by_id(connection, job_id)
+        if not current:
+            return None
+        
+        data = {
+            "assignee_id": None,
+            "updated_at": datetime.now(timezone.utc),
+        }
+        
+        # Only revert status if currently assigned (not in_progress or further)
+        if current["status"] == "assigned":
+            data["status"] = "pending"
+        
+        stmt = update(jobs).where(jobs.c.id == job_id).values(**data).returning(jobs)
+        result = await connection.execute(stmt)
+        row = result.fetchone()
+        return dict(row._mapping) if row else None
+

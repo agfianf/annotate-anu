@@ -11,8 +11,9 @@ from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import JobPermission, TaskPermission
 from app.helpers.response_api import JsonResponse
 from app.repositories.job import JobRepository
+from app.repositories.project import ProjectMemberRepository
 from app.schemas.auth import UserBase
-from app.schemas.job import JobApprove, JobCreate, JobDetailResponse, JobResponse, JobUpdate
+from app.schemas.job import JobApprove, JobAssign, JobCreate, JobDetailResponse, JobResponse, JobUpdate
 
 router = APIRouter(prefix="/api/v1", tags=["Jobs"])
 
@@ -196,3 +197,98 @@ async def approve_job(
         message=f"Job {action}",
         status_code=status.HTTP_200_OK,
     )
+
+
+# =============================================================================
+# Job Assignment Operations
+# =============================================================================
+
+
+@router.post("/jobs/{job_id}/assign", response_model=JsonResponse[JobResponse, None])
+async def assign_job(
+    payload: JobAssign,
+    job: Annotated[dict, Depends(JobPermission("maintainer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """
+    Assign a job to a user. Requires maintainer role.
+    
+    Validates that the assignee is a member of the project.
+    Updates status from 'pending' to 'assigned'.
+    """
+    # Get task to find project_id
+    from app.repositories.task import TaskRepository
+    
+    task = await TaskRepository.get_by_id(connection, job["task_id"])
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Parent task not found",
+        )
+    
+    # Validate assignee is a project member (or project owner)
+    from app.repositories.project import ProjectRepository
+    
+    project = await ProjectRepository.get_by_id(connection, task["project_id"])
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Parent project not found",
+        )
+    
+    # Check if assignee is project owner or a member
+    is_owner = project["owner_id"] == payload.assignee_id
+    membership = await ProjectMemberRepository.get_by_project_and_user(
+        connection, task["project_id"], payload.assignee_id
+    )
+    
+    if not is_owner and not membership:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Assignee must be a project member",
+        )
+    
+    updated = await JobRepository.assign(connection, job["id"], payload.assignee_id)
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to assign job",
+        )
+    
+    return JsonResponse(
+        data=JobResponse(**updated),
+        message="Job assigned successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post("/jobs/{job_id}/unassign", response_model=JsonResponse[JobResponse, None])
+async def unassign_job(
+    job: Annotated[dict, Depends(JobPermission("maintainer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """
+    Remove assignment from a job. Requires maintainer role.
+    
+    Reverts status from 'assigned' back to 'pending'.
+    Cannot unassign if job is already in_progress or beyond.
+    """
+    if job["status"] not in ["pending", "assigned"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot unassign job with status '{job['status']}'. Only 'pending' or 'assigned' jobs can be unassigned.",
+        )
+    
+    updated = await JobRepository.unassign(connection, job["id"])
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to unassign job",
+        )
+    
+    return JsonResponse(
+        data=JobResponse(**updated),
+        message="Job unassigned successfully",
+        status_code=status.HTTP_200_OK,
+    )
+

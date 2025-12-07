@@ -1,7 +1,6 @@
 """RBAC dependencies for project-level access control."""
 
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import Depends, HTTPException, Path, status
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -41,7 +40,7 @@ class ProjectPermission:
 
     async def __call__(
         self,
-        project_id: Annotated[UUID, Path(description="Project ID")],
+        project_id: Annotated[int, Path(description="Project ID")],
         current_user: Annotated[UserBase, Depends(get_current_active_user)],
         connection: Annotated[AsyncConnection, Depends(get_async_conn)],
     ) -> dict:
@@ -49,7 +48,7 @@ class ProjectPermission:
         
         Parameters
         ----------
-        project_id : UUID
+        project_id : int
             Project to check access for
         current_user : UserBase
             Current authenticated user
@@ -128,7 +127,7 @@ class TaskPermission:
 
     async def __call__(
         self,
-        task_id: Annotated[UUID, Path(description="Task ID")],
+        task_id: Annotated[int, Path(description="Task ID")],
         current_user: Annotated[UserBase, Depends(get_current_active_user)],
         connection: Annotated[AsyncConnection, Depends(get_async_conn)],
     ) -> dict:
@@ -212,7 +211,7 @@ class JobPermission:
 
     async def __call__(
         self,
-        job_id: Annotated[UUID, Path(description="Job ID")],
+        job_id: Annotated[int, Path(description="Job ID")],
         current_user: Annotated[UserBase, Depends(get_current_active_user)],
         connection: Annotated[AsyncConnection, Depends(get_async_conn)],
     ) -> dict:

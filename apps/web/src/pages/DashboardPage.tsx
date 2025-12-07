@@ -112,7 +112,7 @@ export default function DashboardPage() {
             {projects.slice(0, 5).map((project) => (
               <Link
                 key={project.id}
-                to={`/dashboard/projects/${project.id}/tasks`}
+                to={`/dashboard/projects/${project.id}?tab=tasks`}
                 className="flex items-center justify-between p-4 rounded-xl border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50 transition-all group"
               >
                 <div className="flex items-center gap-3">

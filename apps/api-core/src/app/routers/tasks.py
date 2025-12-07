@@ -1,5 +1,7 @@
 """Task router with CRUD operations."""
 
+import hashlib
+import random
 from typing import Annotated
 from uuid import UUID
 
@@ -9,8 +11,20 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import ProjectPermission, TaskPermission
 from app.helpers.response_api import JsonResponse
+from app.repositories.image import ImageRepository
+from app.repositories.job import JobRepository
 from app.repositories.task import TaskRepository
-from app.schemas.task import TaskCreate, TaskDetailResponse, TaskResponse, TaskUpdate
+from app.schemas.job import JobResponse
+from app.schemas.task import (
+    JobPreview,
+    TaskCreate,
+    TaskCreateWithMockImages,
+    TaskCreationPreview,
+    TaskDetailResponse,
+    TaskResponse,
+    TaskUpdate,
+    TaskWithJobsResponse,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["Tasks"])
 
@@ -102,3 +116,138 @@ async def delete_task(
         message="Task deleted successfully",
         status_code=status.HTTP_200_OK,
     )
+
+
+# =============================================================================
+# Task Creation with Images & Job Chunking
+# =============================================================================
+
+
+@router.post(
+    "/projects/{project_id}/tasks/preview",
+    response_model=JsonResponse[TaskCreationPreview, None],
+)
+async def preview_task_creation(
+    payload: TaskCreateWithMockImages,
+    project: Annotated[dict, Depends(ProjectPermission("maintainer"))],
+):
+    """Preview task creation showing job breakdown. Does not create anything."""
+    total_images = len(payload.images)
+    chunk_size = payload.chunk_size
+    
+    # Calculate job breakdown
+    job_count = (total_images + chunk_size - 1) // chunk_size  # Ceiling division
+    jobs_preview = []
+    
+    for i in range(job_count):
+        start_idx = i * chunk_size
+        end_idx = min((i + 1) * chunk_size, total_images)
+        jobs_preview.append(JobPreview(
+            sequence_number=i,
+            image_count=end_idx - start_idx,
+        ))
+    
+    return JsonResponse(
+        data=TaskCreationPreview(
+            task_name=payload.name,
+            total_images=total_images,
+            chunk_size=chunk_size,
+            distribution_order=payload.distribution_order,
+            jobs=jobs_preview,
+        ),
+        message=f"{job_count} job(s) will be created",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/tasks/create-with-images",
+    response_model=JsonResponse[TaskWithJobsResponse, None],
+)
+async def create_task_with_images(
+    payload: TaskCreateWithMockImages,
+    project: Annotated[dict, Depends(ProjectPermission("maintainer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """
+    Create a task with images and automatic job chunking.
+    
+    This endpoint:
+    1. Creates the task
+    2. Calculates job count based on chunk size
+    3. Creates jobs automatically
+    4. Distributes images across jobs
+    5. Returns task with jobs and duplicate warnings
+    
+    Note: Image upload is mocked - real S3/MinIO integration deferred.
+    """
+    # Prepare images list (potentially shuffle for random distribution)
+    images_data = list(payload.images)
+    if payload.distribution_order == "random":
+        random.shuffle(images_data)
+    
+    total_images = len(images_data)
+    chunk_size = payload.chunk_size
+    
+    # Create the task first
+    task_data = {
+        "name": payload.name,
+        "description": payload.description,
+        "assignee_id": payload.assignee_id,
+        "total_images": total_images,
+    }
+    task = await TaskRepository.create(connection, project["id"], task_data)
+    task_id = task["id"]
+    
+    # Calculate job count
+    job_count = (total_images + chunk_size - 1) // chunk_size
+    
+    # Create jobs
+    created_jobs = []
+    for i in range(job_count):
+        start_idx = i * chunk_size
+        end_idx = min((i + 1) * chunk_size, total_images)
+        image_count = end_idx - start_idx
+        
+        job_data = {
+            "sequence_number": i,
+            "assignee_id": payload.assignee_id,  # Optionally assign all jobs to same person
+            "total_images": image_count,
+        }
+        job = await JobRepository.create(connection, task_id, job_data)
+        
+        # Create images for this job (mocked S3 keys)
+        job_images = images_data[start_idx:end_idx]
+        for seq_num, img_input in enumerate(job_images):
+            # Generate mock S3 key and checksum if not provided
+            checksum = img_input.checksum_sha256 or hashlib.sha256(
+                f"{project['slug']}/{task_id}/{job['id']}/{img_input.filename}".encode()
+            ).hexdigest()
+            
+            image_data = {
+                "filename": img_input.filename,
+                "s3_key": f"{project['slug']}/tasks/{task_id}/jobs/{job['id']}/{img_input.filename}",
+                "s3_bucket": "annotate-anu",
+                "width": img_input.width,
+                "height": img_input.height,
+                "file_size_bytes": img_input.file_size_bytes,
+                "mime_type": f"image/{img_input.filename.split('.')[-1].lower()}",
+                "checksum_sha256": checksum,
+                "sequence_number": seq_num,
+            }
+            await ImageRepository.create(connection, job["id"], image_data)
+        
+        created_jobs.append(job)
+    
+    return JsonResponse(
+        data=TaskWithJobsResponse(
+            task=TaskResponse(**task),
+            jobs=[JobResponse(**j) for j in created_jobs],
+            total_images=total_images,
+            duplicate_count=0,  # Duplicate detection not yet implemented
+            duplicate_filenames=[],
+        ),
+        message=f"Task created with {job_count} job(s) and {total_images} image(s)",
+        status_code=status.HTTP_201_CREATED,
+    )
+

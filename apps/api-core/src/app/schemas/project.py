@@ -38,7 +38,7 @@ class LabelResponse(BaseModel):
     """Label response schema."""
 
     id: UUID
-    project_id: UUID
+    project_id: int
     name: str
     color: str
     parent_id: UUID | None
@@ -56,29 +56,38 @@ class ProjectMemberCreate(BaseModel):
 
     user_id: UUID = Field(..., description="User to add")
     role: str = Field(default="annotator", description="Role: owner, maintainer, annotator, viewer")
-    allowed_task_ids: list[UUID] | None = Field(None, description="Restrict to specific tasks")
-    allowed_job_ids: list[UUID] | None = Field(None, description="Restrict to specific jobs")
+    allowed_task_ids: list[int] | None = Field(None, description="Restrict to specific tasks")
+    allowed_job_ids: list[int] | None = Field(None, description="Restrict to specific jobs")
 
 
 class ProjectMemberUpdate(BaseModel):
     """Schema for updating a project member."""
 
     role: str | None = None
-    allowed_task_ids: list[UUID] | None = None
-    allowed_job_ids: list[UUID] | None = None
+    allowed_task_ids: list[int] | None = None
+    allowed_job_ids: list[int] | None = None
+
+
+class MemberUserInfo(BaseModel):
+    """Minimal user info for member listings."""
+    
+    email: str
+    username: str
+    full_name: str | None
 
 
 class ProjectMemberResponse(BaseModel):
     """Project member response schema."""
 
     id: UUID
-    project_id: UUID
+    project_id: int
     user_id: UUID
     role: str
-    allowed_task_ids: list[UUID] | None
-    allowed_job_ids: list[UUID] | None
+    allowed_task_ids: list[int] | None
+    allowed_job_ids: list[int] | None
     created_at: datetime
     updated_at: datetime
+    user: MemberUserInfo | None = None
 
 
 # ============================================================================
@@ -110,7 +119,7 @@ class ProjectUpdate(BaseModel):
 class ProjectResponse(BaseModel):
     """Project response schema."""
 
-    id: UUID
+    id: int
     name: str
     slug: str
     description: str | None
@@ -129,3 +138,4 @@ class ProjectDetailResponse(ProjectResponse):
     labels: list[LabelResponse] = []
     member_count: int = 0
     task_count: int = 0
+    user_role: str = "viewer"  # User's role in this project: owner, maintainer, annotator, viewer

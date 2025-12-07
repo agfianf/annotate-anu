@@ -3,13 +3,14 @@
  * Shows project configuration including labels and settings with proper color picker
  */
 
-import { Edit2, Palette, Plus, Settings, Trash2, X } from 'lucide-react';
+import { Crown, Edit2, Eye, Loader2, Palette, Plus, Settings, Shield, Trash2, UserPlus, Users, Wrench, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
-import type { Label, ProjectDetail } from '../lib/api-client';
-import { labelsApi } from '../lib/api-client';
+import type { Label, ProjectDetail, ProjectMember } from '../lib/api-client';
+import { labelsApi, membersApi } from '../lib/api-client';
 import { DEFAULT_LABEL_COLOR, PRESET_COLORS } from '../lib/colors';
+import GlassDropdown from './ui/GlassDropdown';
 
 interface ProjectConfigurationTabProps {
   project: ProjectDetail;
@@ -17,6 +18,9 @@ interface ProjectConfigurationTabProps {
 }
 
 export default function ProjectConfigurationTab({ project, onUpdate }: ProjectConfigurationTabProps) {
+  // Permission checks based on user role
+  const canEdit = project.user_role === 'owner' || project.user_role === 'maintainer';
+
   const [isAddingLabel, setIsAddingLabel] = useState(false);
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [newLabelName, setNewLabelName] = useState('');
@@ -241,13 +245,15 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
             <h2 className="text-lg font-semibold text-gray-900">Labels</h2>
             <span className="text-sm text-gray-400">({project.labels.length})</span>
           </div>
-          <button
-            onClick={() => setIsAddingLabel(true)}
-            className="px-3 py-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium rounded-lg transition-all flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            Add Label
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setIsAddingLabel(true)}
+              className="px-3 py-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium rounded-lg transition-all flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              Add Label
+            </button>
+          )}
         </div>
 
         <div className="p-6">
@@ -383,22 +389,24 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
                         <span className="font-medium text-gray-800">{label.name}</span>
                         <span className="text-xs font-mono text-gray-400">{label.color}</span>
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleStartEdit(label)}
-                          className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
-                          title="Edit label"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteLabel(label)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
-                          title="Delete label"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {canEdit && (
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleStartEdit(label)}
+                            className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-all"
+                            title="Edit label"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLabel(label)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                            title="Delete label"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -407,6 +415,9 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
           )}
         </div>
       </div>
+
+      {/* Members Section */}
+      <ProjectMembersSection projectId={Number(project.id)} canEdit={canEdit} />
 
       {/* Project Settings Section */}
       <div className="glass-strong rounded-2xl shadow-lg overflow-hidden">
@@ -458,6 +469,267 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Project Members Section Component
+ * Handles member listing, adding, and removing
+ */
+
+function ProjectMembersSection({ projectId, canEdit }: { projectId: number; canEdit: boolean }) {
+  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<{ id: string; email: string; username: string; full_name: string | null }[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState('annotator');
+  const [isAdding, setIsAdding] = useState(false);
+
+  useEffect(() => {
+    loadMembers();
+  }, [projectId]);
+
+  const loadMembers = async () => {
+    try {
+      const data = await membersApi.list(String(projectId));
+      setMembers(data);
+    } catch (err) {
+      console.error('Failed to load members:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadAvailableUsers = async () => {
+    setIsLoadingUsers(true);
+    try {
+      const users = await membersApi.listAvailable(String(projectId));
+      setAvailableUsers(users);
+    } catch (err) {
+      console.error('Failed to load available users:', err);
+      toast.error('Failed to load users');
+    } finally {
+      setIsLoadingUsers(false);
+    }
+  };
+
+  const handleOpenAddForm = () => {
+    setShowAddForm(true);
+    setSelectedUserId('');
+    setNewMemberRole('annotator');
+    loadAvailableUsers();
+  };
+
+  const handleAddMember = async () => {
+    if (!selectedUserId) {
+      toast.error('Please select a user');
+      return;
+    }
+
+    setIsAdding(true);
+    try {
+      await membersApi.add(String(projectId), {
+        user_id: selectedUserId,
+        role: newMemberRole,
+      });
+      toast.success('Member added successfully');
+      setShowAddForm(false);
+      setSelectedUserId('');
+      loadMembers();
+    } catch (err) {
+      console.error('Failed to add member:', err);
+      toast.error('Failed to add member');
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string, memberName: string) => {
+    if (!confirm(`Remove ${memberName} from the project?`)) return;
+    
+    try {
+      await membersApi.remove(String(projectId), memberId);
+      toast.success('Member removed');
+      loadMembers();
+    } catch (err) {
+      console.error('Failed to remove member:', err);
+      toast.error('Failed to remove member');
+    }
+  };
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'owner': return <Crown className="w-4 h-4 text-amber-500" />;
+      case 'maintainer': return <Wrench className="w-4 h-4 text-purple-500" />;
+      case 'annotator': return <Shield className="w-4 h-4 text-blue-500" />;
+      case 'viewer': return <Eye className="w-4 h-4 text-gray-400" />;
+      default: return null;
+    }
+  };
+
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case 'owner': return 'bg-amber-100 text-amber-700';
+      case 'maintainer': return 'bg-purple-100 text-purple-700';
+      case 'annotator': return 'bg-blue-100 text-blue-700';
+      case 'viewer': return 'bg-gray-100 text-gray-600';
+      default: return 'bg-gray-100 text-gray-600';
+    }
+  };
+
+  const getMemberName = (member: ProjectMember) => {
+    if (member.user) {
+      return member.user.full_name || member.user.username || member.user.email;
+    }
+    return `User ${member.user_id.slice(0, 8)}`;
+  };
+
+  const getMemberInitials = (member: ProjectMember) => {
+    const name = getMemberName(member);
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="glass-strong rounded-2xl shadow-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-emerald-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Team Members</h2>
+          </div>
+        </div>
+        <div className="p-6 flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-strong rounded-2xl shadow-lg overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
+        <div className="flex items-center gap-2">
+          <Users className="w-5 h-5 text-emerald-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Team Members</h2>
+          <span className="text-sm text-gray-400">({members.length})</span>
+        </div>
+        {canEdit && (
+          <button
+            onClick={handleOpenAddForm}
+            className="px-3 py-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium rounded-lg transition-all flex items-center gap-1.5"
+          >
+            <UserPlus className="w-4 h-4" />
+            Add Member
+          </button>
+        )}
+      </div>
+
+      <div className="p-6">
+        {/* Add Member Form */}
+        {showAddForm && (
+          <div className="mb-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+            <h3 className="font-medium text-gray-800 mb-3">Add Team Member</h3>
+            <div className="flex gap-3 items-center flex-wrap">
+              {/* User Selection Dropdown */}
+              <div className="flex-1 min-w-[250px]">
+                <GlassDropdown
+                  options={availableUsers.map((user) => ({
+                    value: user.id,
+                    label: user.full_name || user.username,
+                    sublabel: user.email,
+                  }))}
+                  value={selectedUserId}
+                  onChange={setSelectedUserId}
+                  placeholder="Select a user..."
+                  isLoading={isLoadingUsers}
+                  emptyMessage="No available users to add"
+                />
+              </div>
+
+              {/* Role Selection */}
+              <div className="w-[140px]">
+                <GlassDropdown
+                  options={[
+                    { value: 'viewer', label: 'Viewer' },
+                    { value: 'annotator', label: 'Annotator' },
+                    { value: 'maintainer', label: 'Maintainer' },
+                  ]}
+                  value={newMemberRole}
+                  onChange={setNewMemberRole}
+                  placeholder="Select role"
+                />
+              </div>
+
+              <button
+                onClick={handleAddMember}
+                disabled={isAdding || !selectedUserId}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium rounded-lg transition-all flex items-center gap-2"
+              >
+                {isAdding && <Loader2 className="w-4 h-4 animate-spin" />}
+                Add
+              </button>
+              <button
+                onClick={() => setShowAddForm(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium rounded-lg transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Members List */}
+        {members.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p>No team members yet</p>
+            <p className="text-sm">Add members to collaborate on this project</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {members.map((member) => (
+              <div
+                key={member.id}
+                className="p-3 bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition-all group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-medium">
+                      {getMemberInitials(member)}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{getMemberName(member)}</p>
+                      {member.user?.email && (
+                        <p className="text-xs text-gray-500">{member.user.email}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      {getRoleIcon(member.role)}
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${getRoleBadge(member.role)}`}>
+                        {member.role}
+                      </span>
+                    </div>
+                    {canEdit && member.role !== 'owner' && (
+                      <button
+                        onClick={() => handleRemoveMember(member.id, getMemberName(member))}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all opacity-0 group-hover:opacity-100"
+                        title="Remove member"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
