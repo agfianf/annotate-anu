@@ -199,9 +199,7 @@ export default function AssigneeDropdown({
               <span className="text-gray-900 truncate">
                 {getMemberDisplayName(selectedMember)}
               </span>
-              <span className={`px-1.5 py-0.5 rounded text-xs font-medium capitalize flex-shrink-0 ${getRoleColor(selectedMember.role)}`}>
-                {selectedMember.role}
-              </span>
+
             </>
           ) : (
             <>
