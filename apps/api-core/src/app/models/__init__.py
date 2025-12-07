@@ -1,5 +1,6 @@
 """SQLAlchemy Core models for AnnotateANU."""
 
+from app.models.activity import project_activity
 from app.models.annotation import (
     detections,
     image_tags,
@@ -36,4 +37,7 @@ __all__ = [
     # History
     "annotation_events",
     "version_snapshots",
+    # Activity
+    "project_activity",
 ]
+

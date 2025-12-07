@@ -1,6 +1,6 @@
 /**
  * Project Detail Page
- * Shows project overview with README editor and navigation to tasks
+ * Shows project overview with tabs for README, Configuration, History, and Explore
  */
 
 import {
@@ -8,15 +8,19 @@ import {
     BookOpen,
     Edit3,
     FolderKanban,
-    ListTodo,
     Loader2,
     Save,
-    X,
+    X
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import ProjectConfigurationTab from '../components/ProjectConfigurationTab';
+import ProjectExploreTab from '../components/ProjectExploreTab';
+import ProjectHistoryTab from '../components/ProjectHistoryTab';
 import ProjectReadmeEditor, { type ProjectReadmeEditorHandle } from '../components/ProjectReadmeEditor';
+import ProjectTabs, { type ProjectTabId } from '../components/ProjectTabs';
+import ProjectTasksTab from '../components/ProjectTasksTab';
 import type { ProjectDetail } from '../lib/api-client';
 import { projectsApi } from '../lib/api-client';
 
@@ -45,12 +49,25 @@ Add any additional information that annotators should know.
 
 export default function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editedReadme, setEditedReadme] = useState('');
   const editorRef = useRef<ProjectReadmeEditorHandle>(null);
+
+  // Get active tab from URL or default to 'readme'
+  const activeTab = (searchParams.get('tab') as ProjectTabId) || 'readme';
+  
+  const handleTabChange = (tab: ProjectTabId) => {
+    setSearchParams({ tab });
+    // Cancel editing when switching tabs
+    if (isEditing && tab !== 'readme') {
+      setIsEditing(false);
+      setEditedReadme(project?.readme || '');
+    }
+  };
 
   useEffect(() => {
     loadProject();
@@ -132,6 +149,95 @@ export default function ProjectDetailPage() {
 
   const hasReadme = project.readme && project.readme.trim().length > 0;
 
+  // Render README tab content
+  const renderReadmeTab = () => (
+    <div className="glass-strong rounded-2xl shadow-lg overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-5 h-5 text-emerald-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Project README</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          {isEditing ? (
+            <>
+              <button
+                onClick={handleCancelEdit}
+                className="px-3 py-1.5 text-gray-600 hover:text-gray-800 font-medium rounded-lg transition-all flex items-center gap-1.5"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium rounded-lg transition-all flex items-center gap-1.5"
+              >
+                {isSaving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleStartEdit}
+              className="px-3 py-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium rounded-lg transition-all flex items-center gap-1.5"
+            >
+              <Edit3 className="w-4 h-4" />
+              Edit
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="p-6">
+        {!hasReadme && !isEditing ? (
+          <div className="text-center py-12">
+            <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">No README yet</h3>
+            <p className="text-gray-500 mb-6">
+              Add project documentation to help annotators understand the guidelines
+            </p>
+            <button
+              onClick={handleInitializeReadme}
+              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all inline-flex items-center gap-2"
+            >
+              <Edit3 className="w-5 h-5" />
+              Create README
+            </button>
+          </div>
+        ) : (
+          <ProjectReadmeEditor
+            ref={editorRef}
+            markdown={isEditing ? editedReadme : (project.readme || '')}
+            onChange={setEditedReadme}
+            isEditing={isEditing}
+          />
+        )}
+      </div>
+    </div>
+  );
+
+  // Render tab content based on active tab
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'readme':
+        return renderReadmeTab();
+      case 'tasks':
+        return <ProjectTasksTab projectId={projectId!} />;
+      case 'configuration':
+        return <ProjectConfigurationTab project={project} onUpdate={loadProject} />;
+      case 'history':
+        return <ProjectHistoryTab projectId={projectId!} />;
+      case 'explore':
+        return <ProjectExploreTab projectId={projectId!} />;
+      default:
+        return renderReadmeTab();
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -152,17 +258,6 @@ export default function ProjectDetailPage() {
               <p className="text-gray-500 mt-1">{project.description}</p>
             )}
           </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Navigation to Tasks */}
-          <Link
-            to={`/dashboard/projects/${projectId}/tasks`}
-            className="px-4 py-2 bg-white border border-gray-200 hover:border-emerald-300 text-gray-700 hover:text-emerald-700 font-medium rounded-xl transition-all flex items-center gap-2 shadow-sm"
-          >
-            <ListTodo className="w-5 h-5" />
-            View Tasks
-          </Link>
         </div>
       </div>
 
@@ -188,104 +283,11 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {/* README Section */}
-      <div className="glass-strong rounded-2xl shadow-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-5 h-5 text-emerald-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Project README</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <>
-                <button
-                  onClick={handleCancelEdit}
-                  className="px-3 py-1.5 text-gray-600 hover:text-gray-800 font-medium rounded-lg transition-all flex items-center gap-1.5"
-                >
-                  <X className="w-4 h-4" />
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium rounded-lg transition-all flex items-center gap-1.5"
-                >
-                  {isSaving ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4" />
-                  )}
-                  Save
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={handleStartEdit}
-                className="px-3 py-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 font-medium rounded-lg transition-all flex items-center gap-1.5"
-              >
-                <Edit3 className="w-4 h-4" />
-                Edit
-              </button>
-            )}
-          </div>
-        </div>
+      {/* Tabs Navigation */}
+      <ProjectTabs activeTab={activeTab} onTabChange={handleTabChange} />
 
-        <div className="p-6">
-          {!hasReadme && !isEditing ? (
-            <div className="text-center py-12">
-              <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-700 mb-2">No README yet</h3>
-              <p className="text-gray-500 mb-6">
-                Add project documentation to help annotators understand the guidelines
-              </p>
-              <button
-                onClick={handleInitializeReadme}
-                className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all inline-flex items-center gap-2"
-              >
-                <Edit3 className="w-5 h-5" />
-                Create README
-              </button>
-            </div>
-          ) : (
-            <ProjectReadmeEditor
-              ref={editorRef}
-              markdown={isEditing ? editedReadme : (project.readme || '')}
-              onChange={setEditedReadme}
-              isEditing={isEditing}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Labels Section */}
-      {project.labels.length > 0 && (
-        <div className="glass-strong rounded-2xl shadow-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-            <h2 className="text-lg font-semibold text-gray-900">Project Labels</h2>
-          </div>
-          <div className="p-6">
-            <div className="flex flex-wrap gap-3">
-              {project.labels.map((label) => (
-                <div
-                  key={label.id}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2"
-                  style={{
-                    backgroundColor: `${label.color}20`,
-                    color: label.color,
-                    border: `1px solid ${label.color}40`,
-                  }}
-                >
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: label.color }}
-                  />
-                  {label.name}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Tab Content */}
+      {renderTabContent()}
     </div>
   );
 }

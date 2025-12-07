@@ -3,14 +3,16 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.dependencies.auth import get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import ProjectPermission
 from app.helpers.response_api import JsonResponse
+from app.repositories.activity import ProjectActivityRepository
 from app.repositories.project import LabelRepository, ProjectMemberRepository, ProjectRepository
+from app.schemas.activity import ActivityListMeta, ProjectActivityCreate, ProjectActivityResponse
 from app.schemas.auth import UserBase
 from app.schemas.project import (
     LabelCreate,
@@ -282,3 +284,54 @@ async def remove_member(
     
     await ProjectMemberRepository.delete(connection, member_id)
     return JsonResponse(data={"deleted": True}, message="Member removed", status_code=status.HTTP_200_OK)
+
+
+# ============================================================================
+# Activity / History
+# ============================================================================
+@router.get("/{project_id}/activity", response_model=JsonResponse[list[ProjectActivityResponse], ActivityListMeta])
+async def list_activity(
+    project: Annotated[dict, Depends(ProjectPermission("viewer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+    limit: int = Query(default=100, le=365, ge=1, description="Max activities to return"),
+    offset: int = Query(default=0, ge=0, description="Offset for pagination"),
+):
+    """List project activity/history. Returns up to 365 most recent entries."""
+    activities = await ProjectActivityRepository.list_for_project(
+        connection, project["id"], limit=limit, offset=offset
+    )
+    total = await ProjectActivityRepository.count_for_project(connection, project["id"])
+    
+    return JsonResponse(
+        data=[ProjectActivityResponse(**a) for a in activities],
+        message=f"Found {len(activities)} of {total} activity entries",
+        status_code=status.HTTP_200_OK,
+        meta=ActivityListMeta(total=total, limit=limit, offset=offset),
+    )
+
+
+@router.post("/{project_id}/activity", response_model=JsonResponse[ProjectActivityResponse, None])
+async def create_activity(
+    payload: ProjectActivityCreate,
+    project: Annotated[dict, Depends(ProjectPermission("annotator"))],
+    current_user: Annotated[UserBase, Depends(get_current_active_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Log a project activity entry. Used internally when tasks/jobs change."""
+    activity = await ProjectActivityRepository.create(
+        connection,
+        project["id"],
+        actor_id=current_user.id,
+        actor_name=current_user.full_name or current_user.username,
+        data=payload.model_dump(),
+    )
+    
+    # Cleanup old entries (keep max 365)
+    await ProjectActivityRepository.cleanup_old(connection, project["id"], keep_count=365)
+    
+    return JsonResponse(
+        data=ProjectActivityResponse(**activity),
+        message="Activity logged successfully",
+        status_code=status.HTTP_201_CREATED,
+    )
+

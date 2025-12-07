@@ -89,6 +89,20 @@ export interface JobDetail extends Job {
   image_count: number;
 }
 
+export interface ProjectActivity {
+  id: string;
+  project_id: string;
+  entity_type: 'task' | 'job' | 'label' | 'member' | 'project';
+  entity_id: string;
+  entity_name: string | null;
+  action: 'created' | 'updated' | 'deleted' | 'status_changed' | 'assigned';
+  actor_id: string | null;
+  actor_name: string | null;
+  previous_data: Record<string, unknown> | null;
+  new_data: Record<string, unknown> | null;
+  created_at: string;
+}
+
 // Storage keys
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
@@ -356,6 +370,61 @@ export const projectsApi = {
 
   async delete(projectId: string): Promise<void> {
     await apiClient.delete(`/api/v1/projects/${projectId}`);
+  },
+
+  async getActivity(projectId: string, limit = 100, offset = 0): Promise<{
+    data: ProjectActivity[];
+    total: number;
+  }> {
+    const response = await apiClient.get<ApiResponse<ProjectActivity[]>>(
+      `/api/v1/projects/${projectId}/activity`,
+      { params: { limit, offset } }
+    );
+    return {
+      data: response.data.data,
+      total: (response.data.meta as { total: number })?.total || 0,
+    };
+  },
+
+  async logActivity(projectId: string, data: {
+    entity_type: 'task' | 'job' | 'label' | 'member' | 'project';
+    entity_id: string;
+    entity_name?: string;
+    action: 'created' | 'updated' | 'deleted' | 'status_changed' | 'assigned';
+    previous_data?: Record<string, unknown>;
+    new_data?: Record<string, unknown>;
+  }): Promise<ProjectActivity> {
+    const response = await apiClient.post<ApiResponse<ProjectActivity>>(
+      `/api/v1/projects/${projectId}/activity`,
+      data
+    );
+    return response.data.data;
+  },
+};
+
+// ============================================================================
+// Labels API (Project Labels)
+// ============================================================================
+
+export const labelsApi = {
+  async create(projectId: string, data: { name: string; color: string }): Promise<Label> {
+    const response = await apiClient.post<ApiResponse<Label>>(
+      `/api/v1/projects/${projectId}/labels`,
+      data
+    );
+    return response.data.data;
+  },
+
+  async update(labelId: string, data: { name?: string; color?: string }): Promise<Label> {
+    const response = await apiClient.patch<ApiResponse<Label>>(
+      `/api/v1/projects/labels/${labelId}`,
+      data
+    );
+    return response.data.data;
+  },
+
+  async delete(labelId: string): Promise<void> {
+    await apiClient.delete(`/api/v1/projects/labels/${labelId}`);
   },
 };
 
