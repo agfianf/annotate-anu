@@ -14,11 +14,14 @@ import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
+import ConfirmationModal from '../components/ConfirmationModal';
+import Toggle from '../components/Toggle';
 import { useAuth } from '../contexts/AuthContext';
 import type { Project } from '../lib/api-client';
 import { projectsApi } from '../lib/api-client';
 
 export default function ProjectsPage() {
+  const [includeArchived, setIncludeArchived] = useState(false);
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -27,14 +30,31 @@ export default function ProjectsPage() {
   const [newProject, setNewProject] = useState({ name: '', description: '' });
 
   const canCreateProject = user?.role === 'admin' || user?.role === 'member';
+  const isAdmin = user?.role === 'admin';
+
+  // Modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDangerous?: boolean;
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     loadProjects();
-  }, []);
+  }, [includeArchived]);
 
   const loadProjects = async () => {
+    setIsLoading(true);
     try {
-      const data = await projectsApi.list();
+      const data = await projectsApi.list(includeArchived);
       setProjects(data);
     } catch (err: unknown) {
       const axiosError = err as { response?: { data?: { detail?: string } } };
@@ -42,6 +62,56 @@ export default function ProjectsPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleArchive = (e: React.MouseEvent, project: Project) => {
+    e.preventDefault();
+    setConfirmModal({
+      isOpen: true,
+      title: 'Archive Project',
+      message: `Are you sure you want to archive "${project.name}"? It will be hidden from the default view but can be restored later.`,
+      confirmText: 'Archive',
+      onConfirm: async () => {
+        try {
+          await projectsApi.archive(project.id);
+          toast.success('Project archived');
+          loadProjects();
+        } catch (err) {
+          toast.error('Failed to archive project');
+        }
+      }
+    });
+  };
+
+  const handleUnarchive = async (e: React.MouseEvent, project: Project) => {
+    e.preventDefault();
+    try {
+      await projectsApi.unarchive(project.id);
+      toast.success('Project unarchived');
+      loadProjects();
+    } catch (err) {
+      toast.error('Failed to unarchive project');
+    }
+  };
+
+  const handleDelete = (e: React.MouseEvent, project: Project) => {
+    e.preventDefault();
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Project',
+      message: `Are you sure you want to PERMANENTLY delete "${project.name}"? This action cannot be undone and will delete all associated tasks, jobs, and annotations.`,
+      isDangerous: true,
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        try {
+          await projectsApi.delete(project.id);
+          toast.success('Project deleted');
+          loadProjects();
+        } catch (err) {
+          toast.error('Failed to delete project');
+        }
+      }
+    });
   };
 
   const handleCreate = async (e: FormEvent) => {
@@ -76,15 +146,23 @@ export default function ProjectsPage() {
           <FolderKanban className="w-7 h-7" />
           Projects
         </h1>
-        {canCreateProject && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/25"
-          >
-            <Plus className="w-5 h-5" />
-            New Project
-          </button>
-        )}
+        <div className="flex items-center gap-4">
+          <Toggle
+            checked={includeArchived}
+            onChange={setIncludeArchived}
+            label="Show Archived"
+          />
+        
+          {canCreateProject && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/25"
+            >
+              <Plus className="w-5 h-5" />
+              New Project
+            </button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -96,7 +174,7 @@ export default function ProjectsPage() {
           <FolderKanban className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700 mb-2">No projects yet</h3>
           <p className="text-gray-500 mb-6">
-            {canCreateProject ? 'Create your first project to get started' : 'No projects found'}
+            {includeArchived ? 'No archived or active projects found' : (canCreateProject ? 'Create your first project to get started' : 'No projects found')}
           </p>
           {canCreateProject && (
             <button
@@ -114,20 +192,53 @@ export default function ProjectsPage() {
             <Link
               key={project.id}
               to={`/dashboard/projects/${project.id}`}
-              className="glass rounded-2xl p-6 shadow-lg shadow-emerald-500/5 border border-gray-100 hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all group"
+              className={`glass rounded-2xl p-6 shadow-lg shadow-emerald-500/5 border border-gray-100 hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all group relative ${project.is_archived ? 'opacity-75 bg-gray-50' : ''}`}
             >
               <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold text-xl">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl ${project.is_archived ? 'bg-gray-200 text-gray-500' : 'bg-emerald-100 text-emerald-600'}`}>
                   {project.name.charAt(0).toUpperCase()}
                 </div>
-                <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+                <div className="flex items-center gap-2">
+                  {project.is_archived && <span className="px-2 py-1 text-xs font-medium bg-gray-200 text-gray-600 rounded-lg">Archived</span>}
+                  <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+                </div>
               </div>
               <h3 className="font-semibold text-gray-900 text-lg mb-1"><span className="text-gray-400 font-normal">#{project.id}</span> {project.name}</h3>
               <p className="text-gray-500 text-sm line-clamp-2">
                 {project.description || 'No description'}
               </p>
-              <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-400">
-                Created {new Date(project.created_at).toLocaleDateString()}
+              
+              <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                <div className="text-xs text-gray-400">
+                  Created {new Date(project.created_at).toLocaleDateString()}
+                </div>
+                {isAdmin && (
+                  <div className="flex items-center gap-3">
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Toggle
+                        checked={project.is_archived}
+                        onChange={(checked) => {
+                          if (checked) {
+                            handleArchive({ preventDefault: () => {} } as React.MouseEvent, project);
+                          } else {
+                            handleUnarchive({ preventDefault: () => {} } as React.MouseEvent, project);
+                          }
+                        }}
+                        label={project.is_archived ? "Archived" : "Active"}
+                        size="sm"
+                      />
+                    </div>
+                     {project.is_archived && (
+                        <button 
+                          onClick={(e) => handleDelete(e, project)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Delete"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                     )}
+                  </div>
+                )}
               </div>
             </Link>
           ))}
@@ -203,6 +314,17 @@ export default function ProjectsPage() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDangerous={confirmModal.isDangerous}
+        confirmText={confirmModal.confirmText}
+      />
     </div>
   );
 }

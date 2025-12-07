@@ -8,12 +8,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from app.dependencies.auth import get_admin_user
 from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import ProjectPermission, TaskPermission
 from app.helpers.response_api import JsonResponse
 from app.repositories.image import ImageRepository
 from app.repositories.job import JobRepository
 from app.repositories.task import TaskRepository
+from app.schemas.auth import UserBase
 from app.schemas.job import JobResponse
 from app.schemas.task import (
     JobPreview,
@@ -34,10 +36,11 @@ async def list_tasks(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
     task_status: str | None = None,
+    include_archived: bool = False,
 ):
     """List all tasks for a project."""
     tasks = await TaskRepository.list_for_project(
-        connection, project["id"], status=task_status
+        connection, project["id"], status=task_status, include_archived=include_archived
     )
     return JsonResponse(
         data=[TaskResponse(**t) for t in tasks],
@@ -104,13 +107,62 @@ async def update_task(
     )
 
 
-@router.delete("/tasks/{task_id}")
-async def delete_task(
-    task: Annotated[dict, Depends(TaskPermission("maintainer"))],
+@router.post("/tasks/{task_id}/archive", response_model=JsonResponse[TaskResponse, None])
+async def archive_task(
+    task_id: int,
+    current_user: Annotated[UserBase, Depends(get_admin_user)],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
-    """Delete a task. Requires maintainer role."""
-    await TaskRepository.delete(connection, task["id"])
+    """Archive a task. Requires admin role."""
+    task = await TaskRepository.get_by_id(connection, task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        
+    updated = await TaskRepository.update(connection, task_id, {"is_archived": True})
+    return JsonResponse(
+        data=TaskResponse(**updated),
+        message="Task archived successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post("/tasks/{task_id}/unarchive", response_model=JsonResponse[TaskResponse, None])
+async def unarchive_task(
+    task_id: int,
+    current_user: Annotated[UserBase, Depends(get_admin_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Unarchive a task. Requires admin role."""
+    task = await TaskRepository.get_by_id(connection, task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+        
+    updated = await TaskRepository.update(connection, task_id, {"is_archived": False})
+    return JsonResponse(
+        data=TaskResponse(**updated),
+        message="Task unarchived successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.delete("/tasks/{task_id}")
+async def delete_task(
+    task_id: int,
+    current_user: Annotated[UserBase, Depends(get_admin_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Delete a task. Requires admin role and archived status."""
+    task = await TaskRepository.get_by_id(connection, task_id)
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+
+    if not task["is_archived"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Task must be archived before deletion"
+        )
+
+    await TaskRepository.delete(connection, task_id)
     return JsonResponse(
         data={"deleted": True},
         message="Task deleted successfully",

@@ -67,6 +67,7 @@ export interface Task {
   name: string;
   description: string | null;
   status: string;
+  is_archived: boolean;
   assignee_id: string | null;
   assignee?: MemberUserInfo | null;
   project_id: number;
@@ -82,6 +83,7 @@ export interface Job {
   id: string;
   name: string | null;
   status: string;
+  is_archived: boolean;
   assignee_id: string | null;
   assignee?: MemberUserInfo | null;
   task_id: string;
@@ -432,6 +434,16 @@ export const projectsApi = {
     return response.data.data;
   },
 
+  async archive(projectId: string): Promise<Project> {
+    const response = await apiClient.post<ApiResponse<Project>>(`/api/v1/projects/${projectId}/archive`);
+    return response.data.data;
+  },
+
+  async unarchive(projectId: string): Promise<Project> {
+    const response = await apiClient.post<ApiResponse<Project>>(`/api/v1/projects/${projectId}/unarchive`);
+    return response.data.data;
+  },
+
   async delete(projectId: string): Promise<void> {
     await apiClient.delete(`/api/v1/projects/${projectId}`);
   },
@@ -497,9 +509,12 @@ export const labelsApi = {
 // ============================================================================
 
 export const tasksApi = {
-  async list(projectId: string, status?: string): Promise<Task[]> {
+  async list(projectId: string, status?: string, includeArchived = false): Promise<Task[]> {
     const response = await apiClient.get<ApiResponse<Task[]>>(`/api/v1/projects/${projectId}/tasks`, {
-      params: status ? { task_status: status } : undefined,
+      params: { 
+        task_status: status || undefined,
+        include_archived: includeArchived 
+      },
     });
     return response.data.data;
   },
@@ -517,6 +532,20 @@ export const tasksApi = {
   async assign(taskId: number, assigneeId: string | null): Promise<Task> {
     const response = await apiClient.post<ApiResponse<Task>>(`/api/v1/tasks/${taskId}/assign`, { assignee_id: assigneeId });
     return response.data.data;
+  },
+
+  async archive(taskId: number): Promise<Task> {
+    const response = await apiClient.post<ApiResponse<Task>>(`/api/v1/tasks/${taskId}/archive`);
+    return response.data.data;
+  },
+
+  async unarchive(taskId: number): Promise<Task> {
+    const response = await apiClient.post<ApiResponse<Task>>(`/api/v1/tasks/${taskId}/unarchive`);
+    return response.data.data;
+  },
+
+  async delete(taskId: number): Promise<void> {
+    await apiClient.delete(`/api/v1/tasks/${taskId}`);
   },
 
   async preview(projectId: string, data: TaskCreateWithImages): Promise<TaskCreationPreview> {
@@ -541,9 +570,12 @@ export const tasksApi = {
 // ============================================================================
 
 export const jobsApi = {
-  async list(taskId: string, status?: string): Promise<Job[]> {
+  async list(taskId: string, status?: string, includeArchived = false): Promise<Job[]> {
     const response = await apiClient.get<ApiResponse<Job[]>>(`/api/v1/tasks/${taskId}/jobs`, {
-      params: status ? { job_status: status } : undefined,
+      params: { 
+        job_status: status || undefined,
+        include_archived: includeArchived 
+      },
     });
     return response.data.data;
   },
@@ -573,6 +605,20 @@ export const jobsApi = {
   async complete(jobId: string): Promise<Job> {
     const response = await apiClient.post<ApiResponse<Job>>(`/api/v1/jobs/${jobId}/complete`);
     return response.data.data;
+  },
+
+  async archive(jobId: string): Promise<Job> {
+    const response = await apiClient.post<ApiResponse<Job>>(`/api/v1/jobs/${jobId}/archive`);
+    return response.data.data;
+  },
+
+  async unarchive(jobId: string): Promise<Job> {
+    const response = await apiClient.post<ApiResponse<Job>>(`/api/v1/jobs/${jobId}/unarchive`);
+    return response.data.data;
+  },
+
+  async delete(jobId: string): Promise<void> {
+    await apiClient.delete(`/api/v1/jobs/${jobId}`);
   },
 };
 
@@ -609,4 +655,3 @@ export const membersApi = {
 };
 
 export default apiClient;
-

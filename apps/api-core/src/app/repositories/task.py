@@ -27,6 +27,7 @@ class TaskRepository:
         connection: AsyncConnection,
         project_id: int,
         status: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict]:
         """List all tasks for a project."""
         stmt = (
@@ -35,6 +36,9 @@ class TaskRepository:
             .where(tasks.c.project_id == project_id)
         )
         
+        if not include_archived:
+            stmt = stmt.where(tasks.c.is_archived == False)  # noqa: E712
+            
         if status:
             stmt = stmt.where(tasks.c.status == status)
         
@@ -60,6 +64,7 @@ class TaskRepository:
         connection: AsyncConnection,
         user_id: UUID,
         status: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict]:
         """List tasks assigned to a user."""
         stmt = (
@@ -68,6 +73,9 @@ class TaskRepository:
             .where(tasks.c.assignee_id == user_id)
         )
         
+        if not include_archived:
+            stmt = stmt.where(tasks.c.is_archived == False)  # noqa: E712
+            
         if status:
             stmt = stmt.where(tasks.c.status == status)
         

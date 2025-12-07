@@ -35,6 +35,7 @@ class TaskResponse(BaseModel):
     assignee_id: UUID | None
     assignee: JobAssigneeInfo | None = None
     status: str
+    is_archived: bool
     is_approved: bool
     approved_by: UUID | None
     approved_at: datetime | None

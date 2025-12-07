@@ -5,44 +5,64 @@
  */
 
 import {
-    AlertCircle,
-    ArrowLeft,
-    Briefcase,
-    CheckCircle2,
-    ChevronRight,
-    Clock,
-    Loader2,
-    Play,
-    User,
+  AlertCircle,
+  ArrowLeft,
+  Briefcase,
+  CheckCircle2,
+  ChevronRight,
+  Clock,
+  Loader2,
+  Play,
+  Trash2,
+  User
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import AssigneeDropdown from '../components/AssigneeDropdown';
+import ConfirmationModal from '../components/ConfirmationModal';
+import Toggle from '../components/Toggle';
+import { useAuth } from '../contexts/AuthContext';
 import type { Job, TaskDetail } from '../lib/api-client';
 import { jobsApi, tasksApi } from '../lib/api-client';
 
 export default function JobsPage() {
   const { taskId, projectId } = useParams<{ taskId: string; projectId?: string }>();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const navigate = useNavigate();
   const [task, setTask] = useState<TaskDetail | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [includeArchived, setIncludeArchived] = useState(false);
   
-  // Assignment modal state
-  
+  // Modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDangerous?: boolean;
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     if (taskId) {
       loadData();
     }
-  }, [taskId]);
+  }, [taskId, includeArchived]);
 
   const loadData = async () => {
+    setIsLoading(true);
     try {
       const [taskData, jobsData] = await Promise.all([
         tasksApi.get(taskId!),
-        jobsApi.list(taskId!),
+        jobsApi.list(taskId!, undefined, includeArchived),
       ]);
       setTask(taskData);
       setJobs(jobsData);
@@ -52,6 +72,56 @@ export default function JobsPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleArchive = (e: React.MouseEvent, job: Job) => {
+    e.stopPropagation();
+    setConfirmModal({
+      isOpen: true,
+      title: 'Archive Job',
+      message: `Are you sure you want to archive Job #${job.id}? It will be hidden from the default view but can be restored later.`,
+      confirmText: 'Archive',
+      onConfirm: async () => {
+        try {
+          await jobsApi.archive(job.id);
+          toast.success('Job archived');
+          loadData();
+        } catch (err) {
+          toast.error('Failed to archive job');
+        }
+      }
+    });
+  };
+
+  const handleUnarchive = async (e: React.MouseEvent, job: Job) => {
+    e.stopPropagation();
+    try {
+      await jobsApi.unarchive(job.id);
+      toast.success('Job unarchived');
+      loadData();
+    } catch (err) {
+      toast.error('Failed to unarchive job');
+    }
+  };
+
+  const handleDelete = (e: React.MouseEvent, job: Job) => {
+    e.stopPropagation();
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Job',
+      message: `Are you sure you want to PERMANENTLY delete Job #${job.id}? This action cannot be undone and will delete all associated annotations.`,
+      isDangerous: true,
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        try {
+          await jobsApi.delete(job.id);
+          toast.success('Job deleted');
+          loadData();
+        } catch (err) {
+          toast.error('Failed to delete job');
+        }
+      }
+    });
   };
 
   const handleJobClick = (jobId: string) => {
@@ -134,7 +204,14 @@ export default function JobsPage() {
           <h1 className="text-2xl font-bold text-gray-900"><span className="text-gray-400 font-normal">#{task?.id}</span> {task?.name}</h1>
           <p className="text-gray-500 text-sm">{task?.description || 'No description'}</p>
         </div>
-        <span className="text-gray-500">{jobs.length} jobs</span>
+        <div className="flex items-center gap-4">
+            <Toggle
+                checked={includeArchived}
+                onChange={setIncludeArchived}
+                label="Show Archived"
+            />
+            <span className="text-gray-500">{jobs.length} jobs</span>
+        </div>
       </div>
 
       {/* Jobs list */}
@@ -142,23 +219,53 @@ export default function JobsPage() {
         <div className="glass-strong rounded-2xl p-12 text-center shadow-lg shadow-emerald-500/5">
           <Briefcase className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700 mb-2">No jobs yet</h3>
-          <p className="text-gray-500">Jobs will appear here when created</p>
+          <p className="text-gray-500">
+             {includeArchived ? 'No archived or active jobs found' : 'Jobs will appear here when created'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {jobs.map((job) => (
             <div
               key={job.id}
-              className="glass rounded-xl p-5 shadow-lg shadow-emerald-500/5 border border-gray-100 hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all"
+               className={`glass rounded-xl p-5 shadow-lg shadow-emerald-500/5 border border-gray-100 hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all group relative ${job.is_archived ? 'opacity-75 bg-gray-50' : ''}`}
             >
-              {/* Header with status */}
+              {/* Header with status and admin actions */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   {getStatusIcon(job.status)}
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusColor(job.status)}`}>
                     {job.status.replace('_', ' ')}
                   </span>
+                  {job.is_archived && <span className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-600 rounded-lg">Archived</span>}
                 </div>
+                
+                 {isAdmin && (
+                  <div className="flex items-center gap-3">
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Toggle
+                        checked={job.is_archived}
+                        onChange={(checked) => {
+                          if (checked) {
+                            handleArchive({ stopPropagation: () => {} } as React.MouseEvent, job);
+                          } else {
+                            handleUnarchive({ stopPropagation: () => {} } as React.MouseEvent, job);
+                          }
+                        }}
+                        size="sm"
+                      />
+                    </div>
+                      {job.is_archived && (
+                           <button 
+                             onClick={(e) => handleDelete(e, job)}
+                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                             title="Delete"
+                           >
+                             <Trash2 className="w-4 h-4" />
+                           </button>
+                     )}
+                  </div>
+                )}
               </div>
 
               {/* Job title - clickable */}
@@ -222,6 +329,17 @@ export default function JobsPage() {
           ))}
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDangerous={confirmModal.isDangerous}
+        confirmText={confirmModal.confirmText}
+      />
     </div>
   );
 }

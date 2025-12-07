@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.dependencies.auth import get_current_active_user
+from app.dependencies.auth import get_admin_user, get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import ProjectPermission
 from app.helpers.response_api import JsonResponse
@@ -136,13 +136,62 @@ async def update_project(
     )
 
 
-@router.delete("/{project_id}")
-async def delete_project(
-    project: Annotated[dict, Depends(ProjectPermission("owner"))],
+@router.post("/{project_id}/archive", response_model=JsonResponse[ProjectResponse, None])
+async def archive_project(
+    project_id: int,
+    current_user: Annotated[UserBase, Depends(get_admin_user)],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
-    """Delete a project. Requires owner role."""
-    await ProjectRepository.delete(connection, project["id"])
+    """Archive a project. Requires admin role."""
+    project = await ProjectRepository.get_by_id(connection, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        
+    updated = await ProjectRepository.update(connection, project_id, {"is_archived": True})
+    return JsonResponse(
+        data=ProjectResponse(**updated),
+        message="Project archived successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post("/{project_id}/unarchive", response_model=JsonResponse[ProjectResponse, None])
+async def unarchive_project(
+    project_id: int,
+    current_user: Annotated[UserBase, Depends(get_admin_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Unarchive a project. Requires admin role."""
+    project = await ProjectRepository.get_by_id(connection, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+        
+    updated = await ProjectRepository.update(connection, project_id, {"is_archived": False})
+    return JsonResponse(
+        data=ProjectResponse(**updated),
+        message="Project unarchived successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.delete("/{project_id}")
+async def delete_project(
+    project_id: int,
+    current_user: Annotated[UserBase, Depends(get_admin_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Delete a project. Requires admin role and archived status."""
+    project = await ProjectRepository.get_by_id(connection, project_id)
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    if not project["is_archived"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Project must be archived before deletion"
+        )
+    
+    await ProjectRepository.delete(connection, project_id)
     return JsonResponse(
         data={"deleted": True},
         message="Project deleted successfully",

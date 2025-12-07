@@ -57,6 +57,13 @@ jobs = Table(
         comment="Status: pending, assigned, in_progress, completed, review, approved, rejected",
     ),
     Column(
+        "is_archived",
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+        comment="Whether job is archived",
+    ),
+    Column(
         "is_approved",
         Boolean,
         nullable=False,

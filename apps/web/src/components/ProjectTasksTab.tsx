@@ -4,13 +4,14 @@
  */
 
 import {
-    Briefcase,
-    ChevronRight,
-    FolderKanban,
-    ListTodo,
-    Loader2,
-    Plus,
-    RefreshCw,
+  Briefcase,
+  ChevronRight,
+  FolderKanban,
+  ListTodo,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -18,7 +19,9 @@ import { useNavigate } from 'react-router-dom';
 import type { Task } from '../lib/api-client';
 import { tasksApi } from '../lib/api-client';
 import AssigneeDropdown from './AssigneeDropdown';
+import ConfirmationModal from './ConfirmationModal';
 import CreateTaskWizard from './CreateTaskWizard';
+import Toggle from './Toggle';
 
 interface ProjectTasksTabProps {
   projectId: string;
@@ -48,18 +51,35 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
 
   // Permission checks based on user role
   const canCreate = userRole === 'owner' || userRole === 'maintainer';
+  const canManage = userRole === 'owner' || userRole === 'maintainer'; // Assuming maintainers can also archive/delete
+
+  // Modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDangerous?: boolean;
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     loadTasks();
-  }, [projectId]);
+  }, [projectId, includeArchived]);
 
   const loadTasks = async () => {
     setIsLoading(true);
     try {
-      const data = await tasksApi.list(projectId);
+      const data = await tasksApi.list(projectId, undefined, includeArchived);
       setTasks(data);
     } catch (err) {
       console.error('Failed to load tasks:', err);
@@ -67,6 +87,56 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleArchive = (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
+    setConfirmModal({
+      isOpen: true,
+      title: 'Archive Task',
+      message: `Are you sure you want to archive "${task.name}"? It will be hidden from the default view but can be restored later.`,
+      confirmText: 'Archive',
+      onConfirm: async () => {
+        try {
+          await tasksApi.archive(task.id);
+          toast.success('Task archived');
+          loadTasks();
+        } catch (err) {
+          toast.error('Failed to archive task');
+        }
+      }
+    });
+  };
+
+  const handleUnarchive = async (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
+    try {
+      await tasksApi.unarchive(task.id);
+      toast.success('Task unarchived');
+      loadTasks();
+    } catch (err) {
+      toast.error('Failed to unarchive task');
+    }
+  };
+
+  const handleDelete = (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Task',
+      message: `Are you sure you want to PERMANENTLY delete "${task.name}"? This action cannot be undone and will delete all associated jobs and annotations.`,
+      isDangerous: true,
+      confirmText: 'Delete',
+      onConfirm: async () => {
+        try {
+          await tasksApi.delete(task.id);
+          toast.success('Task deleted');
+          loadTasks();
+        } catch (err) {
+          toast.error('Failed to delete task');
+        }
+      }
+    });
   };
 
   const handleTaskClick = (taskId: number) => {
@@ -106,6 +176,14 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
           <span className="text-sm text-gray-400">({tasks.length})</span>
         </div>
         <div className="flex items-center gap-2">
+          <div className="mr-2">
+             <Toggle
+                checked={includeArchived}
+                onChange={setIncludeArchived}
+                label="Show Archived"
+                size="sm"
+             />
+          </div>
           <button
             onClick={loadTasks}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
@@ -132,7 +210,7 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
             <h3 className="text-lg font-semibold text-gray-700 mb-2">No tasks yet</h3>
             <p className="text-gray-500 mb-6">
               {canCreate 
-                ? 'Create your first task to start organizing your annotation work'
+                ? (includeArchived ? 'No archived or active tasks found' : 'Create your first task to start organizing your annotation work')
                 : 'No tasks have been created for this project yet'
               }
             </p>
@@ -151,21 +229,22 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
             {tasks.map((task) => (
               <div
                 key={task.id}
-                className="p-4 bg-white rounded-xl border border-gray-100 hover:border-emerald-200 hover:shadow-sm transition-all"
+                className={`p-4 bg-white rounded-xl border border-gray-100 hover:border-emerald-200 hover:shadow-sm transition-all ${task.is_archived ? 'opacity-75 bg-gray-50' : ''}`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div 
                     className="flex items-start gap-3 flex-1 min-w-0 cursor-pointer group"
                     onClick={() => handleTaskClick(task.id)}
                   >
-                    <div className="p-2 bg-emerald-50 rounded-lg group-hover:bg-emerald-100 transition-colors flex-shrink-0">
-                      <Briefcase className="w-5 h-5 text-emerald-600" />
+                    <div className={`p-2 rounded-lg transition-colors flex-shrink-0 ${task.is_archived ? 'bg-gray-200' : 'bg-emerald-50 group-hover:bg-emerald-100'}`}>
+                      <Briefcase className={`w-5 h-5 ${task.is_archived ? 'text-gray-500' : 'text-emerald-600'}`} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <h3 className="font-medium text-gray-900 group-hover:text-emerald-700 transition-colors flex items-center gap-1">
                         <span className="text-gray-400 font-normal">#{task.id}</span> 
                         <span className="truncate">{task.name}</span>
                         <ChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                        {task.is_archived && <span className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-600 rounded-lg">Archived</span>}
                       </h3>
                       {task.description && (
                         <p className="text-sm text-gray-500 mt-0.5 line-clamp-1">
@@ -199,6 +278,33 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
                     >
                       {task.status.replace('_', ' ')}
                     </span>
+                    
+                     {canManage && (
+                      <div className="flex items-center gap-2 border-l border-gray-100 pl-3 ml-1">
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <Toggle
+                            checked={task.is_archived}
+                            onChange={(checked) => {
+                              if (checked) {
+                                handleArchive({ stopPropagation: () => {} } as React.MouseEvent, task);
+                              } else {
+                                handleUnarchive({ stopPropagation: () => {} } as React.MouseEvent, task);
+                              }
+                            }}
+                            size="sm"
+                          />
+                        </div>
+                          {task.is_archived && (
+                            <button 
+                                 onClick={(e) => handleDelete(e, task)}
+                                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                 title="Delete"
+                               >
+                                 <Trash2 className="w-4 h-4" />
+                               </button>
+                         )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -216,6 +322,17 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
           onSuccess={() => loadTasks()}
         />
       )}
+      
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDangerous={confirmModal.isDangerous}
+        confirmText={confirmModal.confirmText}
+      />
     </div>
   );
 }

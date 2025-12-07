@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.dependencies.auth import get_current_active_user
+from app.dependencies.auth import get_admin_user, get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import JobPermission, TaskPermission
 from app.helpers.response_api import JsonResponse
@@ -23,9 +23,10 @@ async def list_jobs(
     task: Annotated[dict, Depends(TaskPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
     job_status: str | None = None,
+    include_archived: bool = False,
 ):
     """List all jobs for a task."""
-    jobs = await JobRepository.list_for_task(connection, task["id"], status=job_status)
+    jobs = await JobRepository.list_for_task(connection, task["id"], status=job_status, include_archived=include_archived)
     return JsonResponse(
         data=[JobResponse(**j) for j in jobs],
         message=f"Found {len(jobs)} job(s)",
@@ -112,13 +113,62 @@ async def update_job(
     )
 
 
-@router.delete("/jobs/{job_id}")
-async def delete_job(
-    job: Annotated[dict, Depends(JobPermission("maintainer"))],
+@router.post("/jobs/{job_id}/archive", response_model=JsonResponse[JobResponse, None])
+async def archive_job(
+    job_id: int,
+    current_user: Annotated[UserBase, Depends(get_admin_user)],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
-    """Delete a job. Requires maintainer role."""
-    await JobRepository.delete(connection, job["id"])
+    """Archive a job. Requires admin role."""
+    job = await JobRepository.get_by_id(connection, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+        
+    updated = await JobRepository.update(connection, job_id, {"is_archived": True})
+    return JsonResponse(
+        data=JobResponse(**updated),
+        message="Job archived successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post("/jobs/{job_id}/unarchive", response_model=JsonResponse[JobResponse, None])
+async def unarchive_job(
+    job_id: int,
+    current_user: Annotated[UserBase, Depends(get_admin_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Unarchive a job. Requires admin role."""
+    job = await JobRepository.get_by_id(connection, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+        
+    updated = await JobRepository.update(connection, job_id, {"is_archived": False})
+    return JsonResponse(
+        data=JobResponse(**updated),
+        message="Job unarchived successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.delete("/jobs/{job_id}")
+async def delete_job(
+    job_id: int,
+    current_user: Annotated[UserBase, Depends(get_admin_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Delete a job. Requires admin role and archived status."""
+    job = await JobRepository.get_by_id(connection, job_id)
+    if not job:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    if not job["is_archived"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Job must be archived before deletion"
+        )
+    
+    await JobRepository.delete(connection, job_id)
     return JsonResponse(
         data={"deleted": True},
         message="Job deleted successfully",

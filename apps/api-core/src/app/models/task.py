@@ -63,6 +63,13 @@ tasks = Table(
         comment="Status: pending, in_progress, completed, review, approved",
     ),
     Column(
+        "is_archived",
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+        comment="Whether task is archived",
+    ),
+    Column(
         "is_approved",
         Boolean,
         nullable=False,

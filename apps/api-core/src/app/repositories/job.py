@@ -27,6 +27,7 @@ class JobRepository:
         connection: AsyncConnection,
         task_id: int,
         status: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict]:
         """List all jobs for a task."""
         stmt = (
@@ -34,6 +35,9 @@ class JobRepository:
             .outerjoin(users, jobs.c.assignee_id == users.c.id)
             .where(jobs.c.task_id == task_id)
         )
+        
+        if not include_archived:
+            stmt = stmt.where(jobs.c.is_archived == False)  # noqa: E712
         
         if status:
             stmt = stmt.where(jobs.c.status == status)
@@ -61,9 +65,13 @@ class JobRepository:
         connection: AsyncConnection,
         user_id: UUID,
         status: str | None = None,
+        include_archived: bool = False,
     ) -> list[dict]:
         """List jobs assigned to a user."""
         stmt = select(jobs).where(jobs.c.assignee_id == user_id)
+        
+        if not include_archived:
+            stmt = stmt.where(jobs.c.is_archived == False)  # noqa: E712
         
         if status:
             stmt = stmt.where(jobs.c.status == status)
