@@ -176,6 +176,24 @@ export default function JobsPage() {
                 </p>
               </div>
 
+              {/* Progress Bar */}
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-1.5">
+                  <span className="text-xs font-medium text-gray-500">Progress</span>
+                  <span className="text-xs font-mono font-medium text-emerald-600">
+                    {job.annotated_images}/{job.total_images}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 rounded-full transition-all duration-500 ease-out"
+                    style={{
+                      width: `${(job.annotated_images / Math.max(job.total_images, 1)) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
               {/* Assignee Dropdown */}
               <div className="mb-3" onClick={(e) => e.stopPropagation()}>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Assignee</label>

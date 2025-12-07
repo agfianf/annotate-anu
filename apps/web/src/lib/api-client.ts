@@ -85,6 +85,8 @@ export interface Job {
   assignee_id: string | null;
   assignee?: MemberUserInfo | null;
   task_id: string;
+  total_images: number;
+  annotated_images: number;
   created_at: string;
   updated_at: string;
 }

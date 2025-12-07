@@ -57,11 +57,26 @@ async def create_project(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Create a new project."""
+    # Only admins and members can create projects
+    if current_user.role not in ["admin", "member"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins and members can create projects"
+        )
+
     project_data = payload.model_dump()
     project_data["owner_id"] = current_user.id
     
     try:
         project = await ProjectRepository.create(connection, project_data)
+        
+        # Auto-add creator as maintainer
+        await ProjectMemberRepository.create(
+            connection, 
+            project["id"], 
+            {"user_id": current_user.id, "role": "maintainer"}
+        )
+
         return JsonResponse(
             data=ProjectResponse(**project),
             message="Project created successfully",

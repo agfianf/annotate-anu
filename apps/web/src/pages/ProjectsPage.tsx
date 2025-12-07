@@ -14,15 +14,19 @@ import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import type { Project } from '../lib/api-client';
 import { projectsApi } from '../lib/api-client';
 
 export default function ProjectsPage() {
+  const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newProject, setNewProject] = useState({ name: '', description: '' });
+
+  const canCreateProject = user?.role === 'admin' || user?.role === 'member';
 
   useEffect(() => {
     loadProjects();
@@ -72,13 +76,15 @@ export default function ProjectsPage() {
           <FolderKanban className="w-7 h-7" />
           Projects
         </h1>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/25"
-        >
-          <Plus className="w-5 h-5" />
-          New Project
-        </button>
+        {canCreateProject && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/25"
+          >
+            <Plus className="w-5 h-5" />
+            New Project
+          </button>
+        )}
       </div>
 
       {isLoading ? (
@@ -89,14 +95,18 @@ export default function ProjectsPage() {
         <div className="glass-strong rounded-2xl p-12 text-center shadow-lg shadow-emerald-500/5">
           <FolderKanban className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700 mb-2">No projects yet</h3>
-          <p className="text-gray-500 mb-6">Create your first project to get started</p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all inline-flex items-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            Create Project
-          </button>
+          <p className="text-gray-500 mb-6">
+            {canCreateProject ? 'Create your first project to get started' : 'No projects found'}
+          </p>
+          {canCreateProject && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-all inline-flex items-center gap-2"
+            >
+              <Plus className="w-5 h-5" />
+              Create Project
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

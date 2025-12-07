@@ -3,12 +3,12 @@
  * Shows project configuration including labels and settings with proper color picker
  */
 
-import { Crown, Edit2, Eye, Loader2, Palette, Plus, Settings, Shield, Trash2, UserPlus, Users, Wrench, X } from 'lucide-react';
+import { Crown, Edit2, Eye, Loader2, Palette, Plus, Save, Settings, Shield, Trash2, UserPlus, Users, Wrench, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import type { Label, ProjectDetail, ProjectMember } from '../lib/api-client';
-import { labelsApi, membersApi } from '../lib/api-client';
+import { labelsApi, membersApi, projectsApi } from '../lib/api-client';
 import { DEFAULT_LABEL_COLOR, PRESET_COLORS } from '../lib/colors';
 import GlassDropdown from './ui/GlassDropdown';
 
@@ -32,6 +32,26 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
   const [isSubmitting, setIsSubmitting] = useState(false);
   const colorButtonRef = useRef<HTMLButtonElement>(null);
   const editColorButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Description state
+  const [description, setDescription] = useState(project.description || '');
+  const [isSavingDescription, setIsSavingDescription] = useState(false);
+
+  const handleUpdateDescription = async () => {
+    setIsSavingDescription(true);
+    try {
+      await projectsApi.update(String(project.id), {
+        description: description.trim(),
+      });
+      toast.success('Project description updated');
+      onUpdate?.();
+    } catch (err) {
+      console.error('Failed to update description:', err);
+      toast.error('Failed to update description');
+    } finally {
+      setIsSavingDescription(false);
+    }
+  };
 
   const handleAddLabel = async () => {
     if (!newLabelName.trim()) {
@@ -428,7 +448,37 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
           </div>
         </div>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-6">
+          {/* Project Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Project Description
+            </label>
+            <div className="relative">
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                disabled={!canEdit}
+                placeholder="Enter project description..."
+                rows={3}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-gray-50 disabled:text-gray-500 transition-all resize-none"
+              />
+              {canEdit && description !== (project.description || '') && (
+                <div className="mt-2 flex justify-end">
+                  <button
+                    onClick={handleUpdateDescription}
+                    disabled={isSavingDescription}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-xs font-medium rounded-lg transition-all flex items-center gap-1.5"
+                  >
+                    {isSavingDescription ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                    Save Description
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="h-px bg-gray-100" />
           {/* Annotation Types */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -438,12 +488,15 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
               {['classification', 'detection', 'segmentation'].map((type) => (
                 <label
                   key={type}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-all"
+                  className={`flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg transition-all ${
+                    canEdit ? 'cursor-pointer hover:bg-gray-100' : 'cursor-not-allowed opacity-60'
+                  }`}
                 >
                   <input
                     type="checkbox"
                     defaultChecked={true}
-                    className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                    disabled={!canEdit}
+                    className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 disabled:opacity-50"
                   />
                   <span className="text-sm text-gray-700 capitalize">{type}</span>
                 </label>
@@ -456,11 +509,12 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Model Prediction
             </label>
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+            <div className={`flex items-center gap-3 p-3 bg-gray-50 rounded-lg ${!canEdit && 'opacity-60'}`}>
               <input
                 type="checkbox"
                 defaultChecked={false}
-                className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                disabled={!canEdit}
+                className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 disabled:opacity-50"
               />
               <div>
                 <span className="text-sm text-gray-700">Enable auto-prediction on upload</span>

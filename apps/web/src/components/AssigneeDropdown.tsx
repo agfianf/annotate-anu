@@ -4,13 +4,13 @@
  */
 
 import {
-    Check,
-    ChevronDown,
-    Loader2,
-    User,
-    UserCircle,
-    Users,
-    X,
+  Check,
+  ChevronDown,
+  Loader2,
+  User,
+  UserCircle,
+  Users,
+  X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -152,6 +152,9 @@ export default function AssigneeDropdown({
   }
 
   const filteredMembers = members.filter(member => {
+    // Filter out viewers - they cannot be assigned
+    if (member.role === 'viewer') return false;
+    
     if (!search) return true;
     const name = getMemberDisplayName(member).toLowerCase();
     return name.includes(search.toLowerCase());
