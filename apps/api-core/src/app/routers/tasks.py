@@ -118,6 +118,29 @@ async def delete_task(
     )
 
 
+@router.post("/tasks/{task_id}/assign", response_model=JsonResponse[TaskResponse, None])
+async def assign_task(
+    payload: dict,
+    task: Annotated[dict, Depends(TaskPermission("maintainer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Assign a task to a user. Requires maintainer role."""
+    assignee_id = payload.get("assignee_id")
+    # if assignee_id is explicit null, it means unassign
+    
+    updated = await TaskRepository.update(
+        connection, 
+        task["id"], 
+        {"assignee_id": assignee_id}
+    )
+    
+    return JsonResponse(
+        data=TaskResponse(**updated),
+        message="Task assigned successfully" if assignee_id else "Task unassigned successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
 # =============================================================================
 # Task Creation with Images & Job Chunking
 # =============================================================================

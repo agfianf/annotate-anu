@@ -3,6 +3,8 @@
 from datetime import datetime
 from uuid import UUID
 
+from app.schemas.job import JobAssigneeInfo
+
 from pydantic import BaseModel, Field
 
 
@@ -31,6 +33,7 @@ class TaskResponse(BaseModel):
     name: str
     description: str | None
     assignee_id: UUID | None
+    assignee: JobAssigneeInfo | None = None
     status: str
     is_approved: bool
     approved_by: UUID | None

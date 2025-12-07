@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.models.job import jobs
 from app.models.task import tasks
+from app.models.user import users
 
 
 class TaskRepository:
@@ -28,14 +29,31 @@ class TaskRepository:
         status: str | None = None,
     ) -> list[dict]:
         """List all tasks for a project."""
-        stmt = select(tasks).where(tasks.c.project_id == project_id)
+        stmt = (
+            select(tasks, users.c.email, users.c.username, users.c.full_name)
+            .outerjoin(users, tasks.c.assignee_id == users.c.id)
+            .where(tasks.c.project_id == project_id)
+        )
         
         if status:
             stmt = stmt.where(tasks.c.status == status)
         
         stmt = stmt.order_by(tasks.c.created_at.desc())
         result = await connection.execute(stmt)
-        return [dict(row._mapping) for row in result.fetchall()]
+        
+        task_list = []
+        for row in result.fetchall():
+            row_dict = dict(row._mapping)
+            if row_dict.get("assignee_id"):
+                row_dict["assignee"] = {
+                    "id": row_dict["assignee_id"],
+                    "email": row_dict["email"],
+                    "username": row_dict["username"],
+                    "full_name": row_dict["full_name"],
+                }
+            task_list.append(row_dict)
+            
+        return task_list
 
     @staticmethod
     async def list_for_user(
@@ -44,14 +62,31 @@ class TaskRepository:
         status: str | None = None,
     ) -> list[dict]:
         """List tasks assigned to a user."""
-        stmt = select(tasks).where(tasks.c.assignee_id == user_id)
+        stmt = (
+            select(tasks, users.c.email, users.c.username, users.c.full_name)
+            .outerjoin(users, tasks.c.assignee_id == users.c.id)
+            .where(tasks.c.assignee_id == user_id)
+        )
         
         if status:
             stmt = stmt.where(tasks.c.status == status)
         
         stmt = stmt.order_by(tasks.c.created_at.desc())
         result = await connection.execute(stmt)
-        return [dict(row._mapping) for row in result.fetchall()]
+        
+        task_list = []
+        for row in result.fetchall():
+            row_dict = dict(row._mapping)
+            if row_dict.get("assignee_id"):
+                row_dict["assignee"] = {
+                    "id": row_dict["assignee_id"],
+                    "email": row_dict["email"],
+                    "username": row_dict["username"],
+                    "full_name": row_dict["full_name"],
+                }
+            task_list.append(row_dict)
+            
+        return task_list
 
     @staticmethod
     async def create(connection: AsyncConnection, project_id: int, data: dict) -> dict:

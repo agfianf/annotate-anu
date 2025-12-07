@@ -5,15 +5,15 @@
  */
 
 import {
-  AlertCircle,
-  ArrowLeft,
-  Briefcase,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  Loader2,
-  Play,
-  User,
+    AlertCircle,
+    ArrowLeft,
+    Briefcase,
+    CheckCircle2,
+    ChevronRight,
+    Clock,
+    Loader2,
+    Play,
+    User,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -186,6 +186,7 @@ export default function JobsPage() {
                     onChange={(id) => handleAssigneeChange(job.id, id)}
                     placeholder="Unassigned"
                     size="sm"
+                    assignedUser={job.assignee}
                   />
                 )}
               </div>

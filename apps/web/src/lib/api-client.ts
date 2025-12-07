@@ -68,6 +68,7 @@ export interface Task {
   description: string | null;
   status: string;
   assignee_id: string | null;
+  assignee?: MemberUserInfo | null;
   project_id: number;
   created_at: string;
   updated_at: string;
@@ -82,6 +83,7 @@ export interface Job {
   name: string | null;
   status: string;
   assignee_id: string | null;
+  assignee?: MemberUserInfo | null;
   task_id: string;
   created_at: string;
   updated_at: string;
@@ -142,12 +144,19 @@ export interface ProjectMember {
   user?: User;
 }
 
+export interface MemberUserInfo {
+  id: string;
+  username: string;
+  full_name: string | null;
+}
+
 export interface ProjectActivity {
   id: string;
   project_id: string;
   entity_type: 'task' | 'job' | 'label' | 'member' | 'project';
   entity_id: string;
-  entity_name: string | null;
+  assignee_id: string | null;
+  status: 'pending' | 'assigned' | 'in_progress' | 'completed' | 'review' | 'approved' | 'rejected';
   action: 'created' | 'updated' | 'deleted' | 'status_changed' | 'assigned';
   actor_id: string | null;
   actor_name: string | null;
@@ -500,6 +509,11 @@ export const tasksApi = {
 
   async create(projectId: string, data: { name: string; description?: string }): Promise<Task> {
     const response = await apiClient.post<ApiResponse<Task>>(`/api/v1/projects/${projectId}/tasks`, data);
+    return response.data.data;
+  },
+
+  async assign(taskId: number, assigneeId: string | null): Promise<Task> {
+    const response = await apiClient.post<ApiResponse<Task>>(`/api/v1/tasks/${taskId}/assign`, { assignee_id: assigneeId });
     return response.data.data;
   },
 

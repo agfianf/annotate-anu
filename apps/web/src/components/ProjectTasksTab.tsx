@@ -74,12 +74,19 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
   };
 
   const handleAssigneeChange = async (taskId: number, assigneeId: string | null) => {
-    // TODO: Implement task assignee update API
-    toast.success(assigneeId ? 'Task assigned' : 'Task unassigned');
-    // For now, just update local state
-    setTasks(prev => prev.map(t => 
-      t.id === taskId ? { ...t, assignee_id: assigneeId } : t
-    ));
+    try {
+      await tasksApi.assign(taskId, assigneeId);
+      
+      // Update local state
+      setTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, assignee_id: assigneeId } : t
+      ));
+      
+      toast.success(assigneeId ? 'Task assigned' : 'Task unassigned');
+    } catch (err) {
+      console.error('Failed to update task:', err);
+      toast.error('Failed to update task assignment');
+    }
   };
 
   if (isLoading) {
@@ -182,6 +189,7 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
                         onChange={(id) => handleAssigneeChange(task.id, id)}
                         placeholder="Unassigned"
                         size="sm"
+                        assignedUser={task.assignee}
                       />
                     </div>
                     <span

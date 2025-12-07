@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { ProjectMember } from '../lib/api-client';
+import type { MemberUserInfo, ProjectMember } from '../lib/api-client';
 import { membersApi } from '../lib/api-client';
 
 interface AssigneeDropdownProps {
@@ -25,6 +25,7 @@ interface AssigneeDropdownProps {
   disabled?: boolean;
   size?: 'sm' | 'md' | 'lg';
   showClear?: boolean;
+  assignedUser?: MemberUserInfo | null;
 }
 
 // Mock user data for members (in real implementation, member.user would be populated)
@@ -61,6 +62,7 @@ export default function AssigneeDropdown({
   disabled = false,
   size = 'md',
   showClear = true,
+  assignedUser,
 }: AssigneeDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [members, setMembers] = useState<ProjectMember[]>([]);
@@ -124,7 +126,30 @@ export default function AssigneeDropdown({
     }
   };
 
-  const selectedMember = members.find(m => m.user_id === value);
+  let selectedMember = members.find(m => m.user_id === value);
+  
+  // Fallback: If member not found in list (e.g. list not loaded), use assignedUser info
+  if (!selectedMember && value && assignedUser && assignedUser.id === value) {
+     selectedMember = {
+         id: 'temp',
+         user_id: assignedUser.id,
+         project_id: projectId,
+         role: 'annotator', // fallback role, mainly for color
+         allowed_task_ids: null,
+         allowed_job_ids: null,
+         created_at: new Date().toISOString(),
+         updated_at: new Date().toISOString(),
+         user: {
+             id: assignedUser.id,
+             username: assignedUser.username,
+             email: '', // Not needed for display usually if full_name/username is there
+             full_name: assignedUser.full_name,
+             role: 'annotator',
+             is_active: true,
+             created_at: '',
+         }
+     } as ProjectMember;
+  }
 
   const filteredMembers = members.filter(member => {
     if (!search) return true;

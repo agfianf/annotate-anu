@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.models.image import images
 from app.models.job import jobs
+from app.models.user import users
 
 
 class JobRepository:
@@ -28,14 +29,32 @@ class JobRepository:
         status: str | None = None,
     ) -> list[dict]:
         """List all jobs for a task."""
-        stmt = select(jobs).where(jobs.c.task_id == task_id)
+        stmt = (
+            select(jobs, users.c.email, users.c.username, users.c.full_name)
+            .outerjoin(users, jobs.c.assignee_id == users.c.id)
+            .where(jobs.c.task_id == task_id)
+        )
         
         if status:
             stmt = stmt.where(jobs.c.status == status)
         
         stmt = stmt.order_by(jobs.c.sequence_number)
         result = await connection.execute(stmt)
-        return [dict(row._mapping) for row in result.fetchall()]
+        
+        job_list = []
+        for row in result.fetchall():
+            row_dict = dict(row._mapping)
+            # manually construct nested user object
+            if row_dict.get("assignee_id"):
+                row_dict["assignee"] = {
+                    "id": row_dict["assignee_id"],
+                    "email": row_dict["email"],
+                    "username": row_dict["username"],
+                    "full_name": row_dict["full_name"],
+                }
+            job_list.append(row_dict)
+            
+        return job_list
 
     @staticmethod
     async def list_for_user(

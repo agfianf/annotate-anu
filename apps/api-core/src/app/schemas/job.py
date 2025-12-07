@@ -27,6 +27,15 @@ class JobApprove(BaseModel):
     rejection_reason: str | None = Field(None, description="Reason for rejection")
 
 
+class JobAssigneeInfo(BaseModel):
+    """User info for job assignee."""
+    
+    id: UUID
+    email: str
+    username: str
+    full_name: str | None
+
+
 class JobResponse(BaseModel):
     """Job response schema."""
 
@@ -34,6 +43,7 @@ class JobResponse(BaseModel):
     task_id: int
     sequence_number: int
     assignee_id: UUID | None
+    assignee: JobAssigneeInfo | None = None
     status: str
     is_approved: bool
     approved_by: UUID | None
@@ -46,6 +56,9 @@ class JobResponse(BaseModel):
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+
 
 
 class JobDetailResponse(JobResponse):
