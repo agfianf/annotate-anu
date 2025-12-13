@@ -15,6 +15,8 @@ from app.schemas.share import (
     DirectoryListResponse,
     FileSelectionRequest,
     FileSelectionResponse,
+    NestedDirectoryCreateRequest,
+    NestedDirectoryCreateResponse,
     UploadFailure,
     UploadResponse,
 )
@@ -80,6 +82,33 @@ async def create_directory(
             created=True,
         ),
         message="Directory created successfully",
+        status_code=status.HTTP_201_CREATED,
+    )
+
+
+@router.post("/mkdir-nested", response_model=JsonResponse[NestedDirectoryCreateResponse, None])
+async def create_nested_directories(
+    request: NestedDirectoryCreateRequest,
+    current_user: Annotated[UserBase, Depends(get_current_active_user)],
+    fs: FileSystemService = Depends(get_filesystem_service),
+):
+    """Create nested directories in a single call.
+
+    Example: base_path="", nested_path="parent/child/grandchild"
+    Creates: parent/, parent/child/, parent/child/grandchild/
+
+    Skips folders that already exist and returns list of created and skipped paths.
+    """
+    created, skipped = await fs.create_nested_directories(
+        request.base_path,
+        request.nested_path,
+    )
+    return JsonResponse(
+        data=NestedDirectoryCreateResponse(
+            created=created,
+            skipped=skipped,
+        ),
+        message=f"Created {len(created)} folder(s), {len(skipped)} already existed",
         status_code=status.HTTP_201_CREATED,
     )
 

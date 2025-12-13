@@ -4,6 +4,30 @@ import type { DirectoryListResponse, UploadResponse, ImageInfo } from '../types'
 
 const BASE_URL = '/api/v1/share'
 
+/**
+ * Transform snake_case keys to camelCase recursively
+ */
+function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+}
+
+function transformKeys<T>(obj: unknown): T {
+  if (Array.isArray(obj)) {
+    return obj.map(transformKeys) as T
+  }
+  if (obj !== null && typeof obj === 'object') {
+    return Object.keys(obj as Record<string, unknown>).reduce(
+      (acc, key) => {
+        const camelKey = snakeToCamel(key)
+        acc[camelKey] = transformKeys((obj as Record<string, unknown>)[key])
+        return acc
+      },
+      {} as Record<string, unknown>
+    ) as T
+  }
+  return obj as T
+}
+
 interface ApiResponse<T> {
   data: T
   message: string
@@ -22,10 +46,11 @@ export const shareApi = {
     params.set('path', path)
     if (includeHidden) params.set('include_hidden', 'true')
 
-    const response = await apiClient.get<ApiResponse<DirectoryListResponse>>(
+    const response = await apiClient.get<ApiResponse<unknown>>(
       `${BASE_URL}?${params}`
     )
-    return response.data.data
+    // Transform snake_case keys to camelCase
+    return transformKeys<DirectoryListResponse>(response.data.data)
   },
 
   /**
@@ -101,5 +126,21 @@ export const shareApi = {
       recursive,
     })
     return response.data.data.files
+  },
+
+  /**
+   * Create nested directories in a single API call
+   */
+  createNestedDirectories: async (
+    basePath: string,
+    nestedPath: string
+  ): Promise<{ created: string[]; skipped: string[] }> => {
+    const response = await apiClient.post<
+      ApiResponse<{ created: string[]; skipped: string[] }>
+    >(`${BASE_URL}/mkdir-nested`, {
+      base_path: basePath,
+      nested_path: nestedPath,
+    })
+    return response.data.data
   },
 }

@@ -47,6 +47,20 @@ class DirectoryCreateResponse(BaseModel):
     created: bool = Field(..., description="Whether directory was created")
 
 
+class NestedDirectoryCreateRequest(BaseModel):
+    """Request to create nested directories."""
+
+    base_path: str = Field(default="", description="Base path relative to share root")
+    nested_path: str = Field(..., min_length=1, description="Nested directory path (e.g., 'parent/child/grandchild')")
+
+
+class NestedDirectoryCreateResponse(BaseModel):
+    """Response after creating nested directories."""
+
+    created: list[str] = Field(default_factory=list, description="List of created directory paths")
+    skipped: list[str] = Field(default_factory=list, description="List of already existing directory paths")
+
+
 # ============================================================================
 # Upload Schemas
 # ============================================================================

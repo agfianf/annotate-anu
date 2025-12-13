@@ -20,6 +20,9 @@ interface CanvasProps {
   onZoomChange?: (zoom: number) => void
   stagePosition?: { x: number; y: number }
   onStagePositionChange?: (position: { x: number; y: number }) => void
+  // Sync status indicator
+  pendingChanges?: number // Number of unsaved changes for current image
+  hasError?: boolean // Whether there's a sync error for current image
 }
 
 const Canvas = React.memo(function Canvas({
@@ -38,6 +41,8 @@ const Canvas = React.memo(function Canvas({
   onZoomChange,
   stagePosition = { x: 0, y: 0 },
   onStagePositionChange,
+  pendingChanges = 0,
+  hasError = false,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
@@ -1974,6 +1979,57 @@ const Canvas = React.memo(function Canvas({
           ) : (
             <>Click to add points • Double-click to finish • Press Escape to cancel</>
           )}
+        </div>
+      )}
+
+      {/* Unsaved changes indicator */}
+      {pendingChanges > 0 && (
+        <div className="absolute top-4 right-4 flex items-center gap-2 pointer-events-none">
+          <div
+            className={`px-3 py-2 rounded-lg shadow-lg border-2 flex items-center gap-2 ${
+              hasError
+                ? 'bg-red-500/90 border-red-400 text-white'
+                : 'bg-orange-500/90 border-orange-400 text-white'
+            }`}
+          >
+            {hasError ? (
+              <>
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+                <span className="font-semibold text-sm">Sync Error</span>
+              </>
+            ) : (
+              <>
+                <svg
+                  className="w-5 h-5 animate-pulse"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span className="font-semibold text-sm">
+                  {pendingChanges} unsaved change{pendingChanges !== 1 ? 's' : ''}
+                </span>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

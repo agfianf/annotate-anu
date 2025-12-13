@@ -11,11 +11,11 @@ wheels/
 apps/api-inference/.venv
 
 # Environment variables
-.env
+# .env
 .secret
-apps/api-inference/.env
+# apps/api-inference/.env
 apps/api-inference/.secret
-apps/web/.env
+# apps/web/.env
 
 # IDEs
 .vscode/
@@ -74,3 +74,4 @@ htmlcov/
 *.temp
 .claude
 backend/docs
+node_modules/.vite

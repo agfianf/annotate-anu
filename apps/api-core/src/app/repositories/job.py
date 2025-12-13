@@ -236,3 +236,29 @@ class JobRepository:
         row = result.fetchone()
         return dict(row._mapping) if row else None
 
+    @staticmethod
+    async def refresh_annotation_counts(connection: AsyncConnection, job_id: int) -> None:
+        """Refresh the cached annotated_images count from actual image data.
+        
+        This recalculates the count of images with is_annotated=True
+        and updates the job's annotated_images field.
+        """
+        # Count images with is_annotated=True for this job
+        count_stmt = (
+            select(func.count())
+            .select_from(images)
+            .where(images.c.job_id == job_id, images.c.is_annotated == True)  # noqa: E712
+        )
+        annotated_count = (await connection.execute(count_stmt)).scalar() or 0
+        
+        # Update job's cached count
+        update_stmt = (
+            update(jobs)
+            .where(jobs.c.id == job_id)
+            .values(
+                annotated_images=annotated_count,
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        await connection.execute(update_stmt)
+

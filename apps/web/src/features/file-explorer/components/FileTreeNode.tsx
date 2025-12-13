@@ -7,6 +7,7 @@ import {
   File,
   Image,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useDirectoryContents } from '../hooks/useFileTree'
 import { useFileSelectionStore } from '../stores/fileSelectionStore'
 import { SelectionCheckbox } from './SelectionCheckbox'
@@ -37,13 +38,22 @@ export const FileTreeNode = memo(function FileTreeNode({
   onNavigate,
   onMouseEnterFolder,
 }: FileTreeNodeProps) {
-  const { isSelected, isIndeterminate, toggleSelect } = useFileSelectionStore()
+  const queryClient = useQueryClient()
+  const { isSelected, isIndeterminate, toggleSelect, updateIndeterminateStates } =
+    useFileSelectionStore()
   const hoverCleanup = useRef<(() => void) | null>(null)
 
   // Fetch children when expanded (lazy loading)
-  const { data: children, isLoading } = useDirectoryContents(item.path, {
+  const { data: children, isLoading, refetch } = useDirectoryContents(item.path, {
     enabled: item.type === 'directory' && isExpanded,
   })
+
+  // Force refetch when folder is expanded to ensure fresh data
+  useEffect(() => {
+    if (isExpanded && item.type === 'directory') {
+      refetch()
+    }
+  }, [isExpanded, item.type, refetch])
 
   // Cleanup hover prefetch on unmount
   useEffect(() => {
@@ -51,6 +61,13 @@ export const FileTreeNode = memo(function FileTreeNode({
       hoverCleanup.current?.()
     }
   }, [])
+
+  // Update indeterminate states when directory loads
+  useEffect(() => {
+    if (item.type === 'directory' && isExpanded && children?.items) {
+      updateIndeterminateStates(queryClient)
+    }
+  }, [item.type, isExpanded, children, queryClient, updateIndeterminateStates])
 
   const handleClick = useCallback(() => {
     if (item.type === 'directory') {
@@ -65,8 +82,8 @@ export const FileTreeNode = memo(function FileTreeNode({
   }, [item, onNavigate])
 
   const handleCheckboxChange = useCallback(() => {
-    toggleSelect(item.path, item.type === 'directory')
-  }, [item, toggleSelect])
+    toggleSelect(item.path, item.type === 'directory', queryClient)
+  }, [item, toggleSelect, queryClient])
 
   const handleMouseEnter = useCallback(() => {
     if (item.type === 'directory' && onMouseEnterFolder) {

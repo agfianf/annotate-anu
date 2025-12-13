@@ -11,6 +11,12 @@ from fastapi import HTTPException
 from app.config import settings
 from app.schemas.share import FileItem
 
+# Register additional MIME types not in the default database
+mimetypes.add_type("image/webp", ".webp")
+mimetypes.add_type("image/avif", ".avif")
+mimetypes.add_type("image/heic", ".heic")
+mimetypes.add_type("image/heif", ".heif")
+
 
 class FileSystemService:
     """Service for file system operations with security checks."""
@@ -230,6 +236,80 @@ class FileSystemService:
             raise HTTPException(
                 status_code=500, detail=f"Failed to create directory: {e}"
             )
+
+    async def create_nested_directories(
+        self, base_path: str, nested_path: str
+    ) -> tuple[list[str], list[str]]:
+        """Create nested directories in a single operation.
+
+        Parameters
+        ----------
+        base_path : str
+            Base path relative to share root
+        nested_path : str
+            Nested directory path (e.g., "parent/child/grandchild")
+
+        Returns
+        -------
+        tuple[list[str], list[str]]
+            Tuple of (created paths, skipped paths)
+
+        Raises
+        ------
+        HTTPException
+            If creation fails
+        """
+        # Split nested path into segments
+        segments = [s for s in nested_path.split("/") if s]
+
+        if not segments:
+            raise HTTPException(status_code=400, detail="Empty nested path")
+
+        created: list[str] = []
+        skipped: list[str] = []
+        current_path = base_path
+
+        for segment in segments:
+            # Validate segment name
+            if segment in (".", "..") or "\\" in segment:
+                raise HTTPException(
+                    status_code=400, detail=f"Invalid directory name: {segment}"
+                )
+
+            # Build full path for this segment
+            folder_path = f"{current_path}/{segment}" if current_path else segment
+
+            # Check depth
+            self._check_depth(folder_path)
+
+            # Validate and get absolute path
+            absolute_path = self._validate_path(folder_path)
+
+            # Check if folder already exists
+            if absolute_path.exists():
+                skipped.append(folder_path)
+            else:
+                try:
+                    # Create the directory
+                    parent_absolute = self._validate_path(current_path)
+                    if not parent_absolute.exists():
+                        raise HTTPException(
+                            status_code=404,
+                            detail=f"Parent directory not found: {current_path}",
+                        )
+
+                    absolute_path.mkdir(parents=False)
+                    created.append(folder_path)
+                except OSError as e:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to create directory '{segment}': {e}",
+                    )
+
+            # Move to next level
+            current_path = folder_path
+
+        return created, skipped
 
     async def save_uploaded_file(
         self, relative_path: str, filename: str, content: bytes

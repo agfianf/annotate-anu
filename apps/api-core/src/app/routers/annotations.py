@@ -15,6 +15,7 @@ from app.repositories.annotation import (
     SegmentationRepository,
 )
 from app.repositories.image import ImageRepository
+from app.repositories.job import JobRepository
 from app.schemas.annotation import (
     BulkAnnotationDelete,
     BulkDetectionCreate,
@@ -43,6 +44,34 @@ async def _get_image(image_id: UUID, connection: AsyncConnection) -> dict:
     if not image:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
     return image
+
+
+async def _sync_image_annotation_status(
+    connection: AsyncConnection,
+    image: dict,
+) -> None:
+    """Sync image annotation status and refresh job stats.
+    
+    This verifies if the image has ANY annotations (tags, dets, segs, kps)
+    and updates is_annotated flag accordingly.
+    """
+    image_id = image["id"]
+    job_id = image["job_id"]
+    
+    # Check all annotation types
+    tags = await ImageTagRepository.list_for_image(connection, image_id)
+    dets = await DetectionRepository.list_for_image(connection, image_id)
+    segs = await SegmentationRepository.list_for_image(connection, image_id)
+    kps = await KeypointRepository.list_for_image(connection, image_id)
+    
+    has_annotations = (len(tags) + len(dets) + len(segs) + len(kps)) > 0
+    
+    # Update image status if changed
+    if image.get("is_annotated") != has_annotations:
+        await ImageRepository.mark_annotated(connection, image_id, is_annotated=has_annotations)
+    
+    # Always refresh job's cached annotation count to be safe
+    await JobRepository.refresh_annotation_counts(connection, job_id)
 
 
 # ============================================================================
@@ -86,8 +115,9 @@ async def create_tag(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Create an image tag."""
-    await _get_image(image_id, connection)
+    image = await _get_image(image_id, connection)
     tag = await ImageTagRepository.create(connection, image_id, payload.model_dump())
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(
         data=ImageTagResponse(**tag),
         message="Tag created",
@@ -102,9 +132,10 @@ async def create_tags_bulk(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Bulk create image tags."""
-    await _get_image(image_id, connection)
+    image = await _get_image(image_id, connection)
     items = [t.model_dump() for t in payload.tags]
     created = await ImageTagRepository.create_bulk(connection, image_id, items)
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(
         data=[ImageTagResponse(**t) for t in created],
         message=f"Created {len(created)} tag(s)",
@@ -119,7 +150,9 @@ async def delete_tag(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Delete an image tag."""
+    image = await _get_image(image_id, connection)
     await ImageTagRepository.delete(connection, tag_id)
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(data={"deleted": True}, message="Tag deleted", status_code=status.HTTP_200_OK)
 
 
@@ -130,7 +163,9 @@ async def delete_tags_bulk(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Bulk delete image tags."""
+    image = await _get_image(image_id, connection)
     count = await ImageTagRepository.delete_bulk(connection, payload.ids)
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(data={"deleted": count}, message=f"Deleted {count} tag(s)", status_code=status.HTTP_200_OK)
 
 
@@ -144,8 +179,9 @@ async def create_detection(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Create a detection (bounding box)."""
-    await _get_image(image_id, connection)
+    image = await _get_image(image_id, connection)
     det = await DetectionRepository.create(connection, image_id, payload.model_dump())
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(
         data=DetectionResponse(**det),
         message="Detection created",
@@ -160,9 +196,10 @@ async def create_detections_bulk(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Bulk create detections."""
-    await _get_image(image_id, connection)
+    image = await _get_image(image_id, connection)
     items = [d.model_dump() for d in payload.detections]
     created = await DetectionRepository.create_bulk(connection, image_id, items)
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(
         data=[DetectionResponse(**d) for d in created],
         message=f"Created {len(created)} detection(s)",
@@ -187,6 +224,11 @@ async def update_detection(
         return JsonResponse(data=DetectionResponse(**det), message="No changes", status_code=status.HTTP_200_OK)
     
     updated = await DetectionRepository.update(connection, detection_id, update_data)
+    
+    # Sync status
+    image = await _get_image(image_id, connection)
+    await _sync_image_annotation_status(connection, image)
+    
     return JsonResponse(
         data=DetectionResponse(**updated),
         message="Detection updated",
@@ -201,7 +243,9 @@ async def delete_detection(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Delete a detection."""
+    image = await _get_image(image_id, connection)
     await DetectionRepository.delete(connection, detection_id)
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(data={"deleted": True}, message="Detection deleted", status_code=status.HTTP_200_OK)
 
 
@@ -212,7 +256,9 @@ async def delete_detections_bulk(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Bulk delete detections."""
+    image = await _get_image(image_id, connection)
     count = await DetectionRepository.delete_bulk(connection, payload.ids)
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(data={"deleted": count}, message=f"Deleted {count} detection(s)", status_code=status.HTTP_200_OK)
 
 
@@ -226,8 +272,9 @@ async def create_segmentation(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Create a segmentation."""
-    await _get_image(image_id, connection)
+    image = await _get_image(image_id, connection)
     seg = await SegmentationRepository.create(connection, image_id, payload.model_dump())
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(
         data=SegmentationResponse(**seg),
         message="Segmentation created",
@@ -242,9 +289,10 @@ async def create_segmentations_bulk(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Bulk create segmentations."""
-    await _get_image(image_id, connection)
+    image = await _get_image(image_id, connection)
     items = [s.model_dump() for s in payload.segmentations]
     created = await SegmentationRepository.create_bulk(connection, image_id, items)
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(
         data=[SegmentationResponse(**s) for s in created],
         message=f"Created {len(created)} segmentation(s)",
@@ -269,6 +317,11 @@ async def update_segmentation(
         return JsonResponse(data=SegmentationResponse(**seg), message="No changes", status_code=status.HTTP_200_OK)
     
     updated = await SegmentationRepository.update(connection, seg_id, update_data)
+    
+    # Sync status
+    image = await _get_image(image_id, connection)
+    await _sync_image_annotation_status(connection, image)
+    
     return JsonResponse(
         data=SegmentationResponse(**updated),
         message="Segmentation updated",
@@ -283,7 +336,9 @@ async def delete_segmentation(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Delete a segmentation."""
+    image = await _get_image(image_id, connection)
     await SegmentationRepository.delete(connection, seg_id)
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(data={"deleted": True}, message="Segmentation deleted", status_code=status.HTTP_200_OK)
 
 
@@ -297,8 +352,9 @@ async def create_keypoints(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Create keypoints."""
-    await _get_image(image_id, connection)
+    image = await _get_image(image_id, connection)
     kp = await KeypointRepository.create(connection, image_id, payload.model_dump())
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(
         data=KeypointResponse(**kp),
         message="Keypoints created",
@@ -323,6 +379,11 @@ async def update_keypoints(
         return JsonResponse(data=KeypointResponse(**kp), message="No changes", status_code=status.HTTP_200_OK)
     
     updated = await KeypointRepository.update(connection, kp_id, update_data)
+    
+    # Sync status
+    image = await _get_image(image_id, connection)
+    await _sync_image_annotation_status(connection, image)
+    
     return JsonResponse(
         data=KeypointResponse(**updated),
         message="Keypoints updated",
@@ -337,5 +398,7 @@ async def delete_keypoints(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Delete keypoints."""
+    image = await _get_image(image_id, connection)
     await KeypointRepository.delete(connection, kp_id)
+    await _sync_image_annotation_status(connection, image)
     return JsonResponse(data={"deleted": True}, message="Keypoints deleted", status_code=status.HTTP_200_OK)

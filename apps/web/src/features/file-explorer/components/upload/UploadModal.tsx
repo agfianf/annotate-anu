@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Upload } from 'lucide-react'
 import { useFileUpload } from '../../hooks/useFileUpload'
+import { PathAutocomplete } from '../PathAutocomplete'
 import { DropZone } from './DropZone'
 import { UploadQueue } from './UploadQueue'
 import toast from 'react-hot-toast'
@@ -96,16 +97,15 @@ export function UploadModal({
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
               Destination Folder
             </label>
-            <input
-              type="text"
+            <PathAutocomplete
               value={destination}
-              onChange={(e) => setDestination(e.target.value)}
+              onChange={setDestination}
               placeholder="/ (root)"
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
               disabled={isUploading}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Leave empty for root folder
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Type "/" to see folder suggestions. Leave empty for root folder.
             </p>
           </div>
 

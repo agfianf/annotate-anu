@@ -14,6 +14,7 @@ from app.repositories.job import JobRepository
 from app.repositories.project import ProjectMemberRepository
 from app.schemas.auth import UserBase
 from app.schemas.job import JobApprove, JobAssign, JobCreate, JobDetailResponse, JobResponse, JobUpdate
+from app.schemas.job_sync import JobSyncRequest
 
 router = APIRouter(prefix="/api/v1", tags=["Jobs"])
 
@@ -75,12 +76,30 @@ async def get_job(
     job: Annotated[dict, Depends(JobPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
-    """Get job details with image count."""
+    """Get job details with image count and project labels for annotation mode."""
+    from app.repositories.project import LabelRepository
+    from app.repositories.task import TaskRepository
+    from app.schemas.project import LabelResponse
+
+    
+    # Get image count
     image_count = await JobRepository.get_image_count(connection, job["id"])
+    
+    # Traverse job -> task -> project to get labels
+    project_id = None
+    labels = []
+    
+    task = await TaskRepository.get_by_id(connection, job["task_id"])
+    if task:
+        project_id = task["project_id"]
+        project_labels = await LabelRepository.list_for_project(connection, project_id)
+        labels = [LabelResponse(**lb) for lb in project_labels]
     
     response = JobDetailResponse(
         **{k: v for k, v in job.items() if not k.startswith("_")},
         image_count=image_count,
+        project_id=project_id,
+        labels=labels,
     )
     
     return JsonResponse(
@@ -88,6 +107,7 @@ async def get_job(
         message="Job retrieved successfully",
         status_code=status.HTTP_200_OK,
     )
+
 
 
 @router.patch("/jobs/{job_id}", response_model=JsonResponse[JobResponse, None])
@@ -339,6 +359,128 @@ async def unassign_job(
     return JsonResponse(
         data=JobResponse(**updated),
         message="Job unassigned successfully",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+# =============================================================================
+# Job Annotation Sync
+# =============================================================================
+
+@router.post("/jobs/{job_id}/annotations/sync", response_model=JsonResponse[dict, None])
+async def sync_annotations(
+    payload: JobSyncRequest,
+    job: Annotated[dict, Depends(JobPermission("annotator"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """
+    Sync annotations for a job across multiple images.
+    
+    Handlers creation, update, and deletion of tags, detections, segmentations, and keypoints.
+    Updates image annotation status automatically.
+    """
+    from app.repositories.annotation import (
+        DetectionRepository,
+        ImageTagRepository,
+        KeypointRepository,
+        SegmentationRepository,
+    )
+    from app.repositories.image import ImageRepository
+    from app.routers.annotations import _sync_image_annotation_status
+    
+    total_ops = 0
+    synced_images = []
+    
+    # Iterate over images provided in payload
+    for image_id, data in payload.images.items():
+        image_ops = 0
+        
+        # Verify image belongs to job (optional but good for security)
+        # We skip this query for performance optimization assuming frontend sends correct data
+        # But we DO need to fetch the image to pass it to _sync_image_annotation_status at the end
+        image = await ImageRepository.get_by_id(connection, image_id)
+        if not image or image["job_id"] != job["id"]:
+            # Skip invalid images
+            continue
+            
+        # 1. Tags
+        if data.tags:
+            # Create
+            if data.tags.created:
+                await ImageTagRepository.create_bulk(connection, image_id, data.tags.created)
+                image_ops += len(data.tags.created)
+            
+            # Delete
+            if data.tags.deleted:
+                await ImageTagRepository.delete_bulk(connection, data.tags.deleted)
+                image_ops += len(data.tags.deleted)
+
+        # 2. Detections
+        if data.detections:
+            # Create
+            if data.detections.created:
+                await DetectionRepository.create_bulk(connection, image_id, data.detections.created)
+                image_ops += len(data.detections.created)
+                
+            # Update
+            for update_item in data.detections.updated:
+                item_id = update_item.pop("id", None)
+                if item_id:
+                    await DetectionRepository.update(connection, item_id, update_item)
+                    image_ops += 1
+            
+            # Delete
+            if data.detections.deleted:
+                await DetectionRepository.delete_bulk(connection, data.detections.deleted)
+                image_ops += len(data.detections.deleted)
+
+        # 3. Segmentations
+        if data.segmentations:
+            # Create
+            if data.segmentations.created:
+                await SegmentationRepository.create_bulk(connection, image_id, data.segmentations.created)
+                image_ops += len(data.segmentations.created)
+                
+            # Update
+            for update_item in data.segmentations.updated:
+                item_id = update_item.pop("id", None)
+                if item_id:
+                    await SegmentationRepository.update(connection, item_id, update_item)
+                    image_ops += 1
+            
+            # Delete
+            if data.segmentations.deleted:
+                await SegmentationRepository.delete_bulk(connection, data.segmentations.deleted)
+                image_ops += len(data.segmentations.deleted)
+
+        # 4. Keypoints
+        if data.keypoints:
+            # Create
+            for kp_item in data.keypoints.created:
+                await KeypointRepository.create(connection, image_id, kp_item)
+                image_ops += 1
+                
+            # Update
+            for update_item in data.keypoints.updated:
+                item_id = update_item.pop("id", None)
+                if item_id:
+                    await KeypointRepository.update(connection, item_id, update_item)
+                    image_ops += 1
+            
+            # Delete
+            for delete_id in data.keypoints.deleted:
+                await KeypointRepository.delete(connection, delete_id)
+                image_ops += 1
+
+        # Sync Image Status if any ops happened
+        if image_ops > 0:
+            await _sync_image_annotation_status(connection, image)
+            total_ops += image_ops
+            synced_images.append(str(image_id))
+
+    return JsonResponse(
+        data={"synced_images": synced_images, "total_operations": total_ops},
+        message=f"Synced {total_ops} changes across {len(synced_images)} image(s)",
         status_code=status.HTTP_200_OK,
     )
 

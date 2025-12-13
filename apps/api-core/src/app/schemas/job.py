@@ -63,9 +63,16 @@ class JobResponse(BaseModel):
 
 
 class JobDetailResponse(JobResponse):
-    """Job response with image count."""
+    """Job response with image count and project context for annotation mode."""
 
     image_count: int = 0
+    project_id: int | None = None
+    labels: list["LabelResponse"] = []
+
+
+# Import for forward reference
+from app.schemas.project import LabelResponse
+
 
 
 class JobAssign(BaseModel):

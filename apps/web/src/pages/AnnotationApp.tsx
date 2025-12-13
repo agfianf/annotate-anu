@@ -1,7 +1,7 @@
-import { Copy, Download, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { Check, Cloud, CloudOff, Copy, Download, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import '../App.css'
 import Canvas from '../components/Canvas'
 import { ExportModal } from '../components/ExportModal'
@@ -13,13 +13,15 @@ import { ColorPickerPopup } from '../components/ui/ColorPickerPopup'
 import { Modal } from '../components/ui/Modal'
 import ShortcutsHelpModal from '../components/ui/ShortcutsHelpModal'
 import { useHistory } from '../hooks/useHistory'
+import { useJobStorage } from '../hooks/useJobStorage'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useModelRegistry } from '../hooks/useModelRegistry'
-import { useStorage } from '../hooks/useStorage'
+import { imagesApi } from '../lib/api-client'
 import { DEFAULT_LABEL_COLOR } from '../lib/colors'
 import { ALLOWED_IMAGE_EXTENSIONS, getDisplayName, getRelativePath, isAllowedImageFile, isFolderUploadSupported } from '../lib/file-utils'
 import { annotationStorage } from '../lib/storage'
 import type { Annotation, ImageData, Label, PolygonAnnotation, PromptMode, RectangleAnnotation, Tool } from '../types/annotations'
+import type { DirtyImageInfo } from '../hooks/useAutoSave'
 
 // Thumbnail component to prevent re-creating blob URLs on every render
 interface ImageThumbnailProps {
@@ -28,6 +30,10 @@ interface ImageThumbnailProps {
   annotationCount: number
   onClick: () => void
   onDelete: (e: React.MouseEvent) => void
+  isJobMode?: boolean
+  s3Key?: string
+  dirtyInfo?: DirtyImageInfo // Enhanced dirty state with count and error info
+  isDirty?: boolean // Legacy compatibility
 }
 
 const ImageThumbnail = ({
@@ -35,18 +41,30 @@ const ImageThumbnail = ({
   isActive,
   onClick,
   onDelete,
-  annotationCount
+  annotationCount,
+  isJobMode = false,
+  s3Key,
+  dirtyInfo,
+  isDirty = false,
 }: ImageThumbnailProps) => {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    // Create URL only once when component mounts or image changes
-    const url = URL.createObjectURL(image.blob)
-    setThumbnailUrl(url)
+    // For job mode, use the public job image endpoint
+    if (isJobMode && s3Key && image.jobId && image.jobImageId) {
+      setThumbnailUrl(imagesApi.getImageUrl(s3Key, image.jobId.toString(), image.jobImageId))
+      return
+    }
 
-    // Cleanup: revoke URL when component unmounts or image changes
-    return () => URL.revokeObjectURL(url)
-  }, [image.blob])
+    // For local mode, create blob URL
+    if (image.blob && image.blob.size > 0) {
+      const url = URL.createObjectURL(image.blob)
+      setThumbnailUrl(url)
+
+      // Cleanup: revoke URL when component unmounts or image changes
+      return () => URL.revokeObjectURL(url)
+    }
+  }, [image.blob, isJobMode, s3Key, image.jobId, image.jobImageId])
 
   // Show loading placeholder while URL is being created
   if (!thumbnailUrl) {
@@ -68,12 +86,48 @@ const ImageThumbnail = ({
       <img
         src={thumbnailUrl}
         alt={image.displayName}
-        className="h-20 w-auto object-contain bg-gray-900"
+        className="h-20 w-20 object-cover bg-gray-900"
       />
       {annotationCount > 0 && (
         <div className="absolute top-1 right-1 bg-emerald-600 text-white text-xs px-1.5 py-0.5 rounded">
           {annotationCount}
         </div>
+      )}
+      {/* Enhanced dirty indicator with count and error state */}
+      {(dirtyInfo || isDirty) && (
+        <>
+          {dirtyInfo ? (
+            // Enhanced badge system
+            <>
+              {dirtyInfo.hasError ? (
+                // Error state: Red exclamation badge
+                <div
+                  className="absolute top-1 right-8 w-5 h-5 bg-red-500 rounded-full border border-gray-900 flex items-center justify-center"
+                  title={`Sync error - ${dirtyInfo.count} unsaved change${dirtyInfo.count !== 1 ? 's' : ''}`}
+                >
+                  <span className="text-white text-xs font-bold">!</span>
+                </div>
+              ) : dirtyInfo.count > 5 ? (
+                // 6+ changes: Badge with number
+                <div
+                  className="absolute top-1 right-8 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded-full border border-gray-900 font-medium"
+                  title={`${dirtyInfo.count} unsaved changes`}
+                >
+                  {dirtyInfo.count}
+                </div>
+              ) : (
+                // 1-5 changes: Orange dot
+                <div
+                  className="absolute top-1 right-8 w-2.5 h-2.5 bg-orange-500 rounded-full border border-gray-900"
+                  title={`${dirtyInfo.count} unsaved change${dirtyInfo.count !== 1 ? 's' : ''}`}
+                />
+              )}
+            </>
+          ) : (
+            // Legacy fallback: Simple orange dot
+            <div className="absolute top-1 right-8 w-2.5 h-2.5 bg-orange-500 rounded-full border border-gray-900" title="Unsaved changes" />
+          )}
+        </>
       )}
       <button
         onClick={onDelete}
@@ -88,6 +142,9 @@ const ImageThumbnail = ({
 
 function AnnotationApp() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const jobId = searchParams.get('jobId')
+
   const [selectedTool, setSelectedTool] = useState<Tool>('select')
   const [selectedAnnotations, setSelectedAnnotations] = useState<string[]>([])
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null)
@@ -134,6 +191,8 @@ function AnnotationApp() {
   const [zoomLevel, setZoomLevel] = useState(1)
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 })
 
+  // Use job-aware storage (falls back to local storage if no jobId)
+  const storage = useJobStorage(jobId)
   const {
     images,
     labels,
@@ -156,7 +215,18 @@ function AnnotationApp() {
     updateLabel,
     removeLabel,
     resetAll,
-  } = useStorage()
+    // Job mode specific
+    isJobMode,
+    autoSaveConfig,
+    setAutoSaveConfig,
+    syncStatus,
+    pendingCount,
+    isOnline,
+    syncNow,
+    dirtyImageIds, // Legacy
+    dirtyImageInfo, // Enhanced
+    syncHistory, // Sync history
+  } = storage
 
   // History for undo/redo
   const { recordChange, undo, redo, canUndo, canRedo } = useHistory(currentImageId)
@@ -558,15 +628,34 @@ function AnnotationApp() {
 
   useEffect(() => {
     if (currentImage) {
-      const url = URL.createObjectURL(currentImage.blob)
-      setCurrentImageUrl(url)
-      return () => URL.revokeObjectURL(url)
+      // In job mode, use API URL for full-size image (blob is empty placeholder)
+      if (isJobMode && currentImage.s3Key && currentImage.jobId && currentImage.jobImageId) {
+        const apiUrl = imagesApi.getFullImageUrl(
+          currentImage.s3Key,
+          currentImage.jobId.toString(),
+          currentImage.jobImageId
+        )
+        setCurrentImageUrl(apiUrl)
+        // No cleanup needed for API URLs
+        return
+      }
+
+      // For local mode, create blob URL from file
+      if (currentImage.blob && currentImage.blob.size > 0) {
+        const url = URL.createObjectURL(currentImage.blob)
+        setCurrentImageUrl(url)
+        return () => URL.revokeObjectURL(url)
+      }
+
+      // Fallback: no valid image source
+      setCurrentImageUrl(null)
     } else {
       setCurrentImageUrl(null)
     }
     // Clear selection when image changes
     setSelectedAnnotations([])
-  }, [currentImage])
+  }, [currentImage, isJobMode])
+
 
   // Clear selection when navigating between images
   useEffect(() => {
@@ -817,6 +906,71 @@ function AnnotationApp() {
             </span>
           )}
 
+          {/* Job Mode: Sync Status and Auto-save Settings */}
+          {isJobMode && (
+            <div className="flex items-center gap-3 px-3 py-1.5 glass rounded-lg border border-gray-200">
+              {/* Online/Offline indicator */}
+              {isOnline ? (
+                <Cloud className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <CloudOff className="w-4 h-4 text-amber-600" />
+              )}
+
+              {/* Sync status */}
+              <div className="flex items-center gap-1.5">
+                {syncStatus === 'syncing' && (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 text-blue-600 animate-spin" />
+                    <span className="text-xs text-blue-600">Saving...</span>
+                  </>
+                )}
+                {syncStatus === 'success' && (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="text-xs text-emerald-600">Saved</span>
+                  </>
+                )}
+                {syncStatus === 'error' && (
+                  <span className="text-xs text-red-600">Save failed</span>
+                )}
+                {syncStatus === 'idle' && pendingCount > 0 && (
+                  <span className="text-xs text-gray-500">{pendingCount} pending</span>
+                )}
+                {syncStatus === 'idle' && pendingCount === 0 && (
+                  <span className="text-xs text-gray-500">Up to date</span>
+                )}
+              </div>
+
+              {/* Auto-save interval selector */}
+              <select
+                value={autoSaveConfig?.intervalMs ?? 5000}
+                onChange={(e) => setAutoSaveConfig?.({
+                  ...autoSaveConfig!,
+                  intervalMs: parseInt(e.target.value),
+                })}
+                className="text-xs bg-white border border-gray-200 rounded px-1.5 py-0.5 text-gray-700 focus:outline-none focus:border-emerald-500"
+                title="Auto-save interval"
+              >
+                <option value="3000">3s</option>
+                <option value="5000">5s</option>
+                <option value="10000">10s</option>
+                <option value="30000">30s</option>
+                <option value="60000">1m</option>
+              </select>
+
+              {/* Manual sync button */}
+              {pendingCount > 0 && (
+                <button
+                  onClick={syncNow}
+                  disabled={syncStatus === 'syncing'}
+                  className="text-xs px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded transition-colors"
+                >
+                  Sync Now
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Model Selector */}
           <ModelSelector
             selectedModel={selectedModel}
@@ -936,6 +1090,8 @@ function AnnotationApp() {
                 onZoomChange={setZoomLevel}
                 stagePosition={stagePosition}
                 onStagePositionChange={setStagePosition}
+                pendingChanges={currentImageId ? (dirtyImageInfo?.get(currentImageId)?.count || 0) : 0}
+                hasError={currentImageId ? (dirtyImageInfo?.get(currentImageId)?.hasError || false) : false}
               />
               {/* Auto-apply loading overlay */}
               {isAutoApplyLoading && (
@@ -988,45 +1144,19 @@ function AnnotationApp() {
 
           {/* Thumbnails */}
           <div className="flex-1 flex gap-2 overflow-x-auto py-2">
-            {/* Upload buttons container */}
-            <div className="flex-shrink-0 flex gap-2">
-              {/* Upload Files Button */}
-              <label className="cursor-pointer group" title="Upload image files">
-                <div className="h-20 w-20 border-2 border-dashed border-gray-300 hover:border-emerald-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-emerald-50">
-                  <Upload className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 transition-colors" />
-                  <span className="text-xs text-gray-500 group-hover:text-emerald-600 transition-colors">Files</span>
-                </div>
-                <input
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp,.bmp"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files) {
-                      handleImageUpload(e.target.files)
-                    }
-                  }}
-                />
-              </label>
-
-              {/* Upload Folder Button */}
-              {folderUploadSupported && (
-                <label className="cursor-pointer group" title="Upload entire folder of images">
-                  <div className="h-20 w-20 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-blue-50">
-                    <svg
-                      className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                    </svg>
-                    <span className="text-xs text-gray-500 group-hover:text-blue-600 transition-colors">Folder</span>
+            {/* Upload buttons container - hidden in job mode */}
+            {!isJobMode && (
+              <div className="flex-shrink-0 flex gap-2">
+                {/* Upload Files Button */}
+                <label className="cursor-pointer group" title="Upload image files">
+                  <div className="h-20 w-20 border-2 border-dashed border-gray-300 hover:border-emerald-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-emerald-50">
+                    <Upload className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 transition-colors" />
+                    <span className="text-xs text-gray-500 group-hover:text-emerald-600 transition-colors">Files</span>
                   </div>
                   <input
                     type="file"
                     accept=".jpg,.jpeg,.png,.webp,.bmp"
-                    {...({ webkitdirectory: "", mozdirectory: "", directory: "" } as any)}
+                    multiple
                     className="hidden"
                     onChange={(e) => {
                       if (e.target.files) {
@@ -1035,8 +1165,36 @@ function AnnotationApp() {
                     }}
                   />
                 </label>
-              )}
-            </div>
+
+                {/* Upload Folder Button */}
+                {folderUploadSupported && (
+                  <label className="cursor-pointer group" title="Upload entire folder of images">
+                    <div className="h-20 w-20 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-blue-50">
+                      <svg
+                        className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                      </svg>
+                      <span className="text-xs text-gray-500 group-hover:text-blue-600 transition-colors">Folder</span>
+                    </div>
+                    <input
+                      type="file"
+                      accept=".jpg,.jpeg,.png,.webp,.bmp"
+                      {...({ webkitdirectory: "", mozdirectory: "", directory: "" } as any)}
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) {
+                          handleImageUpload(e.target.files)
+                        }
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+            )}
 
             {images.map((image) => {
               // Count annotations for this specific image
@@ -1049,8 +1207,17 @@ function AnnotationApp() {
                   isActive={currentImageId === image.id}
                   annotationCount={imageAnnotationCount}
                   onClick={() => setCurrentImageId(image.id)}
+                  isJobMode={isJobMode}
+                  s3Key={image.s3Key}
+                  dirtyInfo={dirtyImageInfo?.get(image.id)}
+                  isDirty={dirtyImageIds?.has(image.id)}
                   onDelete={(e) => {
                     e.stopPropagation()
+                    // Don't allow deleting job images
+                    if (isJobMode) {
+                      toast.error('Cannot delete images in job mode')
+                      return
+                    }
                     if (window.confirm(`Delete "${image.name}"? This will also remove all associated annotations.`)) {
                       removeImage(image.id)
                     }

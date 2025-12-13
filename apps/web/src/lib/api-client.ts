@@ -52,15 +52,19 @@ export interface ProjectDetail extends Project {
   labels: Label[];
   task_count: number;
   member_count: number;
+  annotation_types: string[];
   user_role: 'owner' | 'maintainer' | 'annotator' | 'viewer';
 }
+
 
 export interface Label {
   id: string;
   name: string;
   color: string;
   project_id: string;
+  created_at?: string;
 }
+
 
 export interface Task {
   id: number;
@@ -95,7 +99,10 @@ export interface Job {
 
 export interface JobDetail extends Job {
   image_count: number;
+  project_id: number | null;
+  labels: Label[];
 }
+
 
 // Types for Task Creation Flow
 export interface MockImage {
@@ -597,6 +604,17 @@ export const jobsApi = {
     return response.data.data;
   },
 
+  /**
+   * Sync annotations for a job
+   */
+  async syncAnnotations(jobId: string, payload: { images: Record<string, any> }): Promise<{ synced_images: string[], total_operations: number }> {
+    const response = await apiClient.post<ApiResponse<{ synced_images: string[], total_operations: number }>>(
+      `/api/v1/jobs/${jobId}/annotations/sync`,
+      payload
+    );
+    return response.data.data;
+  },
+
   async start(jobId: string): Promise<Job> {
     const response = await apiClient.post<ApiResponse<Job>>(`/api/v1/jobs/${jobId}/start`);
     return response.data.data;
@@ -651,6 +669,277 @@ export const membersApi = {
 
   async remove(projectId: string, memberId: string): Promise<void> {
     await apiClient.delete(`/api/v1/projects/${projectId}/members/${memberId}`);
+  },
+};
+
+// ============================================================================
+// Images API (Job Images)
+// ============================================================================
+
+export interface ImageResponse {
+  id: string;
+  job_id: number;
+  filename: string;
+  s3_key: string;
+  s3_bucket: string;
+  width: number;
+  height: number;
+  thumbnail_s3_key: string | null;
+  file_size_bytes: number | null;
+  mime_type: string | null;
+  checksum_sha256: string | null;
+  metadata: Record<string, unknown> | null;
+  sequence_number: number;
+  is_annotated: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImageListResponse {
+  images: ImageResponse[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export const imagesApi = {
+  /**
+   * List images for a job with pagination
+   */
+  async listForJob(jobId: string, page = 1, pageSize = 50): Promise<ImageListResponse> {
+    const response = await apiClient.get<ApiResponse<ImageListResponse>>(
+      `/api/v1/jobs/${jobId}/images`,
+      { params: { page, page_size: pageSize } }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Get a single image by ID
+   */
+  async get(imageId: string): Promise<ImageResponse> {
+    const response = await apiClient.get<ApiResponse<ImageResponse>>(`/api/v1/images/${imageId}`);
+    return response.data.data;
+  },
+
+  /**
+   * Construct the full image URL for display
+   * For job images, uses the public job image endpoint (no auth required)
+   * For other images, uses the share thumbnail endpoint (requires auth)
+   */
+  getImageUrl(s3Key: string, jobId?: string, imageId?: string): string {
+    // If we have jobId and imageId, use the public job image endpoint
+    if (jobId && imageId) {
+      return `${API_BASE_URL}/api/v1/jobs/${jobId}/images/${imageId}/thumbnail`;
+    }
+    // Fallback to share endpoint (requires auth)
+    return `${API_BASE_URL}/api/v1/share/thumbnail/${encodeURIComponent(s3Key)}`;
+  },
+
+  /**
+   * Construct the full-size image URL for canvas rendering
+   * Uses the /file endpoint which returns the original image
+   */
+  getFullImageUrl(s3Key: string, jobId?: string, imageId?: string): string {
+    // If we have jobId and imageId, use the public job image file endpoint
+    if (jobId && imageId) {
+      return `${API_BASE_URL}/api/v1/jobs/${jobId}/images/${imageId}/file`;
+    }
+    // Fallback to share endpoint (requires auth)
+    return `${API_BASE_URL}/api/v1/share/thumbnail/${encodeURIComponent(s3Key)}`;
+  },
+};
+
+
+// ============================================================================
+// Annotations API (Detections, Segmentations)
+// ============================================================================
+
+// Detection (Bounding Box) types
+export interface DetectionCreate {
+  label_id: string;
+  x_min: number;  // Normalized 0-1
+  y_min: number;
+  x_max: number;
+  y_max: number;
+  rotation?: number;
+  confidence?: number;
+  attributes?: Record<string, unknown>;
+}
+
+export interface DetectionUpdate {
+  label_id?: string;
+  x_min?: number;
+  y_min?: number;
+  x_max?: number;
+  y_max?: number;
+  rotation?: number;
+  confidence?: number;
+  attributes?: Record<string, unknown>;
+}
+
+export interface DetectionResponse {
+  id: string;
+  image_id: string;
+  label_id: string;
+  x_min: number;
+  y_min: number;
+  x_max: number;
+  y_max: number;
+  rotation: number | null;
+  confidence: number | null;
+  attributes: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Segmentation (Polygon) types
+export interface SegmentationCreate {
+  label_id: string;
+  format?: string;  // 'polygon' | 'rle' | 'bitmap'
+  polygon?: number[][];  // [[x1,y1], [x2,y2], ...] normalized 0-1
+  rle?: Record<string, unknown>;
+  area?: number;
+  confidence?: number;
+  attributes?: Record<string, unknown>;
+}
+
+export interface SegmentationUpdate {
+  label_id?: string;
+  polygon?: number[][];
+  rle?: Record<string, unknown>;
+  area?: number;
+  confidence?: number;
+  attributes?: Record<string, unknown>;
+}
+
+export interface SegmentationResponse {
+  id: string;
+  image_id: string;
+  label_id: string;
+  format: string;
+  polygon: number[][] | null;
+  rle: Record<string, unknown> | null;
+  area: number | null;
+  confidence: number | null;
+  attributes: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Combined annotations response
+export interface ImageAnnotationsResponse {
+  image_id: string;
+  tags: unknown[];
+  detections: DetectionResponse[];
+  segmentations: SegmentationResponse[];
+  keypoints: unknown[];
+}
+
+export const annotationsApi = {
+  /**
+   * Get all annotations for an image
+   */
+  async getForImage(imageId: string): Promise<ImageAnnotationsResponse> {
+    const response = await apiClient.get<ApiResponse<ImageAnnotationsResponse>>(
+      `/api/v1/images/${imageId}/annotations`
+    );
+    return response.data.data;
+  },
+
+  // ---- Detections (Bounding Boxes) ----
+
+  /**
+   * Create a single detection
+   */
+  async createDetection(imageId: string, data: DetectionCreate): Promise<DetectionResponse> {
+    const response = await apiClient.post<ApiResponse<DetectionResponse>>(
+      `/api/v1/images/${imageId}/annotations/detections`,
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Create multiple detections in bulk
+   */
+  async createDetectionBulk(imageId: string, detections: DetectionCreate[]): Promise<DetectionResponse[]> {
+    const response = await apiClient.post<ApiResponse<DetectionResponse[]>>(
+      `/api/v1/images/${imageId}/annotations/detections/bulk`,
+      { detections }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Update a detection
+   */
+  async updateDetection(imageId: string, detectionId: string, data: DetectionUpdate): Promise<DetectionResponse> {
+    const response = await apiClient.patch<ApiResponse<DetectionResponse>>(
+      `/api/v1/images/${imageId}/annotations/detections/${detectionId}`,
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Delete a detection
+   */
+  async deleteDetection(imageId: string, detectionId: string): Promise<void> {
+    await apiClient.delete(`/api/v1/images/${imageId}/annotations/detections/${detectionId}`);
+  },
+
+  /**
+   * Delete multiple detections in bulk
+   */
+  async deleteDetectionBulk(imageId: string, ids: string[]): Promise<{ deleted: number }> {
+    const response = await apiClient.delete<ApiResponse<{ deleted: number }>>(
+      `/api/v1/images/${imageId}/annotations/detections/bulk`,
+      { data: { ids } }
+    );
+    return response.data.data;
+  },
+
+  // ---- Segmentations (Polygons) ----
+
+  /**
+   * Create a single segmentation
+   */
+  async createSegmentation(imageId: string, data: SegmentationCreate): Promise<SegmentationResponse> {
+    const response = await apiClient.post<ApiResponse<SegmentationResponse>>(
+      `/api/v1/images/${imageId}/annotations/segmentations`,
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Create multiple segmentations in bulk
+   */
+  async createSegmentationBulk(imageId: string, segmentations: SegmentationCreate[]): Promise<SegmentationResponse[]> {
+    const response = await apiClient.post<ApiResponse<SegmentationResponse[]>>(
+      `/api/v1/images/${imageId}/annotations/segmentations/bulk`,
+      { segmentations }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Update a segmentation
+   */
+  async updateSegmentation(imageId: string, segId: string, data: SegmentationUpdate): Promise<SegmentationResponse> {
+    const response = await apiClient.patch<ApiResponse<SegmentationResponse>>(
+      `/api/v1/images/${imageId}/annotations/segmentations/${segId}`,
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Delete a segmentation
+   */
+  async deleteSegmentation(imageId: string, segId: string): Promise<void> {
+    await apiClient.delete(`/api/v1/images/${imageId}/annotations/segmentations/${segId}`);
   },
 };
 

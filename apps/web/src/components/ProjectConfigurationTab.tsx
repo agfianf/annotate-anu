@@ -37,6 +37,39 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
   const [description, setDescription] = useState(project.description || '');
   const [isSavingDescription, setIsSavingDescription] = useState(false);
 
+  // Annotation types state
+  const [annotationTypes, setAnnotationTypes] = useState<string[]>(project.annotation_types || ['classification', 'detection', 'segmentation']);
+  const [isSavingAnnotationTypes, setIsSavingAnnotationTypes] = useState(false);
+
+  const handleToggleAnnotationType = (type: string) => {
+    setAnnotationTypes((prev) =>
+      prev.includes(type)
+        ? prev.filter((t) => t !== type)
+        : [...prev, type]
+    );
+  };
+
+  const handleSaveAnnotationTypes = async () => {
+    if (annotationTypes.length === 0) {
+      toast.error('At least one annotation type must be enabled');
+      return;
+    }
+
+    setIsSavingAnnotationTypes(true);
+    try {
+      await projectsApi.update(String(project.id), {
+        annotation_types: annotationTypes,
+      });
+      toast.success('Annotation types updated');
+      onUpdate?.();
+    } catch (err) {
+      console.error('Failed to update annotation types:', err);
+      toast.error('Failed to update annotation types');
+    } finally {
+      setIsSavingAnnotationTypes(false);
+    }
+  };
+
   const handleUpdateDescription = async () => {
     setIsSavingDescription(true);
     try {
@@ -494,7 +527,8 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
                 >
                   <input
                     type="checkbox"
-                    defaultChecked={true}
+                    checked={annotationTypes.includes(type)}
+                    onChange={() => handleToggleAnnotationType(type)}
                     disabled={!canEdit}
                     className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 disabled:opacity-50"
                   />
@@ -502,6 +536,18 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
                 </label>
               ))}
             </div>
+            {canEdit && JSON.stringify(annotationTypes.sort()) !== JSON.stringify((project.annotation_types || []).sort()) && (
+              <div className="mt-3 flex justify-end">
+                <button
+                  onClick={handleSaveAnnotationTypes}
+                  disabled={isSavingAnnotationTypes}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-xs font-medium rounded-lg transition-all flex items-center gap-1.5"
+                >
+                  {isSavingAnnotationTypes ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  Save Annotation Types
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Model Prediction Settings (Placeholder) */}

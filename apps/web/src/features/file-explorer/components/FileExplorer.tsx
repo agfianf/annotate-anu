@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import {
   useDirectoryContents,
   usePrefetchDirectory,
+  useResolveSelection,
 } from '../hooks/useFileTree'
 import { useFileSelectionStore } from '../stores/fileSelectionStore'
 import { FileTree } from './FileTree'
@@ -33,6 +34,7 @@ export function FileExplorer({
   // Fetch current directory
   const { data, isLoading, error, refetch } = useDirectoryContents(currentPath)
   const prefetch = usePrefetchDirectory()
+  const resolveSelectionMutation = useResolveSelection()
 
   // Handle folder navigation
   const handleNavigate = useCallback(
@@ -51,10 +53,23 @@ export function FileExplorer({
   )
 
   // Handle selection confirm
-  const handleConfirmSelection = useCallback(() => {
+  const handleConfirmSelection = useCallback(async () => {
     const selectedPaths = getSelectedPaths()
-    onSelect?.(selectedPaths)
-  }, [getSelectedPaths, onSelect])
+
+    try {
+      // Expand folders to files server-side
+      const resolvedFiles = await resolveSelectionMutation.mutateAsync({
+        paths: selectedPaths,
+        recursive: true,
+      })
+
+      // Call parent callback with resolved file paths
+      onSelect?.(resolvedFiles)
+    } catch (error) {
+      console.error('Failed to resolve selection:', error)
+      // TODO: Show error toast to user
+    }
+  }, [getSelectedPaths, onSelect, resolveSelectionMutation])
 
   // Handle prefetch on hover
   const handleMouseEnterFolder = useCallback(

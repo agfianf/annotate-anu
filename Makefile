@@ -2,7 +2,7 @@
         backend-install backend-run backend-test backend-format backend-lint \
         core-install core-run core-test core-format core-lint \
         frontend-install frontend-dev frontend-build \
-        docker-up docker-down docker-logs docker-build docker-restart docker-shell \
+        docker-up docker-down docker-logs docker-build docker-rebuild docker-restart docker-shell \
         docker-up-solo docker-down-solo docker-up-team docker-down-team
 
 help:
@@ -42,6 +42,7 @@ help:
 	@echo "  docker-down-team - Stop TEAM mode services"
 	@echo "  docker-logs      - View logs (usage: make docker-logs service=backend|api-core|frontend)"
 	@echo "  docker-build     - Rebuild all Docker images"
+	@echo "  docker-rebuild   - Rebuild images, stop, and restart services (build -> down -> up)"
 	@echo "  docker-restart   - Restart services (usage: make docker-restart service=backend|api-core|frontend)"
 	@echo "  docker-shell     - Open shell in container (usage: make docker-shell service=backend|api-core|frontend)"
 
@@ -133,6 +134,7 @@ frontend-build:
 	@cd apps/web && npm run build
 
 # Docker commands
+
 docker-up:
 	@echo "Starting Docker services (development mode)..."
 	docker-compose -f docker/docker-compose.dev.yml up -d
@@ -190,6 +192,25 @@ endif
 docker-build:
 	@echo "Building Docker images..."
 	docker-compose -f docker/docker-compose.dev.yml build
+
+docker-rebuild:
+	@echo "Rebuilding Docker services (build -> down -> up)..."
+	@echo "Step 1/3: Building images..."
+	@docker-compose -f docker/docker-compose.dev.yml build
+	@echo ""
+	@echo "Step 2/3: Stopping services..."
+	@docker-compose -f docker/docker-compose.dev.yml down
+	@echo ""
+	@echo "Step 3/3: Starting services..."
+	@docker-compose -f docker/docker-compose.dev.yml up -d
+	@echo ""
+	@echo "✓ Services rebuilt and restarted:"
+	@echo "  Backend API (SAM3): http://localhost:8000"
+	@echo "  Backend Docs: http://localhost:8000/docs"
+	@echo "  API Core (BYOM): http://localhost:8001"
+	@echo "  API Core Docs: http://localhost:8001/docs"
+	@echo "  Frontend: http://localhost:5173"
+	@echo "  Redis: localhost:6379 (internal)"
 
 docker-restart:
 ifdef service
