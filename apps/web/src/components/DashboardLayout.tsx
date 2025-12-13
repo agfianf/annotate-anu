@@ -6,6 +6,7 @@
 import {
     ChevronRight,
     FolderKanban,
+    HardDrive,
     Home,
     LogOut,
     Menu,
@@ -30,6 +31,7 @@ const navItems: NavItem[] = [
   { path: '/dashboard/profile', label: 'Profile', icon: <User className="w-5 h-5" /> },
   { path: '/dashboard/admin', label: 'Users', icon: <Users className="w-5 h-5" />, adminOnly: true },
   { path: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className="w-5 h-5" /> },
+  { path: '/dashboard/files', label: 'File Share', icon: <HardDrive className="w-5 h-5" /> },
 ];
 
 export default function DashboardLayout() {

@@ -8,14 +8,17 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.dependencies.auth import get_admin_user
+from app.dependencies.auth import get_admin_user, get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import ProjectPermission, TaskPermission
 from app.helpers.response_api import JsonResponse
 from app.repositories.image import ImageRepository
 from app.repositories.job import JobRepository
+from app.repositories.project_image import ProjectImageRepository
+from app.repositories.shared_image import SharedImageRepository
 from app.repositories.task import TaskRepository
 from app.schemas.auth import UserBase
+from app.schemas.data_management import TaskCreateWithFilePaths
 from app.schemas.job import JobResponse
 from app.schemas.task import (
     JobPreview,
@@ -27,6 +30,12 @@ from app.schemas.task import (
     TaskUpdate,
     TaskWithJobsResponse,
 )
+from app.services.filesystem import FileSystemService
+from app.services.thumbnail import ThumbnailService
+
+# Initialize services for file path handling
+_filesystem_service = FileSystemService()
+_thumbnail_service = ThumbnailService()
 
 router = APIRouter(prefix="/api/v1", tags=["Tasks"])
 
@@ -313,7 +322,7 @@ async def create_task_with_images(
             await ImageRepository.create(connection, job["id"], image_data)
         
         created_jobs.append(job)
-    
+
     return JsonResponse(
         data=TaskWithJobsResponse(
             task=TaskResponse(**task),
@@ -321,6 +330,145 @@ async def create_task_with_images(
             total_images=total_images,
             duplicate_count=0,  # Duplicate detection not yet implemented
             duplicate_filenames=[],
+        ),
+        message=f"Task created with {job_count} job(s) and {total_images} image(s)",
+        status_code=status.HTTP_201_CREATED,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/tasks/create-with-file-paths",
+    response_model=JsonResponse[TaskWithJobsResponse, None],
+)
+async def create_task_with_file_paths(
+    payload: TaskCreateWithFilePaths,
+    project: Annotated[dict, Depends(ProjectPermission("maintainer"))],
+    current_user: Annotated[UserBase, Depends(get_current_active_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """
+    Create a task with images from file share paths.
+
+    This endpoint:
+    1. Registers file paths as shared_images (if not already registered)
+    2. Adds images to project pool (if not already in pool)
+    3. Creates the task with job chunking
+    4. Links job images to shared_images via shared_image_id
+
+    File paths must exist in the file share directory (/data/share).
+    """
+    project_id = project["id"]
+
+    # Step 1: Register file paths as shared_images
+    shared_images_list = []
+    failed_paths = []
+
+    for file_path in payload.file_paths:
+        # Check if already registered
+        existing = await SharedImageRepository.get_by_file_path(connection, file_path)
+        if existing:
+            shared_images_list.append(existing)
+            continue
+
+        # Validate file exists and get metadata
+        try:
+            absolute_path = _filesystem_service.get_absolute_path(file_path)
+            if not absolute_path.exists():
+                failed_paths.append(file_path)
+                continue
+
+            # Get image info
+            image_info = await _thumbnail_service.get_image_info(file_path)
+
+            # Create shared image record
+            image_data = {
+                "file_path": file_path,
+                "filename": absolute_path.name,
+                "width": image_info.get("width"),
+                "height": image_info.get("height"),
+                "file_size_bytes": image_info.get("size"),
+                "mime_type": image_info.get("mime_type"),
+                "registered_by": current_user.id,
+            }
+            shared_image = await SharedImageRepository.create(connection, image_data)
+            shared_images_list.append(shared_image)
+        except Exception:
+            failed_paths.append(file_path)
+
+    if not shared_images_list:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid images found in the provided file paths",
+        )
+
+    # Step 2: Add images to project pool (if not already)
+    for shared_image in shared_images_list:
+        await ProjectImageRepository.add_to_pool(
+            connection,
+            project_id=project_id,
+            shared_image_id=shared_image["id"],
+            user_id=current_user.id,
+        )
+
+    # Step 3: Prepare images list (potentially shuffle for random distribution)
+    if payload.distribution_order == "random":
+        random.shuffle(shared_images_list)
+
+    total_images = len(shared_images_list)
+    chunk_size = payload.chunk_size
+
+    # Step 4: Create the task
+    task_data = {
+        "name": payload.name,
+        "description": payload.description,
+        "assignee_id": payload.assignee_id,
+        "total_images": total_images,
+    }
+    task = await TaskRepository.create(connection, project_id, task_data)
+    task_id = task["id"]
+
+    # Step 5: Calculate job count and create jobs
+    job_count = (total_images + chunk_size - 1) // chunk_size
+
+    created_jobs = []
+    for i in range(job_count):
+        start_idx = i * chunk_size
+        end_idx = min((i + 1) * chunk_size, total_images)
+        image_count = end_idx - start_idx
+
+        job_data = {
+            "sequence_number": i,
+            "assignee_id": payload.assignee_id,
+            "total_images": image_count,
+        }
+        job = await JobRepository.create(connection, task_id, job_data)
+
+        # Create images for this job with shared_image_id reference
+        job_images = shared_images_list[start_idx:end_idx]
+        for seq_num, shared_img in enumerate(job_images):
+            image_data = {
+                "filename": shared_img["filename"],
+                "s3_key": shared_img["file_path"],  # Use file_path as s3_key for now
+                "s3_bucket": "file-share",  # Marker to indicate file share storage
+                "width": shared_img["width"] or 1920,
+                "height": shared_img["height"] or 1080,
+                "file_size_bytes": shared_img.get("file_size_bytes"),
+                "mime_type": shared_img.get("mime_type"),
+                "checksum_sha256": shared_img.get("checksum_sha256"),
+                "sequence_number": seq_num,
+                "shared_image_id": shared_img["id"],  # Link to shared image registry
+            }
+            await ImageRepository.create(connection, job["id"], image_data)
+
+        created_jobs.append(job)
+
+    return JsonResponse(
+        data=TaskWithJobsResponse(
+            task=TaskResponse(**task),
+            jobs=[JobResponse(**j) for j in created_jobs],
+            total_images=total_images,
+            duplicate_count=len(failed_paths),
+            duplicate_filenames=failed_paths,  # Reusing field for failed paths
         ),
         message=f"Task created with {job_count} job(s) and {total_images} image(s)",
         status_code=status.HTTP_201_CREATED,

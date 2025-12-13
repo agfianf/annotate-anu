@@ -1,11 +1,11 @@
-import { useState } from 'react'
-import { MousePointer, Square, Pentagon, ZoomIn, ZoomOut, Maximize2, Undo, Redo, Keyboard } from 'lucide-react'
-import { TextPromptPanel } from './TextPromptPanel'
-import { BboxPromptPanel } from './BboxPromptPanel'
-import { AutoDetectPanel } from './AutoDetectPanel'
-import { ToolButton } from './ui/ToolButton'
-import type { Label, ImageData, Tool, PromptMode } from '@/types/annotations'
+import type { ImageData, Label, PromptMode, Tool } from '@/types/annotations'
 import type { AvailableModel } from '@/types/byom'
+import { Keyboard, Maximize2, MousePointer, Pentagon, Redo, Square, Undo, ZoomIn, ZoomOut } from 'lucide-react'
+import { useState } from 'react'
+import { AutoDetectPanel } from './AutoDetectPanel'
+import { BboxPromptPanel } from './BboxPromptPanel'
+import { TextPromptPanel } from './TextPromptPanel'
+import { ToolButton } from './ui/ToolButton'
 
 interface LeftSidebarProps {
   selectedTool: Tool

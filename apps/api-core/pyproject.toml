@@ -19,6 +19,8 @@ dependencies = [
     "alembic>=1.17.2",
     "python-jose[cryptography]>=3.3.0",
     "passlib[bcrypt]>=1.7.4",
+    "aiofiles>=24.1.0",
+    "pillow>=10.0.0",
 ]
 
 [build-system]

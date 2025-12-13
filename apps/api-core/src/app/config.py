@@ -1,5 +1,7 @@
 """Configuration settings for API Core service."""
 
+from pathlib import Path
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -85,6 +87,32 @@ class Settings(BaseSettings):
     )
     INFERENCE_TIMEOUT: int = Field(
         default=120, description="Inference request timeout in seconds"
+    )
+
+    # File Share Settings
+    SHARE_ROOT: Path = Field(
+        default=Path("/data/share"),
+        description="Root directory for shared file storage",
+    )
+    SHARE_MAX_DEPTH: int = Field(
+        default=5, description="Maximum folder depth allowed"
+    )
+    SHARE_ALLOWED_EXTENSIONS: set[str] = Field(
+        default={".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"},
+        description="Allowed file extensions for upload",
+    )
+    SHARE_MAX_UPLOAD_SIZE_MB: int = Field(
+        default=50, description="Maximum upload file size in MB"
+    )
+    SHARE_THUMBNAIL_SIZE: tuple[int, int] = Field(
+        default=(256, 256), description="Thumbnail dimensions (width, height)"
+    )
+    SHARE_THUMBNAIL_CACHE_DIR: Path = Field(
+        default=Path("/data/cache/thumbnails"),
+        description="Directory for cached thumbnails",
+    )
+    SHARE_THUMBNAIL_QUALITY: int = Field(
+        default=85, description="JPEG quality for thumbnails (1-100)"
     )
 
 

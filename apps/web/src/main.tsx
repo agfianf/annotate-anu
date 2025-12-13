@@ -1,8 +1,21 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toaster } from 'react-hot-toast'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import './index.css'
+
+// Create a client for TanStack Query
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 30 * 60 * 1000, // 30 minutes
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
 // Auth
 import DashboardLayout from './components/DashboardLayout'
@@ -18,6 +31,7 @@ import RegisterPage from './pages/RegisterPage'
 // Protected pages
 import AdminPage from './pages/AdminPage'
 import DashboardPage from './pages/DashboardPage'
+import FileSharePage from './pages/FileSharePage'
 import JobsPage from './pages/JobsPage'
 import ProfilePage from './pages/ProfilePage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
@@ -60,6 +74,7 @@ function App() {
         <Route path="projects/:projectId/tasks" element={<TasksPage />} />
         <Route path="projects/:projectId/tasks/:taskId" element={<JobsPage />} />
         <Route path="tasks/:taskId/jobs" element={<JobsPage />} />
+        <Route path="files" element={<FileSharePage />} />
       </Route>
 
       {/* Existing routes */}
@@ -71,25 +86,27 @@ function App() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <FirstUserCheck>
-          <App />
-        </FirstUserCheck>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 3000,
-            style: {
-              background: 'rgba(255, 255, 255, 0.95)',
-              backdropFilter: 'blur(12px)',
-              border: '1px solid rgba(229, 231, 235, 0.8)',
-              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-            },
-          }}
-        />
-      </AuthProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <FirstUserCheck>
+            <App />
+          </FirstUserCheck>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 3000,
+              style: {
+                background: 'rgba(255, 255, 255, 0.95)',
+                backdropFilter: 'blur(12px)',
+                border: '1px solid rgba(229, 231, 235, 0.8)',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              },
+            }}
+          />
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   </StrictMode>,
 )
 

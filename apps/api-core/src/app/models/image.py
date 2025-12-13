@@ -112,6 +112,13 @@ images = Table(
         comment="Has any annotations",
     ),
     Column(
+        "shared_image_id",
+        UUID(as_uuid=True),
+        ForeignKey("shared_images.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Reference to shared image registry",
+    ),
+    Column(
         "created_at",
         DateTime(timezone=True),
         nullable=False,
@@ -128,4 +135,5 @@ images = Table(
     Index("ix_images_s3_key", "s3_key"),
     Index("ix_images_annotated", "job_id", "is_annotated"),
     Index("ix_images_unique", "job_id", "sequence_number", unique=True),
+    Index("ix_images_shared_image_id", "shared_image_id"),
 )

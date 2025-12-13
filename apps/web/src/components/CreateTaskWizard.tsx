@@ -1,6 +1,7 @@
 /**
  * Create Task Wizard
  * Multi-step wizard for creating tasks with images and job chunking
+ * Supports both file share selection and direct upload
  */
 
 import {
@@ -10,6 +11,7 @@ import {
   ChevronRight,
   File,
   FolderKanban,
+  FolderOpen,
   Image as ImageIcon,
   Loader2,
   Settings,
@@ -21,9 +23,10 @@ import {
 import { useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { FileExplorer, useResolveSelection, useFileSelectionStore } from '../features/file-explorer';
 import type { JobPreview, MockImage, TaskCreateWithImages } from '../lib/api-client';
 import { tasksApi } from '../lib/api-client';
+import { taskFilePathsApi } from '../lib/data-management-client';
 import AssigneeDropdown from './AssigneeDropdown';
 
 interface CreateTaskWizardProps {
@@ -34,6 +37,7 @@ interface CreateTaskWizardProps {
 }
 
 type WizardStep = 'basic' | 'images' | 'config' | 'review';
+type ImageSourceMode = 'select' | 'upload';
 
 const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
   { id: 'basic', label: 'Basic Info', icon: <FolderKanban className="w-4 h-4" /> },
@@ -43,27 +47,40 @@ const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function CreateTaskWizard({ projectId, projectName, onClose, onSuccess }: CreateTaskWizardProps) {
-  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState<WizardStep>('basic');
   const [isCreating, setIsCreating] = useState(false);
-  
+
   // Step 1: Basic Info
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
-  
-  // Step 2: Images (mocked for now)
-  const [images, setImages] = useState<MockImage[]>([]);
+
+  // Step 2: Images - Mode selection
+  const [imageSourceMode, setImageSourceMode] = useState<ImageSourceMode>('select');
+
+  // Step 2: Images - Upload mode (legacy)
+  const [uploadedImages, setUploadedImages] = useState<MockImage[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  
+
+  // Step 2: Images - File share selection mode
+  const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
+  const [isResolvingPaths, setIsResolvingPaths] = useState(false);
+
+  // File selection store for FileExplorer
+  const { getSelectedPaths, clearSelection } = useFileSelectionStore();
+  const resolveMutation = useResolveSelection();
+
   // Step 3: Configuration
   const [chunkSize, setChunkSize] = useState(25);
   const [distributionOrder, setDistributionOrder] = useState<'sequential' | 'random'>('sequential');
 
+  // Get the effective image count based on mode
+  const effectiveImageCount = imageSourceMode === 'select' ? selectedFilePaths.length : uploadedImages.length;
+
   // Calculate job preview
   const jobPreview = useMemo<JobPreview[]>(() => {
-    if (images.length === 0) return [];
-    const totalImages = images.length;
+    if (effectiveImageCount === 0) return [];
+    const totalImages = effectiveImageCount;
     const jobCount = Math.ceil(totalImages / chunkSize);
     const jobs: JobPreview[] = [];
     for (let i = 0; i < jobCount; i++) {
@@ -75,7 +92,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
       });
     }
     return jobs;
-  }, [images.length, chunkSize]);
+  }, [effectiveImageCount, chunkSize]);
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep);
 
@@ -84,7 +101,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
       case 'basic':
         return name.trim().length > 0;
       case 'images':
-        return images.length > 0;
+        return effectiveImageCount > 0;
       case 'config':
         return chunkSize >= 1 && chunkSize <= 500;
       case 'review':
@@ -92,7 +109,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
       default:
         return false;
     }
-  }, [currentStep, name, images.length, chunkSize]);
+  }, [currentStep, name, effectiveImageCount, chunkSize]);
 
   const goNext = () => {
     const currentIdx = currentStepIndex;
@@ -108,7 +125,33 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
     }
   };
 
-  // Handle file selection (mock - just extract filenames)
+  // Handle file selection confirmation from FileExplorer
+  const handleFileExplorerSelect = async (paths: string[]) => {
+    if (paths.length === 0) {
+      toast.error('No files selected');
+      return;
+    }
+
+    setIsResolvingPaths(true);
+    try {
+      // Resolve folder selections to individual file paths
+      const resolvedPaths = await resolveMutation.mutateAsync({ paths, recursive: true });
+
+      if (resolvedPaths.length === 0) {
+        toast.error('No image files found in selection');
+        return;
+      }
+
+      setSelectedFilePaths(resolvedPaths);
+      toast.success(`Selected ${resolvedPaths.length} image(s)`);
+    } catch (err) {
+      toast.error('Failed to resolve selection');
+    } finally {
+      setIsResolvingPaths(false);
+    }
+  };
+
+  // Handle upload mode file selection (legacy - just extract filenames)
   const handleFileSelect = (files: FileList | null) => {
     if (!files) return;
     const newImages: MockImage[] = [];
@@ -124,7 +167,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
       });
     }
     if (newImages.length > 0) {
-      setImages(prev => [...prev, ...newImages]);
+      setUploadedImages(prev => [...prev, ...newImages]);
       toast.success(`Added ${newImages.length} image(s)`);
     }
   };
@@ -145,40 +188,20 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
     handleFileSelect(e.dataTransfer.files);
   };
 
-  const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
+  const removeUploadedImage = (index: number) => {
+    setUploadedImages(prev => prev.filter((_, i) => i !== index));
   };
 
-  const clearAllImages = () => {
-    setImages([]);
+  const clearAllUploadedImages = () => {
+    setUploadedImages([]);
   };
 
-  // Create task
-  const handleCreate = async () => {
-    setIsCreating(true);
-    try {
-      const payload: TaskCreateWithImages = {
-        name,
-        description: description || undefined,
-        assignee_id: assigneeId || undefined,
-        chunk_size: chunkSize,
-        distribution_order: distributionOrder,
-        images,
-      };
-      
-      const result = await tasksApi.createWithImages(projectId, payload);
-      toast.success(`Task created with ${result.jobs.length} job(s)!`);
-      onSuccess();
-      onClose();
-    } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to create task');
-    } finally {
-      setIsCreating(false);
-    }
+  const clearAllSelectedPaths = () => {
+    setSelectedFilePaths([]);
+    clearSelection();
   };
 
-  // Generate sample images for demo
+  // Generate sample images for demo (upload mode)
   const generateSampleImages = () => {
     const samples: MockImage[] = [];
     for (let i = 1; i <= 100; i++) {
@@ -189,13 +212,66 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
         file_size_bytes: Math.floor(Math.random() * 5000000) + 500000,
       });
     }
-    setImages(samples);
+    setUploadedImages(samples);
     toast.success('Added 100 sample images');
+  };
+
+  // Create task
+  const handleCreate = async () => {
+    setIsCreating(true);
+    try {
+      if (imageSourceMode === 'select') {
+        // Use file paths API
+        const result = await taskFilePathsApi.createWithFilePaths(projectId, {
+          name,
+          description: description || undefined,
+          assignee_id: assigneeId || undefined,
+          chunk_size: chunkSize,
+          distribution_order: distributionOrder,
+          file_paths: selectedFilePaths,
+        });
+        toast.success(`Task created with ${result.jobs.length} job(s)!`);
+        if (result.duplicate_count > 0) {
+          toast(`${result.duplicate_count} file(s) could not be processed`, { icon: '⚠️' });
+        }
+      } else {
+        // Use legacy mock images API
+        const payload: TaskCreateWithImages = {
+          name,
+          description: description || undefined,
+          assignee_id: assigneeId || undefined,
+          chunk_size: chunkSize,
+          distribution_order: distributionOrder,
+          images: uploadedImages,
+        };
+        const result = await tasksApi.createWithImages(projectId, payload);
+        toast.success(`Task created with ${result.jobs.length} job(s)!`);
+      }
+      onSuccess();
+      onClose();
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { data?: { detail?: string } } };
+      toast.error(axiosError.response?.data?.detail || 'Failed to create task');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  // Switch mode handler
+  const handleModeSwitch = (mode: ImageSourceMode) => {
+    setImageSourceMode(mode);
+    // Clear the other mode's data when switching
+    if (mode === 'select') {
+      setUploadedImages([]);
+    } else {
+      setSelectedFilePaths([]);
+      clearSelection();
+    }
   };
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="glass-strong rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col overflow-hidden bg-white">
+      <div className="glass-strong rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col overflow-hidden bg-white">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
@@ -287,88 +363,171 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
           {/* Step 2: Images */}
           {currentStep === 'images' && (
             <div className="space-y-4">
-              {/* Drop Zone */}
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
-                  isDragging
-                    ? 'border-emerald-500 bg-emerald-50'
-                    : 'border-gray-300 hover:border-emerald-400 hover:bg-gray-50'
-                }`}
-              >
-                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-600 mb-2">
-                  Drag & drop images here, or{' '}
-                  <label className="text-emerald-600 hover:text-emerald-700 cursor-pointer font-medium">
-                    browse
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) => handleFileSelect(e.target.files)}
-                      className="hidden"
-                    />
-                  </label>
-                </p>
-                <p className="text-sm text-gray-400">Supports JPG, PNG, WEBP</p>
-              </div>
-
-              {/* Demo Button */}
-              <div className="flex justify-center">
+              {/* Mode Toggle */}
+              <div className="flex gap-2 mb-4">
                 <button
-                  onClick={generateSampleImages}
-                  className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"
+                  onClick={() => handleModeSwitch('select')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
+                    imageSourceMode === 'select'
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                      : 'border-gray-200 hover:border-emerald-200 text-gray-600'
+                  }`}
                 >
-                  <File className="w-4 h-4" />
-                  Generate 100 sample images (demo)
+                  <FolderOpen className="w-5 h-5" />
+                  <span className="font-medium">Select from File Share</span>
+                </button>
+                <button
+                  onClick={() => handleModeSwitch('upload')}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
+                    imageSourceMode === 'upload'
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                      : 'border-gray-200 hover:border-emerald-200 text-gray-600'
+                  }`}
+                >
+                  <Upload className="w-5 h-5" />
+                  <span className="font-medium">Upload New</span>
                 </button>
               </div>
 
-              {/* Image List */}
-              {images.length > 0 && (
-                <div className="border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">
-                      {images.length} image(s) selected
-                    </span>
+              {/* File Share Selection Mode */}
+              {imageSourceMode === 'select' && (
+                <div className="space-y-4">
+                  {/* FileExplorer */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden h-[400px]">
+                    <FileExplorer
+                      onSelect={handleFileExplorerSelect}
+                      selectionMode="multiple"
+                      showUpload={true}
+                    />
+                  </div>
+
+                  {/* Loading state */}
+                  {isResolvingPaths && (
+                    <div className="flex items-center justify-center gap-2 text-emerald-600">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Resolving selection...</span>
+                    </div>
+                  )}
+
+                  {/* Selected Files Summary */}
+                  {selectedFilePaths.length > 0 && (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-emerald-700">
+                          {selectedFilePaths.length} image(s) selected
+                        </span>
+                        <button
+                          onClick={clearAllSelectedPaths}
+                          className="text-sm text-red-500 hover:text-red-600 font-medium flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Clear all
+                        </button>
+                      </div>
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {selectedFilePaths.slice(0, 10).map((path, idx) => (
+                          <div key={idx} className="text-xs text-emerald-600 truncate">
+                            {path}
+                          </div>
+                        ))}
+                        {selectedFilePaths.length > 10 && (
+                          <div className="text-xs text-emerald-500">
+                            ... and {selectedFilePaths.length - 10} more
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Upload Mode (Legacy) */}
+              {imageSourceMode === 'upload' && (
+                <div className="space-y-4">
+                  {/* Drop Zone */}
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+                      isDragging
+                        ? 'border-emerald-500 bg-emerald-50'
+                        : 'border-gray-300 hover:border-emerald-400 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-600 mb-2">
+                      Drag & drop images here, or{' '}
+                      <label className="text-emerald-600 hover:text-emerald-700 cursor-pointer font-medium">
+                        browse
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={(e) => handleFileSelect(e.target.files)}
+                          className="hidden"
+                        />
+                      </label>
+                    </p>
+                    <p className="text-sm text-gray-400">Supports JPG, PNG, WEBP</p>
+                  </div>
+
+                  {/* Demo Button */}
+                  <div className="flex justify-center">
                     <button
-                      onClick={clearAllImages}
-                      className="text-sm text-red-500 hover:text-red-600 font-medium flex items-center gap-1"
+                      onClick={generateSampleImages}
+                      className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Clear all
+                      <File className="w-4 h-4" />
+                      Generate 100 sample images (demo)
                     </button>
                   </div>
-                  <div className="max-h-64 overflow-y-auto grid grid-cols-4 md:grid-cols-6 gap-2 p-3">
-                    {images.slice(0, 50).map((img, idx) => (
-                      <div
-                        key={idx}
-                        className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200 hover:border-emerald-300 transition-all"
-                      >
-                        <img
-                          src="/sample.webp"
-                          alt={img.filename}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
-                          <button
-                            onClick={() => removeImage(idx)}
-                            className="p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1">
-                          <p className="text-[9px] text-white truncate">{img.filename}</p>
-                        </div>
+
+                  {/* Image List */}
+                  {uploadedImages.length > 0 && (
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      <div className="bg-gray-50 px-4 py-2 flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          {uploadedImages.length} image(s) selected
+                        </span>
+                        <button
+                          onClick={clearAllUploadedImages}
+                          className="text-sm text-red-500 hover:text-red-600 font-medium flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Clear all
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                  {images.length > 50 && (
-                    <div className="px-4 py-2 text-sm text-gray-500 text-center border-t border-gray-100">
-                      ... and {images.length - 50} more images
+                      <div className="max-h-64 overflow-y-auto grid grid-cols-4 md:grid-cols-6 gap-2 p-3">
+                        {uploadedImages.slice(0, 50).map((img, idx) => (
+                          <div
+                            key={idx}
+                            className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200 hover:border-emerald-300 transition-all"
+                          >
+                            <img
+                              src="/sample.webp"
+                              alt={img.filename}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                              <button
+                                onClick={() => removeUploadedImage(idx)}
+                                className="p-1.5 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1">
+                              <p className="text-[9px] text-white truncate">{img.filename}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {uploadedImages.length > 50 && (
+                        <div className="px-4 py-2 text-sm text-gray-500 text-center border-t border-gray-100">
+                          ... and {uploadedImages.length - 50} more images
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -478,8 +637,14 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
                   </div>
                 )}
                 <div className="flex justify-between">
+                  <span className="text-gray-600">Image Source</span>
+                  <span className="font-medium text-gray-900">
+                    {imageSourceMode === 'select' ? 'File Share' : 'Upload'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-gray-600">Total Images</span>
-                  <span className="font-medium text-gray-900">{images.length}</span>
+                  <span className="font-medium text-gray-900">{effectiveImageCount}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Chunk Size</span>
@@ -494,7 +659,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
                   <span className="font-bold text-emerald-600">{jobPreview.length}</span>
                 </div>
               </div>
-              
+
               <p className="text-sm text-gray-500 text-center">
                 Ready to create? Click <strong>Create Task</strong> to proceed.
               </p>
@@ -511,7 +676,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
             <ArrowLeft className="w-4 h-4" />
             {currentStepIndex === 0 ? 'Cancel' : 'Back'}
           </button>
-          
+
           {currentStep === 'review' ? (
             <button
               onClick={handleCreate}

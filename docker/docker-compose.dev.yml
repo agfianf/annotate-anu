@@ -38,8 +38,13 @@ services:
     volumes:
       - ../apps/api-core/src:/app/src
       - api-core-data:/app/data
+      - share-data:/data/share
+      - thumbnail-cache:/data/cache/thumbnails
     env_file:
       - ../apps/api-core/.env
+    environment:
+      - SHARE_ROOT=/data/share
+      - SHARE_THUMBNAIL_CACHE_DIR=/data/cache/thumbnails
     restart: unless-stopped
     networks:
       - anu-network
@@ -110,6 +115,10 @@ volumes:
   huggingface_cache:
     driver: local
   api-core-data:
+    driver: local
+  share-data:
+    driver: local
+  thumbnail-cache:
     driver: local
   redis-data:
     driver: local

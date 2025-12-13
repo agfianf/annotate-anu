@@ -213,12 +213,20 @@ export default function AssigneeDropdown({
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {showClear && value && (
-            <button
+            <div
+              role="button"
+              tabIndex={0}
               onClick={handleClear}
-              className="p-0.5 text-gray-400 hover:text-red-500 rounded transition-colors"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleClear(e as any);
+                }
+              }}
+              className="p-0.5 text-gray-400 hover:text-red-500 rounded transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
-            </button>
+            </div>
           )}
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </div>
