@@ -3,7 +3,7 @@
  */
 
 import { memo, useMemo } from 'react';
-import { Check, ImageOff, Loader2, X } from 'lucide-react';
+import { Check, ImageOff, Loader2, X, MousePointer2, Maximize2 } from 'lucide-react';
 import type { SharedImage } from '../../lib/data-management-client';
 import { getAbsoluteThumbnailUrl } from '../../lib/data-management-client';
 import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
@@ -79,15 +79,15 @@ export const ImageThumbnail = memo(function ImageThumbnail({
     ? image.annotation_summary!.detection_count + image.annotation_summary!.segmentation_count
     : 0;
 
-  // Handle click area division: top 70% = select, bottom 30% = fullscreen
+  // Handle click area division: top 50% = select, bottom 50% = fullscreen
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const element = e.currentTarget;
     const rect = element.getBoundingClientRect();
     const clickY = e.clientY - rect.top;
     const relativeY = clickY / rect.height;
 
-    // Bottom 30% opens fullscreen, top 70% toggles selection
-    if (relativeY >= 0.70) {
+    // Bottom 50% opens fullscreen, top 50% toggles selection
+    if (relativeY >= 0.50) {
       onDoubleClick(); // Opens fullscreen modal
     } else {
       onToggle(); // Toggles checkbox selection
@@ -121,6 +121,19 @@ export const ImageThumbnail = memo(function ImageThumbnail({
           className="w-full h-full object-contain"
         />
       )}
+
+      {/* Interactive zones gradient overlay (shows on hover) */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+        {/* Top half - Select zone */}
+        <div className="absolute inset-0 bottom-1/2 bg-gradient-to-b from-emerald-500/0 via-emerald-500/8 to-emerald-500/15 flex items-center justify-center">
+          <MousePointer2 className="w-5 h-5 text-white drop-shadow-lg" />
+        </div>
+
+        {/* Bottom half - Fullscreen zone */}
+        <div className="absolute inset-0 top-1/2 bg-gradient-to-t from-white/0 via-white/8 to-white/15 flex items-center justify-center">
+          <Maximize2 className="w-5 h-5 text-white drop-shadow-lg" />
+        </div>
+      </div>
 
       {/* Annotation overlay (shows on hover) */}
       {overlayBboxes && overlayBboxes.length > 0 && (
