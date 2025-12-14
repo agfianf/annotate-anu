@@ -39,6 +39,28 @@ export const ImageThumbnail = memo(function ImageThumbnail({
     return url.toString();
   }, [image.thumbnail_url, thumbnailSize]);
 
+  // Calculate scale factor based on thumbnail size
+  const scaleFactor = useMemo(() => {
+    switch (thumbnailSize) {
+      case '1x': return 0.9;  // Small - 90% of base size
+      case '2x': return 1.2;  // Medium - 120% of base size
+      case '4x': return 1.5;  // Large - 150% of base size
+      default: return 1.2;
+    }
+  }, [thumbnailSize]);
+
+  // Scaled sizes (base sizes are from 2x/medium)
+  const tagStyles = useMemo(() => ({
+    fontSize: Math.round(9 * scaleFactor), // Base: 9px
+    padding: `${Math.round(2 * scaleFactor)}px ${Math.round(8 * scaleFactor)}px`, // Base: 2px 8px
+    maxWidth: Math.round(80 * scaleFactor), // Base: 80px
+    dotSize: Math.round(8 * scaleFactor), // Base: 8px (w-2 h-2)
+    dotGap: Math.round(2 * scaleFactor), // Base: 2px
+    plusFontSize: Math.round(8 * scaleFactor), // Base: 8px
+    xButtonSize: Math.round(10 * scaleFactor), // Base: 10px (w-2.5 h-2.5)
+    gap: Math.round(4 * scaleFactor), // Base: 4px (gap-1)
+  }), [scaleFactor]);
+
   // Fetch image with authentication
   const { blobUrl, isLoading, error } = useAuthenticatedImage(thumbnailUrl);
 
@@ -127,15 +149,21 @@ export const ImageThumbnail = memo(function ImageThumbnail({
       {image.tags.length > 0 && (
         <>
           {/* Default state: Show first 2 tags with text, rest as dots */}
-          <div className="absolute bottom-1 left-1 right-1 flex flex-wrap gap-1 items-center group-hover:hidden">
+          <div
+            className="absolute bottom-1 left-1 right-1 flex flex-wrap items-center group-hover:hidden"
+            style={{ gap: `${tagStyles.gap}px` }}
+          >
             {/* First 2 tags with text */}
             {image.tags.slice(0, 2).map((tag) => (
               <span
                 key={tag.id}
-                className="px-2 py-0.5 rounded-md text-[9px] font-medium truncate max-w-[80px]"
+                className="rounded-md font-medium truncate"
                 style={{
                   backgroundColor: tag.color,
                   color: 'white',
+                  fontSize: `${tagStyles.fontSize}px`,
+                  padding: tagStyles.padding,
+                  maxWidth: `${tagStyles.maxWidth}px`,
                 }}
                 title={tag.name}
               >
@@ -145,17 +173,30 @@ export const ImageThumbnail = memo(function ImageThumbnail({
 
             {/* Remaining tags as colored dots */}
             {image.tags.length > 2 && (
-              <div className="flex gap-0.5 items-center">
+              <div
+                className="flex items-center"
+                style={{ gap: `${tagStyles.dotGap}px` }}
+              >
                 {image.tags.slice(2, 5).map((tag) => (
                   <span
                     key={tag.id}
-                    className="w-2 h-2 rounded-full"
-                    style={{ backgroundColor: tag.color }}
+                    className="rounded-full"
+                    style={{
+                      backgroundColor: tag.color,
+                      width: `${tagStyles.dotSize}px`,
+                      height: `${tagStyles.dotSize}px`,
+                    }}
                     title={tag.name}
                   />
                 ))}
                 {image.tags.length > 5 && (
-                  <span className="text-[8px] text-white bg-black px-1 rounded">
+                  <span
+                    className="text-white bg-black rounded font-medium"
+                    style={{
+                      fontSize: `${tagStyles.plusFontSize}px`,
+                      padding: `0 ${tagStyles.dotGap * 2}px`,
+                    }}
+                  >
                     +{image.tags.length - 5}
                   </span>
                 )}
@@ -164,17 +205,28 @@ export const ImageThumbnail = memo(function ImageThumbnail({
           </div>
 
           {/* Hover state: Show all tags with removal buttons */}
-          <div className="absolute bottom-1 left-1 right-1 hidden group-hover:flex flex-wrap gap-1">
+          <div
+            className="absolute bottom-1 left-1 right-1 hidden group-hover:flex flex-wrap"
+            style={{ gap: `${tagStyles.gap}px` }}
+          >
             {image.tags.map((tag) => (
               <div
                 key={tag.id}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-medium"
+                className="flex items-center rounded-md font-medium"
                 style={{
                   backgroundColor: tag.color,
                   color: 'white',
+                  fontSize: `${tagStyles.fontSize}px`,
+                  padding: tagStyles.padding,
+                  gap: `${tagStyles.gap}px`,
                 }}
               >
-                <span className="truncate max-w-[80px]">{tag.name}</span>
+                <span
+                  className="truncate"
+                  style={{ maxWidth: `${tagStyles.maxWidth}px` }}
+                >
+                  {tag.name}
+                </span>
                 {onRemoveTag && (
                   <button
                     onClick={(e) => {
@@ -182,9 +234,13 @@ export const ImageThumbnail = memo(function ImageThumbnail({
                       onRemoveTag(tag.id);
                     }}
                     className="hover:text-red-300 transition-colors"
+                    style={{
+                      width: `${tagStyles.xButtonSize}px`,
+                      height: `${tagStyles.xButtonSize}px`,
+                    }}
                     title="Remove tag"
                   >
-                    <X className="w-2.5 h-2.5" />
+                    <X style={{ width: '100%', height: '100%' }} />
                   </button>
                 )}
               </div>
