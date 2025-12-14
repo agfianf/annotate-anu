@@ -482,27 +482,30 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         </div>
       </div>
 
-      {/* Selection Actions Bar */}
+      {/* Floating Selection Actions Bar */}
       {selectedImages.size > 0 && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-4 flex items-center justify-between">
-          <span className="text-sm text-emerald-700 font-medium">
-            {selectedImages.size} image(s) selected
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowAddTagModal(true)}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg flex items-center gap-1"
-            >
-              <Tag className="w-4 h-4" />
-              Add Tags
-            </button>
-            <button
-              onClick={() => setSelectedImages(new Set())}
-              className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-sm font-medium rounded-lg flex items-center gap-1"
-            >
-              <X className="w-4 h-4" />
-              Clear
-            </button>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5 duration-300">
+          <div className="bg-emerald-600 text-white rounded-full shadow-2xl px-6 py-3 flex items-center gap-4 border border-emerald-700">
+            <span className="text-sm font-medium">
+              {selectedImages.size} selected
+            </span>
+            <div className="h-5 w-px bg-emerald-400"></div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAddTagModal(true)}
+                className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-sm font-medium rounded-full flex items-center gap-1.5 transition-all"
+              >
+                <Tag className="w-4 h-4" />
+                Add Tags
+              </button>
+              <button
+                onClick={() => setSelectedImages(new Set())}
+                className="p-2 hover:bg-white/20 text-white rounded-full flex items-center transition-all"
+                title="Clear selection"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}
