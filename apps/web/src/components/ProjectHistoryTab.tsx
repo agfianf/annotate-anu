@@ -4,9 +4,9 @@
  */
 
 import {
+    Boxes,
     Briefcase,
     Clock,
-    FolderKanban,
     ListTodo,
     Loader2,
     Palette,
@@ -53,7 +53,7 @@ const getEntityIcon = (entityType: string) => {
     case 'member':
       return User;
     case 'project':
-      return FolderKanban;
+      return Boxes;
     default:
       return Clock;
   }

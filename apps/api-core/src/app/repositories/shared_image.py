@@ -150,3 +150,37 @@ class SharedImageRepository:
         )
         result = await connection.execute(stmt)
         return {row.file_path: row.id for row in result.fetchall()}
+
+    @staticmethod
+    async def get_associated_jobs(
+        connection: AsyncConnection,
+        shared_image_id: UUID,
+    ) -> list[dict]:
+        """Get all jobs and tasks that include this shared image."""
+        from app.models.image import images
+        from app.models.job import jobs
+        from app.models.task import tasks
+        from app.models.user import users
+
+        stmt = (
+            select(
+                jobs.c.id.label('job_id'),
+                jobs.c.status.label('job_status'),
+                jobs.c.sequence_number.label('job_sequence'),
+                jobs.c.is_archived.label('job_is_archived'),
+                tasks.c.id.label('task_id'),
+                tasks.c.name.label('task_name'),
+                tasks.c.status.label('task_status'),
+                tasks.c.is_archived.label('task_is_archived'),
+                jobs.c.assignee_id,
+                users.c.email.label('assignee_email'),
+            )
+            .join(jobs, images.c.job_id == jobs.c.id)
+            .join(tasks, jobs.c.task_id == tasks.c.id)
+            .outerjoin(users, jobs.c.assignee_id == users.c.id)
+            .where(images.c.shared_image_id == shared_image_id)
+            .order_by(tasks.c.id, jobs.c.sequence_number)
+        )
+
+        result = await connection.execute(stmt)
+        return [dict(row._mapping) for row in result.fetchall()]

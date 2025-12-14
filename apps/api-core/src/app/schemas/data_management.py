@@ -231,6 +231,24 @@ class AnnotationSummary(BaseModel):
     bboxes: list[BboxPreview] | None = Field(None, description="Simplified bboxes for overlay")
 
 
+# ============================================================================
+# Job Association Schemas (for image-job relationships)
+# ============================================================================
+class JobAssociationInfo(BaseModel):
+    """Job and task information for a shared image."""
+
+    job_id: int
+    job_status: str = Field(..., description="Job status: pending, assigned, in_progress, completed, etc.")
+    job_sequence: int = Field(..., description="Sequence number within task")
+    job_is_archived: bool
+    task_id: int
+    task_name: str
+    task_status: str
+    task_is_archived: bool
+    assignee_id: UUID | None = None
+    assignee_email: str | None = None
+
+
 class SharedImageWithAnnotations(SharedImageBase):
     """Shared image response with annotation summary."""
 

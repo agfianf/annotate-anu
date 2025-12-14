@@ -4,9 +4,9 @@
  */
 
 import {
+    Boxes,
     ChevronLeft,
     ChevronRight,
-    FolderKanban,
     HardDrive,
     Home,
     LogOut,
@@ -32,7 +32,7 @@ const navItems: NavItem[] = [
   { path: '/dashboard', label: 'Overview', icon: <Home className="w-4 h-4" /> },
   { path: '/dashboard/profile', label: 'Profile', icon: <User className="w-4 h-4" /> },
   { path: '/dashboard/admin', label: 'Users', icon: <Users className="w-4 h-4" />, adminOnly: true },
-  { path: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className="w-4 h-4" /> },
+  { path: '/dashboard/projects', label: 'Projects', icon: <Boxes className="w-4 h-4" /> },
   { path: '/dashboard/files', label: 'File Share', icon: <HardDrive className="w-4 h-4" /> },
 ];
 

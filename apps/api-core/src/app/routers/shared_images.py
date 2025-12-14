@@ -16,6 +16,7 @@ from app.schemas.data_management import (
     AddTagsRequest,
     BulkTagRequest,
     BulkTagResponse,
+    JobAssociationInfo,
     RemoveTagsRequest,
     SharedImageBulkRegister,
     SharedImageBulkRegisterResponse,
@@ -103,6 +104,29 @@ async def get_shared_image(
     return JsonResponse(
         data=enriched,
         message="Shared image retrieved",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get("/{image_id}/jobs", response_model=JsonResponse[list[JobAssociationInfo], None])
+async def get_image_jobs(
+    image_id: UUID,
+    current_user: Annotated[UserBase, Depends(get_current_active_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Get all jobs and tasks that include this shared image."""
+    image = await SharedImageRepository.get_by_id(connection, image_id)
+    if not image:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Shared image not found",
+        )
+
+    jobs_info = await SharedImageRepository.get_associated_jobs(connection, image_id)
+
+    return JsonResponse(
+        data=[JobAssociationInfo(**job) for job in jobs_info],
+        message=f"Found {len(jobs_info)} job(s) for this image",
         status_code=status.HTTP_200_OK,
     )
 

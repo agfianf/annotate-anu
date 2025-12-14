@@ -7,10 +7,10 @@
 import {
   ArrowLeft,
   ArrowRight,
+  Boxes,
   Check,
   ChevronRight,
   File,
-  FolderKanban,
   FolderOpen,
   Image as ImageIcon,
   Loader2,
@@ -23,7 +23,7 @@ import {
 import { useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
-import { FileExplorer, useResolveSelection, useFileSelectionStore } from '../features/file-explorer';
+import { FileExplorer, useFileSelectionStore, useResolveSelection } from '../features/file-explorer';
 import type { JobPreview, MockImage, TaskCreateWithImages } from '../lib/api-client';
 import { tasksApi } from '../lib/api-client';
 import { taskFilePathsApi } from '../lib/data-management-client';
@@ -40,7 +40,7 @@ type WizardStep = 'basic' | 'images' | 'config' | 'review';
 type ImageSourceMode = 'select' | 'upload';
 
 const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
-  { id: 'basic', label: 'Basic Info', icon: <FolderKanban className="w-4 h-4" /> },
+  { id: 'basic', label: 'Basic Info', icon: <Boxes className="w-4 h-4" /> },
   { id: 'images', label: 'Images', icon: <ImageIcon className="w-4 h-4" /> },
   { id: 'config', label: 'Configure', icon: <Settings className="w-4 h-4" /> },
   { id: 'review', label: 'Review', icon: <Check className="w-4 h-4" /> },

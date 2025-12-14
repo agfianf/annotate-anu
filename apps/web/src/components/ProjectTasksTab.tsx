@@ -4,14 +4,14 @@
  */
 
 import {
-  Briefcase,
-  ChevronRight,
-  FolderKanban,
-  ListTodo,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Trash2
+    Boxes,
+    Briefcase,
+    ChevronRight,
+    ListTodo,
+    Loader2,
+    Plus,
+    RefreshCw,
+    Trash2
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -206,7 +206,7 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
         {/* Tasks List */}
         {tasks.length === 0 ? (
           <div className="text-center py-12">
-            <FolderKanban className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <Boxes className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-700 mb-2">No tasks yet</h3>
             <p className="text-gray-500 mb-6">
               {canCreate 

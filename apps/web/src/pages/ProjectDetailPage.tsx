@@ -6,8 +6,8 @@
 import {
     ArrowLeft,
     BookOpen,
+    Boxes,
     Edit3,
-    FolderKanban,
     Loader2,
     Save,
     X
@@ -135,7 +135,7 @@ export default function ProjectDetailPage() {
   if (!project) {
     return (
       <div className="glass-strong rounded-2xl p-12 text-center">
-        <FolderKanban className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+        <Boxes className="w-16 h-16 text-gray-300 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-gray-700 mb-2">Project not found</h3>
         <Link
           to="/dashboard/projects"
@@ -269,7 +269,7 @@ export default function ProjectDetailPage() {
                 <ArrowLeft className="w-4 h-4" />
               </Link>
               <div className="flex items-center gap-2">
-                <FolderKanban className="w-5 h-5 text-emerald-600" />
+                <Boxes className="w-5 h-5 text-emerald-600" />
                 <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                   <span className="text-gray-400 font-normal text-sm">#{project.id}</span>
                   <span>{project.name}</span>

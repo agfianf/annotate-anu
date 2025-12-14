@@ -19,15 +19,18 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   tagsApi,
   sharedImagesApi,
   getAbsoluteThumbnailUrl,
+  getFullSizeThumbnailUrl,
   type SharedImage,
   type Tag as TagType,
   type ExploreFilters,
+  type JobAssociation,
 } from '../lib/data-management-client';
 import { tasksApi } from '../lib/api-client';
 import { useInfiniteExploreImages } from '../hooks/useInfiniteExploreImages';
@@ -66,6 +69,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // Full-view mode
   const { isFullView, toggleFullView, exitFullView } = useExploreView();
@@ -92,6 +96,12 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [showAddTagModal, setShowAddTagModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState<SharedImage | null>(null);
+
+  // Job association state for image modal
+  const [selectedJobIdForAnnotation, setSelectedJobIdForAnnotation] = useState<number | null>(null);
+  const [jobsData, setJobsData] = useState<JobAssociation[] | null>(null);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [jobsError, setJobsError] = useState<string | null>(null);
 
   // Build filters object
   const filters: ExploreFilters = useMemo(
@@ -181,6 +191,34 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isFullView, exitFullView, showTagManager, showAddTagModal, showImageModal]);
 
+  // Fetch jobs when image modal opens
+  useEffect(() => {
+    if (showImageModal) {
+      setJobsLoading(true);
+      setJobsError(null);
+      setSelectedJobIdForAnnotation(null);
+
+      sharedImagesApi
+        .getImageJobs(showImageModal.id)
+        .then((jobs) => {
+          setJobsData(jobs);
+          // Auto-select if only one job
+          if (jobs.length === 1) {
+            setSelectedJobIdForAnnotation(jobs[0].job_id);
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to fetch jobs:', err);
+          setJobsError('Failed to load job information');
+          setJobsData([]);
+        })
+        .finally(() => setJobsLoading(false));
+    } else {
+      setJobsData(null);
+      setJobsError(null);
+    }
+  }, [showImageModal]);
+
   // Handlers
   const handleSelectAll = useCallback(() => {
     if (selectedImages.size === images.length) {
@@ -219,6 +257,31 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       imageIds: Array.from(selectedImages),
       tagIds,
     });
+  };
+
+  const handleAnnotateClick = useCallback(() => {
+    if (!jobsData || jobsData.length === 0) return;
+
+    const targetJobId =
+      jobsData.length === 1 ? jobsData[0].job_id : selectedJobIdForAnnotation;
+
+    if (targetJobId) {
+      navigate(`/app?jobId=${targetJobId}`);
+      setShowImageModal(null);
+    }
+  }, [jobsData, selectedJobIdForAnnotation, navigate]);
+
+  const getJobStatusColor = (status: string): string => {
+    const statusColors: Record<string, string> = {
+      pending: 'bg-gray-100 text-gray-700',
+      assigned: 'bg-blue-100 text-blue-700',
+      in_progress: 'bg-yellow-100 text-yellow-700',
+      completed: 'bg-green-100 text-green-700',
+      review: 'bg-purple-100 text-purple-700',
+      approved: 'bg-emerald-100 text-emerald-700',
+      rejected: 'bg-red-100 text-red-700',
+    };
+    return statusColors[status] || 'bg-gray-100 text-gray-700';
   };
 
   return (
@@ -572,7 +635,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 {/* Image Preview */}
                 <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden">
                   <img
-                    src={getAbsoluteThumbnailUrl(showImageModal.thumbnail_url) || '/sample.webp'}
+                    src={getFullSizeThumbnailUrl(showImageModal.thumbnail_url) || '/sample.webp'}
                     alt={showImageModal.filename}
                     className="w-full h-full object-contain"
                   />
@@ -631,6 +694,57 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                     </div>
                   </div>
 
+                  {/* Jobs & Tasks */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500 mb-2">Jobs & Tasks</h4>
+                    {jobsLoading ? (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <div className="animate-pulse h-8 bg-gray-200 rounded" />
+                      </div>
+                    ) : jobsError ? (
+                      <div className="text-sm text-red-600">{jobsError}</div>
+                    ) : jobsData && jobsData.length > 0 ? (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {jobsData.map((job) => (
+                          <div
+                            key={`${job.task_id}-${job.job_id}`}
+                            className="bg-gray-50 rounded-lg p-3 text-sm"
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900">{job.task_name}</div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  Job #{job.job_sequence}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-medium ${getJobStatusColor(
+                                  job.job_status
+                                )}`}
+                              >
+                                {job.job_status}
+                              </span>
+                              {job.job_is_archived && (
+                                <span className="text-xs px-2 py-1 bg-gray-200 text-gray-600 rounded">
+                                  Archived
+                                </span>
+                              )}
+                              {job.assignee_email && (
+                                <span className="text-xs text-gray-600 truncate max-w-[150px]">
+                                  {job.assignee_email}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400">No jobs assigned</p>
+                    )}
+                  </div>
+
                   {/* Annotation Summary */}
                   {showImageModal.annotation_summary && (
                     <div>
@@ -655,13 +769,42 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
-              <button
-                onClick={() => setShowImageModal(null)}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg"
-              >
-                Close
-              </button>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-between gap-3">
+              <div className="flex-1">
+                {jobsData && jobsData.length > 1 && (
+                  <select
+                    value={selectedJobIdForAnnotation || ''}
+                    onChange={(e) => setSelectedJobIdForAnnotation(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select a job to annotate...</option>
+                    {jobsData
+                      .filter((job) => !job.job_is_archived)
+                      .map((job) => (
+                        <option key={job.job_id} value={job.job_id}>
+                          {job.task_name} - Job #{job.job_sequence}
+                        </option>
+                      ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowImageModal(null)}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+                {jobsData && jobsData.filter((job) => !job.job_is_archived).length > 0 && (
+                  <button
+                    onClick={handleAnnotateClick}
+                    disabled={jobsData.length > 1 && !selectedJobIdForAnnotation}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
+                  >
+                    Annotate
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

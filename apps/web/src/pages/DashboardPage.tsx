@@ -3,7 +3,7 @@
  * Quick summary and stats for the user
  */
 
-import { ArrowRight, Briefcase, ClipboardList, FolderKanban, Loader2 } from 'lucide-react';
+import { ArrowRight, Boxes, Briefcase, ClipboardList, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -46,7 +46,7 @@ export default function DashboardPage() {
         <div className="glass rounded-2xl p-6 shadow-lg shadow-emerald-500/5 border border-gray-100">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
-              <FolderKanban className="w-6 h-6 text-emerald-600" />
+              <Boxes className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900">{projects.length}</p>
@@ -98,7 +98,7 @@ export default function DashboardPage() {
           </div>
         ) : projects.length === 0 ? (
           <div className="text-center py-8">
-            <FolderKanban className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <Boxes className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500">No projects yet</p>
             <Link
               to="/dashboard/projects"

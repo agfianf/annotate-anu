@@ -5,7 +5,7 @@
 
 import {
     ArrowRight,
-    FolderKanban,
+    Boxes,
     Loader2,
     Plus,
     X,
@@ -143,7 +143,7 @@ export default function ProjectsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <FolderKanban className="w-7 h-7" />
+          <Boxes className="w-7 h-7" />
           Projects
         </h1>
         <div className="flex items-center gap-4">
@@ -171,7 +171,7 @@ export default function ProjectsPage() {
         </div>
       ) : projects.length === 0 ? (
         <div className="glass-strong rounded-2xl p-12 text-center shadow-lg shadow-emerald-500/5">
-          <FolderKanban className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <Boxes className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-700 mb-2">No projects yet</h3>
           <p className="text-gray-500 mb-6">
             {includeArchived ? 'No archived or active projects found' : (canCreateProject ? 'Create your first project to get started' : 'No projects found')}

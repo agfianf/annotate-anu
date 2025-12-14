@@ -55,6 +55,21 @@ export function getAbsoluteThumbnailUrl(thumbnailUrl: string | null): string | n
   return `${apiBase}${thumbnailUrl}`;
 }
 
+/**
+ * Helper to build full-size thumbnail URL (4x = 1024px) from relative path
+ */
+export function getFullSizeThumbnailUrl(thumbnailUrl: string | null): string | null {
+  if (!thumbnailUrl) return null;
+
+  const baseUrl = getAbsoluteThumbnailUrl(thumbnailUrl);
+  if (!baseUrl) return null;
+
+  // Add size=4x query parameter for full-size thumbnail (1024px)
+  const url = new URL(baseUrl, window.location.origin);
+  url.searchParams.set('size', '4x');
+  return url.toString();
+}
+
 export interface BulkRegisterResponse {
   registered: SharedImage[];
   already_existed: string[];
@@ -104,6 +119,19 @@ export interface AnnotationSummary {
   detection_count: number;
   segmentation_count: number;
   bboxes?: BboxPreview[];
+}
+
+export interface JobAssociation {
+  job_id: number;
+  job_status: string;
+  job_sequence: number;
+  job_is_archived: boolean;
+  task_id: number;
+  task_name: string;
+  task_status: string;
+  task_is_archived: boolean;
+  assignee_id: string | null;
+  assignee_email: string | null;
 }
 
 export interface ExploreFilters {
@@ -239,6 +267,16 @@ export const sharedImagesApi = {
   async removeTag(imageId: string, tagId: string): Promise<Tag[]> {
     const response: AxiosResponse<ApiResponse<Tag[]>> = await dataClient.delete(
       `/api/v1/shared-images/${imageId}/tags/${tagId}`
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Get all jobs and tasks associated with a shared image
+   */
+  async getImageJobs(imageId: string): Promise<JobAssociation[]> {
+    const response: AxiosResponse<ApiResponse<JobAssociation[]>> = await dataClient.get(
+      `/api/v1/shared-images/${imageId}/jobs`
     );
     return response.data.data;
   },
