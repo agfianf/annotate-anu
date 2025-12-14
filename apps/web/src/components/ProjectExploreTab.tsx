@@ -38,6 +38,7 @@ import { useZoomLevel } from '../hooks/useZoomLevel';
 import { useExploreView } from '../contexts/ExploreViewContext';
 import { VirtualizedImageGrid, MultiTaskSelect } from './explore';
 import { ZoomControl } from './explore/ZoomControl';
+import TagSelectorDropdown from './TagSelectorDropdown';
 
 interface ProjectExploreTabProps {
   projectId: string;
@@ -96,8 +97,6 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [showAddTagModal, setShowAddTagModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState<SharedImage | null>(null);
-  const [showImageTagSelector, setShowImageTagSelector] = useState(false);
-  const [selectedTagsForImage, setSelectedTagsForImage] = useState<string[]>([]);
 
   // Job association state for image modal
   const [selectedJobIdForAnnotation, setSelectedJobIdForAnnotation] = useState<number | null>(null);
@@ -299,10 +298,6 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       imageIds: [imageId],
       tagIds: tagIds,
     });
-
-    // Reset selection
-    setSelectedTagsForImage([]);
-    setShowImageTagSelector(false);
   }, [bulkTagMutation, showImageModal, allTags]);
 
   // Navigation in fullscreen modal
@@ -795,71 +790,17 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-sm font-medium text-gray-500">Tags</h4>
-                      {/* Add tags button */}
-                      <button
-                        onClick={() => setShowImageTagSelector(!showImageTagSelector)}
-                        className="text-xs px-3 py-1.5 border border-emerald-500 text-emerald-600 rounded-lg bg-white hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors flex items-center gap-1"
+                      {/* Add tags button with dropdown */}
+                      <TagSelectorDropdown
+                        tags={allTags}
+                        excludeTagIds={showImageModal.tags.map(t => t.id)}
+                        onAddTags={(tagIds) => handleAddTagsToImage(showImageModal.id, tagIds)}
+                        buttonText="Add Tags"
                         disabled={bulkTagMutation.isPending}
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add Tags
-                      </button>
+                        showUsageCount={true}
+                        size="sm"
+                      />
                     </div>
-
-                    {/* Multi-select tag dropdown */}
-                    {showImageTagSelector && (
-                      <div className="mb-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
-                        <div className="max-h-40 overflow-y-auto space-y-2 mb-3">
-                          {allTags
-                            .filter(tag => !showImageModal.tags.some(t => t.id === tag.id))
-                            .map(tag => (
-                              <label
-                                key={tag.id}
-                                className="flex items-center gap-2 hover:bg-white p-2 rounded cursor-pointer"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedTagsForImage.includes(tag.id)}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedTagsForImage([...selectedTagsForImage, tag.id]);
-                                    } else {
-                                      setSelectedTagsForImage(selectedTagsForImage.filter(id => id !== tag.id));
-                                    }
-                                  }}
-                                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                                />
-                                <span
-                                  className="w-3 h-3 rounded-full flex-shrink-0"
-                                  style={{ backgroundColor: tag.color }}
-                                />
-                                <span className="text-sm text-gray-700">{tag.name}</span>
-                              </label>
-                            ))}
-                          {allTags.filter(tag => !showImageModal.tags.some(t => t.id === tag.id)).length === 0 && (
-                            <p className="text-sm text-gray-500 text-center py-2">All tags already added</p>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleAddTagsToImage(showImageModal.id, selectedTagsForImage)}
-                            disabled={selectedTagsForImage.length === 0 || bulkTagMutation.isPending}
-                            className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-xs font-medium rounded-lg transition-colors"
-                          >
-                            Add {selectedTagsForImage.length > 0 && `(${selectedTagsForImage.length})`}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setShowImageTagSelector(false);
-                              setSelectedTagsForImage([]);
-                            }}
-                            className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-xs font-medium rounded-lg"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
 
                     <div className="flex flex-wrap gap-2">
                       {showImageModal.tags.map((tag) => (
