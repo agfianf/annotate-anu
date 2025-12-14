@@ -19,6 +19,7 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useExploreView } from '../contexts/ExploreViewContext';
 
 interface NavItem {
   path: string;
@@ -41,6 +42,10 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const { isFullView } = useExploreView();
+
+  // Combine manual collapse state with full-view mode
+  const effectiveCollapsed = isSidebarCollapsed || isFullView;
 
   const handleLogout = async () => {
     try {
@@ -111,15 +116,15 @@ export default function DashboardLayout() {
 
       <div className="flex">
         {/* Desktop Sidebar */}
-        <aside className={`hidden lg:flex flex-col min-h-screen glass border-r border-gray-200 sticky top-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
+        <aside className={`hidden lg:flex flex-col min-h-screen glass border-r border-gray-200 sticky top-0 transition-all duration-300 ${effectiveCollapsed ? 'w-20' : 'w-72'}`}>
           {/* Logo */}
-          <div className={`border-b border-gray-200 transition-all ${isSidebarCollapsed ? 'p-4' : 'p-6'}`}>
+          <div className={`border-b border-gray-200 transition-all ${effectiveCollapsed ? 'p-4' : 'p-6'}`}>
             <button
-              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              onClick={() => !isFullView && setIsSidebarCollapsed(!isSidebarCollapsed)}
               className="flex items-center gap-3 group w-full relative"
-              title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={effectiveCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              {!isSidebarCollapsed && (
+              {!effectiveCollapsed && (
                 <>
                   <img
                     src="/logo.png"
@@ -132,7 +137,7 @@ export default function DashboardLayout() {
                   />
                 </>
               )}
-              {isSidebarCollapsed && (
+              {effectiveCollapsed && (
                 <>
                   <img
                     src="/logo.png"
@@ -148,14 +153,14 @@ export default function DashboardLayout() {
           </div>
 
           {/* User Info */}
-          <div className={`border-b border-gray-200 transition-all ${isSidebarCollapsed ? 'p-2' : 'p-4'}`}>
+          <div className={`border-b border-gray-200 transition-all ${effectiveCollapsed ? 'p-2' : 'p-4'}`}>
             <div
               className={`flex items-center rounded-lg transition-all ${
-                isSidebarCollapsed ? 'w-12 h-12 justify-center bg-emerald-50' : 'gap-3 px-3 py-2 bg-emerald-50'
+                effectiveCollapsed ? 'w-12 h-12 justify-center bg-emerald-50' : 'gap-3 px-3 py-2 bg-emerald-50'
               }`}
-              title={isSidebarCollapsed ? `${user?.full_name || user?.username} (${user?.role})` : ''}
+              title={effectiveCollapsed ? `${user?.full_name || user?.username} (${user?.role})` : ''}
             >
-              {isSidebarCollapsed ? (
+              {effectiveCollapsed ? (
                 <div className="w-8 h-8 rounded-full bg-emerald-200 flex items-center justify-center text-emerald-700 font-semibold text-sm">
                   {user?.full_name?.charAt(0).toUpperCase() || user?.username?.charAt(0).toUpperCase()}
                 </div>
@@ -174,14 +179,14 @@ export default function DashboardLayout() {
           </div>
 
           {/* Navigation */}
-          <nav className={`flex-1 transition-all ${isSidebarCollapsed ? 'p-2' : 'p-4'}`}>
+          <nav className={`flex-1 transition-all ${effectiveCollapsed ? 'p-2' : 'p-4'}`}>
             {filteredNavItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
-                title={isSidebarCollapsed ? item.label : ''}
+                title={effectiveCollapsed ? item.label : ''}
                 className={`flex items-center rounded-lg mb-2 transition-all group ${
-                  isSidebarCollapsed ? 'w-12 h-12 justify-center' : 'gap-3 px-4 py-3'
+                  effectiveCollapsed ? 'w-12 h-12 justify-center' : 'gap-3 px-4 py-3'
                 } ${
                   isActive(item.path)
                     ? 'bg-emerald-100 text-emerald-700 shadow-sm'
@@ -189,7 +194,7 @@ export default function DashboardLayout() {
                 }`}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
-                {!isSidebarCollapsed && (
+                {!effectiveCollapsed && (
                   <>
                     <span className="flex-1">{item.label}</span>
                     <ChevronRight
@@ -204,16 +209,16 @@ export default function DashboardLayout() {
           </nav>
 
           {/* Logout */}
-          <div className={`border-t border-gray-200 transition-all ${isSidebarCollapsed ? 'p-2' : 'p-4'}`}>
+          <div className={`border-t border-gray-200 transition-all ${effectiveCollapsed ? 'p-2' : 'p-4'}`}>
             <button
               onClick={handleLogout}
-              title={isSidebarCollapsed ? "Logout" : ''}
+              title={effectiveCollapsed ? "Logout" : ''}
               className={`flex items-center rounded-lg text-left text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all ${
-                isSidebarCollapsed ? 'w-12 h-12 justify-center' : 'w-full gap-3 px-4 py-3'
+                effectiveCollapsed ? 'w-12 h-12 justify-center' : 'w-full gap-3 px-4 py-3'
               }`}
             >
               <LogOut className="w-4 h-4 flex-shrink-0" />
-              {!isSidebarCollapsed && <span>Logout</span>}
+              {!effectiveCollapsed && <span>Logout</span>}
             </button>
           </div>
         </aside>

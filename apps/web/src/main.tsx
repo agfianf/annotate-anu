@@ -22,6 +22,7 @@ import DashboardLayout from './components/DashboardLayout'
 import FirstUserCheck from './components/FirstUserCheck'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './contexts/AuthContext'
+import { ExploreViewProvider } from './contexts/ExploreViewContext'
 
 // Public pages
 import LandingPage from './pages/LandingPage'
@@ -89,21 +90,23 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <FirstUserCheck>
-            <App />
-          </FirstUserCheck>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 3000,
-              style: {
-                background: 'rgba(255, 255, 255, 0.95)',
-                backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(229, 231, 235, 0.8)',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-              },
-            }}
-          />
+          <ExploreViewProvider>
+            <FirstUserCheck>
+              <App />
+            </FirstUserCheck>
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                duration: 3000,
+                style: {
+                  background: 'rgba(255, 255, 255, 0.95)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(229, 231, 235, 0.8)',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                },
+              }}
+            />
+          </ExploreViewProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

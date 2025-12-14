@@ -21,6 +21,7 @@ import ProjectHistoryTab from '../components/ProjectHistoryTab';
 import ProjectReadmeEditor, { type ProjectReadmeEditorHandle } from '../components/ProjectReadmeEditor';
 import ProjectTabs, { type ProjectTabId } from '../components/ProjectTabs';
 import ProjectTasksTab from '../components/ProjectTasksTab';
+import { useExploreView } from '../contexts/ExploreViewContext';
 import type { ProjectDetail } from '../lib/api-client';
 import { projectsApi } from '../lib/api-client';
 
@@ -249,34 +250,42 @@ export default function ProjectDetailPage() {
   // Check if current tab needs full height (explore tab)
   const needsFullHeight = activeTab === 'explore';
 
+  // Full-view mode for explore tab
+  const { isFullView } = useExploreView();
+  const isExploreTab = activeTab === 'explore';
+  const showHeader = !isExploreTab || !isFullView;
+
   return (
     <div className={needsFullHeight ? "flex flex-col h-[calc(100vh-4rem)]" : "space-y-6"}>
       {/* Header */}
-      <div className={needsFullHeight ? "flex-shrink-0" : ""}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link
-              to="/dashboard/projects"
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </Link>
-            <div className="flex items-center gap-2">
-              <FolderKanban className="w-5 h-5 text-emerald-600" />
-              <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <span className="text-gray-400 font-normal text-sm">#{project.id}</span>
-                <span>{project.name}</span>
-              </h1>
-              {project.description && (
-                <span className="text-gray-500 text-sm ml-2">{project.description}</span>
-              )}
+      {showHeader && (
+        <div className={needsFullHeight ? "flex-shrink-0" : ""}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link
+                to="/dashboard/projects"
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Link>
+              <div className="flex items-center gap-2">
+                <FolderKanban className="w-5 h-5 text-emerald-600" />
+                <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <span className="text-gray-400 font-normal text-sm">#{project.id}</span>
+                  <span>{project.name}</span>
+                </h1>
+                {project.description && (
+                  <span className="text-gray-500 text-sm ml-2">{project.description}</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Stats */}
-      <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 ${needsFullHeight ? "flex-shrink-0 mt-3" : ""}`}>
+      {showHeader && (
+        <div className={`grid grid-cols-2 md:grid-cols-4 gap-4 ${needsFullHeight ? "flex-shrink-0 mt-3" : ""}`}>
         <div className="glass rounded-xl p-4 border border-gray-100">
           <div className="text-2xl font-bold text-gray-900">{project.task_count}</div>
           <div className="text-sm text-gray-500">Tasks</div>
@@ -295,12 +304,15 @@ export default function ProjectDetailPage() {
             {new Date(project.created_at).toLocaleDateString()}
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Tabs Navigation */}
-      <div className={needsFullHeight ? "flex-shrink-0 mt-3" : ""}>
-        <ProjectTabs activeTab={activeTab} onTabChange={handleTabChange} />
-      </div>
+      {showHeader && (
+        <div className={needsFullHeight ? "flex-shrink-0 mt-3" : ""}>
+          <ProjectTabs activeTab={activeTab} onTabChange={handleTabChange} />
+        </div>
+      )}
 
       {/* Tab Content */}
       <div className={needsFullHeight ? "flex-1 min-h-0 mt-3" : ""}>

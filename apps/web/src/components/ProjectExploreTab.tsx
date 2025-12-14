@@ -10,6 +10,8 @@ import {
   Grid3X3,
   Image as ImageIcon,
   Loader2,
+  Maximize2,
+  Minimize2,
   Plus,
   RefreshCw,
   Search,
@@ -30,6 +32,7 @@ import {
 import { tasksApi } from '../lib/api-client';
 import { useInfiniteExploreImages } from '../hooks/useInfiniteExploreImages';
 import { useZoomLevel } from '../hooks/useZoomLevel';
+import { useExploreView } from '../contexts/ExploreViewContext';
 import { VirtualizedImageGrid, MultiTaskSelect } from './explore';
 import { ZoomControl } from './explore/ZoomControl';
 
@@ -63,6 +66,9 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps) {
   const queryClient = useQueryClient();
+
+  // Full-view mode
+  const { isFullView, toggleFullView, exitFullView } = useExploreView();
 
   // Zoom level
   const { zoomLevel, setZoomLevel, config: zoomConfig } = useZoomLevel();
@@ -162,6 +168,19 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     setSelectedImages(new Set());
   }, [filters]);
 
+  // Handle ESC key to exit full-view
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle ESC when in full-view and no modals are open
+      if (e.key === 'Escape' && isFullView && !showTagManager && !showAddTagModal && !showImageModal) {
+        exitFullView();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullView, exitFullView, showTagManager, showAddTagModal, showImageModal]);
+
   // Handlers
   const handleSelectAll = useCallback(() => {
     if (selectedImages.size === images.length) {
@@ -251,6 +270,16 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             title="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
+          </button>
+
+          {/* Full View Toggle */}
+          <button
+            onClick={toggleFullView}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title={isFullView ? "Exit full view (ESC)" : "Enter full view"}
+            aria-label={isFullView ? "Exit full view" : "Enter full view"}
+          >
+            {isFullView ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
 
           {/* Zoom Control */}
