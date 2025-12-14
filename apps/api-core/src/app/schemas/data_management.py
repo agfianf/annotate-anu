@@ -106,6 +106,7 @@ class TagResponse(BaseModel):
     """Tag response schema."""
 
     id: UUID
+    project_id: int
     name: str
     description: str | None = None
     color: str

@@ -4,9 +4,11 @@
  * Supports 10,000+ images with smooth performance
  */
 
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Check,
   ChevronDown,
+  Delete,
   Grid3X3,
   Image as ImageIcon,
   Loader2,
@@ -16,27 +18,26 @@ import {
   RefreshCw,
   Search,
   Tag,
-  X,
+  X
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  tagsApi,
-  sharedImagesApi,
-  getAbsoluteThumbnailUrl,
-  getFullSizeThumbnailUrl,
-  type SharedImage,
-  type Tag as TagType,
-  type ExploreFilters,
-  type JobAssociation,
-} from '../lib/data-management-client';
-import { tasksApi } from '../lib/api-client';
+import { useNavigate } from 'react-router-dom';
+import { useExploreView } from '../contexts/ExploreViewContext';
 import { useInfiniteExploreImages } from '../hooks/useInfiniteExploreImages';
 import { useZoomLevel } from '../hooks/useZoomLevel';
-import { useExploreView } from '../contexts/ExploreViewContext';
-import { VirtualizedImageGrid, MultiTaskSelect } from './explore';
+import { tasksApi } from '../lib/api-client';
+import {
+  getFullSizeThumbnailUrl,
+  projectImagesApi,
+  sharedImagesApi,
+  tagsApi,
+  type ExploreFilters,
+  type JobAssociation,
+  type SharedImage,
+  type Tag as TagType
+} from '../lib/data-management-client';
+import { MultiTaskSelect, VirtualizedImageGrid } from './explore';
 import { ZoomControl } from './explore/ZoomControl';
 import TagSelectorDropdown from './TagSelectorDropdown';
 
@@ -96,6 +97,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [showAddTagModal, setShowAddTagModal] = useState(false);
+  const [showRemoveTagModal, setShowRemoveTagModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState<SharedImage | null>(null);
 
   // Job association state for image modal
@@ -132,10 +134,11 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     enabled: !!projectId,
   });
 
-  // Fetch all tags
+  // Fetch all tags for this project
   const { data: allTags = [], isLoading: isLoadingTags } = useQuery({
-    queryKey: ['tags'],
-    queryFn: () => tagsApi.list({ include_usage_count: true }),
+    queryKey: ['tags', projectId],
+    queryFn: () => tagsApi.list(Number(projectId), { include_usage_count: true }),
+    enabled: !!projectId,
   });
 
   // Fetch tasks for filter dropdown
@@ -147,22 +150,24 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
   // Create tag mutation
   const createTagMutation = useMutation({
-    mutationFn: (data: { name: string; color: string }) => tagsApi.create(data),
+    mutationFn: (data: { name: string; color: string }) => tagsApi.create(Number(projectId), data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tags'] });
+      queryClient.invalidateQueries({ queryKey: ['tags', projectId] });
       setNewTagName('');
       setShowTagManager(false);
       toast.success('Tag created');
     },
-    onError: () => {
-      toast.error('Failed to create tag');
+    onError: (error: any) => {
+      console.error('Failed to create tag:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to create tag';
+      toast.error(errorMessage);
     },
   });
 
   // Bulk tag mutation
   const bulkTagMutation = useMutation({
     mutationFn: ({ imageIds, tagIds }: { imageIds: string[]; tagIds: string[] }) =>
-      sharedImagesApi.bulkTag(imageIds, tagIds),
+      projectImagesApi.bulkTag(Number(projectId), imageIds, tagIds),
     onSuccess: (_, variables) => {
       // If adding to currently open modal image, fetch updated image data
       if (showImageModal && variables.imageIds.includes(showImageModal.id)) {
@@ -175,19 +180,22 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         }
       }
       queryClient.invalidateQueries({ queryKey: ['project-explore-infinite'] });
+      queryClient.invalidateQueries({ queryKey: ['tags', projectId] }); // Update tag counts
       setSelectedImages(new Set());
       setShowAddTagModal(false);
       toast.success('Tags added');
     },
-    onError: () => {
-      toast.error('Failed to add tags');
+    onError: (error: any) => {
+      console.error('Failed to add tags:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to add tags';
+      toast.error(errorMessage);
     },
   });
 
   // Remove tag from specific image
   const removeTagMutation = useMutation({
     mutationFn: ({ imageId, tagId }: { imageId: string; tagId: string }) =>
-      sharedImagesApi.removeTag(imageId, tagId),
+      projectImagesApi.removeTag(Number(projectId), imageId, tagId),
     onSuccess: (updatedTags) => {
       // Update modal image state if open
       if (showImageModal) {
@@ -197,10 +205,31 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         });
       }
       queryClient.invalidateQueries({ queryKey: ['project-explore-infinite'] });
+      queryClient.invalidateQueries({ queryKey: ['tags', projectId] }); // Update tag counts
       toast.success('Tag removed');
     },
-    onError: () => {
-      toast.error('Failed to remove tag');
+    onError: (error: any) => {
+      console.error('Failed to remove tag:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to remove tag';
+      toast.error(errorMessage);
+    },
+  });
+
+  // Bulk remove tags mutation
+  const bulkUntagMutation = useMutation({
+    mutationFn: ({ imageIds, tagIds }: { imageIds: string[]; tagIds: string[] }) =>
+      projectImagesApi.bulkUntag(Number(projectId), imageIds, tagIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project-explore-infinite'] });
+      queryClient.invalidateQueries({ queryKey: ['tags', projectId] }); // Update tag counts
+      setSelectedImages(new Set());
+      setShowRemoveTagModal(false);
+      toast.success('Tags removed');
+    },
+    onError: (error: any) => {
+      console.error('Failed to remove tags:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to remove tags';
+      toast.error(errorMessage);
     },
   });
 
@@ -276,6 +305,33 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       tagIds,
     });
   };
+
+  const handleBulkRemoveTags = (tagIds: string[]) => {
+    if (selectedImages.size === 0 || tagIds.length === 0) return;
+    bulkUntagMutation.mutate({
+      imageIds: Array.from(selectedImages),
+      tagIds,
+    });
+  };
+
+  // Get all unique tags from selected images
+  const getTagsFromSelectedImages = useCallback((): TagType[] => {
+    const tagMap = new Map<string, TagType>();
+    const selectedImageIds = Array.from(selectedImages);
+
+    selectedImageIds.forEach((imageId) => {
+      const image = images.find((img) => img.id === imageId);
+      if (image) {
+        image.tags.forEach((tag) => {
+          if (!tagMap.has(tag.id)) {
+            tagMap.set(tag.id, tag);
+          }
+        });
+      }
+    });
+
+    return Array.from(tagMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [selectedImages, images]);
 
   const handleRemoveTag = useCallback((imageId: string, tagId: string) => {
     removeTagMutation.mutate({ imageId, tagId });
@@ -368,6 +424,356 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       rejected: 'bg-red-100 text-red-700',
     };
     return statusColors[status] || 'bg-gray-100 text-gray-700';
+  };
+
+  // Bulk Tag Modal Component
+  const BulkTagModal = () => {
+    const [searchTag, setSearchTag] = useState('');
+    const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    // Auto-focus search input
+    useEffect(() => {
+      if (searchInputRef.current) {
+        requestAnimationFrame(() => searchInputRef.current?.focus());
+      }
+    }, []);
+
+    // Filter tags based on search
+    const filteredTags = useMemo(() => {
+      if (!searchTag.trim()) return allTags;
+      const searchLower = searchTag.toLowerCase();
+      return allTags.filter((tag) => tag.name.toLowerCase().includes(searchLower));
+    }, [searchTag]);
+
+    const handleToggleTag = (tagId: string) => {
+      setSelectedTagIds((prev) =>
+        prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+      );
+    };
+
+    const handleAddSelected = () => {
+      if (selectedTagIds.length === 0) return;
+      handleBulkAddTags(selectedTagIds);
+    };
+
+    const handleClose = () => {
+      setShowAddTagModal(false);
+      setSearchTag('');
+      setSelectedTagIds([]);
+    };
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col max-h-[80vh]">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-white">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Add Tags to Images
+              </h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {selectedImages.size} image{selectedImages.size !== 1 ? 's' : ''} selected
+              </p>
+            </div>
+            <button
+              onClick={handleClose}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="px-6 py-3 border-b border-gray-100 bg-gray-50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchTag}
+                onChange={(e) => setSearchTag(e.target.value)}
+                placeholder="Search tags..."
+                className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Tags List */}
+          <div className="flex-1 overflow-y-auto px-2 py-2">
+            {filteredTags.length === 0 ? (
+              <div className="py-12 text-center">
+                {searchTag.trim() ? (
+                  <>
+                    <Search className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">No tags match &quot;{searchTag}&quot;</p>
+                    <button
+                      onClick={() => setSearchTag('')}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 mt-2"
+                    >
+                      Clear search
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Tag className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500 mb-4">No tags available</p>
+                    <button
+                      onClick={() => {
+                        setShowAddTagModal(false);
+                        setShowTagManager(true);
+                      }}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors inline-flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Create First Tag
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {filteredTags.map((tag) => {
+                  const isSelected = selectedTagIds.includes(tag.id);
+                  return (
+                    <label
+                      key={tag.id}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleTag(tag.id)}
+                        className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                      />
+                      <span
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      <span className="text-sm text-gray-700 flex-1 font-medium">
+                        {tag.name}
+                      </span>
+                      {tag.usage_count !== undefined && (
+                        <span className="text-xs text-gray-400 font-mono">
+                          ({tag.usage_count})
+                        </span>
+                      )}
+                      {isSelected && (
+                        <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
+            <button
+              onClick={() => {
+                setShowAddTagModal(false);
+                setShowTagManager(true);
+              }}
+              className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1.5 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Create New Tag
+            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddSelected}
+                disabled={selectedTagIds.length === 0 || bulkTagMutation.isPending}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                {bulkTagMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    Add {selectedTagIds.length > 0 && `(${selectedTagIds.length})`}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Bulk Remove Tag Modal Component
+  const BulkRemoveTagModal = () => {
+    const [searchTag, setSearchTag] = useState('');
+    const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    // Get tags from selected images
+    const tagsFromSelectedImages = useMemo(() => getTagsFromSelectedImages(), []);
+
+    // Auto-focus search input
+    useEffect(() => {
+      if (searchInputRef.current) {
+        requestAnimationFrame(() => searchInputRef.current?.focus());
+      }
+    }, []);
+
+    // Filter tags based on search
+    const filteredTags = useMemo(() => {
+      if (!searchTag.trim()) return tagsFromSelectedImages;
+      const searchLower = searchTag.toLowerCase();
+      return tagsFromSelectedImages.filter((tag) => tag.name.toLowerCase().includes(searchLower));
+    }, [searchTag, tagsFromSelectedImages]);
+
+    const handleToggleTag = (tagId: string) => {
+      setSelectedTagIds((prev) =>
+        prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+      );
+    };
+
+    const handleRemoveSelected = () => {
+      if (selectedTagIds.length === 0) return;
+      handleBulkRemoveTags(selectedTagIds);
+    };
+
+    const handleClose = () => {
+      setShowRemoveTagModal(false);
+      setSearchTag('');
+      setSelectedTagIds([]);
+    };
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col max-h-[80vh]">
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-red-50 to-white">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Remove Tags from Images
+              </h3>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {selectedImages.size} image{selectedImages.size !== 1 ? 's' : ''} selected
+              </p>
+            </div>
+            <button
+              onClick={handleClose}
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="px-6 py-3 border-b border-gray-100 bg-gray-50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchTag}
+                onChange={(e) => setSearchTag(e.target.value)}
+                placeholder="Search tags to remove..."
+                className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Tags List */}
+          <div className="flex-1 overflow-y-auto px-2 py-2">
+            {filteredTags.length === 0 ? (
+              <div className="py-12 text-center">
+                {searchTag.trim() ? (
+                  <>
+                    <Search className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">No tags match &quot;{searchTag}&quot;</p>
+                    <button
+                      onClick={() => setSearchTag('')}
+                      className="text-xs text-red-600 hover:text-red-700 mt-2"
+                    >
+                      Clear search
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Tag className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500 mb-2">
+                      No tags on selected images
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Add tags to images first
+                    </p>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {filteredTags.map((tag) => {
+                  const isSelected = selectedTagIds.includes(tag.id);
+                  return (
+                    <label
+                      key={tag.id}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 rounded-lg cursor-pointer transition-colors group"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleTag(tag.id)}
+                        className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                      />
+                      <span
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      <span className="text-sm text-gray-700 flex-1 font-medium">
+                        {tag.name}
+                      </span>
+                      {isSelected && (
+                        <Check className="w-4 h-4 text-red-600 flex-shrink-0" />
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-2">
+            <button
+              onClick={handleClose}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm font-medium rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleRemoveSelected}
+              disabled={selectedTagIds.length === 0 || bulkUntagMutation.isPending}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+            >
+              {bulkUntagMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Removing...
+                </>
+              ) : (
+                <>
+                  <X className="w-4 h-4" />
+                  Remove {selectedTagIds.length > 0 && `(${selectedTagIds.length})`}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -497,6 +903,14 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               >
                 <Tag className="w-4 h-4" />
                 Add Tags
+              </button>
+              <button
+                onClick={() => setShowRemoveTagModal(true)}
+                disabled={getTagsFromSelectedImages().length === 0}
+                className="p-2.5 bg-red-500/20 hover:bg-red-500/30 disabled:bg-white/10 disabled:cursor-not-allowed backdrop-blur-sm text-white rounded-full flex items-center transition-all"
+                title="Remove Tags"
+              >
+                <Delete className="w-4 h-4 rotate-45" />
               </button>
               <button
                 onClick={() => setSelectedImages(new Set())}
@@ -642,67 +1056,10 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       )}
 
       {/* Add Tags to Selection Modal */}
-      {showAddTagModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">
-                Add Tags to {selectedImages.size} Image(s)
-              </h3>
-              <button
-                onClick={() => setShowAddTagModal(false)}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {showAddTagModal && <BulkTagModal />}
 
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {allTags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => handleBulkAddTags([tag.id])}
-                  disabled={bulkTagMutation.isPending}
-                  className="w-full px-3 py-2 text-left rounded-lg hover:bg-gray-50 flex items-center gap-2"
-                >
-                  <span
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: tag.color }}
-                  />
-                  <span className="text-sm font-medium">{tag.name}</span>
-                  {tag.usage_count !== undefined && (
-                    <span className="text-xs text-gray-400">({tag.usage_count})</span>
-                  )}
-                </button>
-              ))}
-              {allTags.length === 0 && (
-                <p className="text-sm text-gray-500 text-center py-4">
-                  No tags available. Create one first!
-                </p>
-              )}
-            </div>
-
-            <div className="flex justify-between items-center pt-4 border-t border-gray-100 mt-4">
-              <button
-                onClick={() => {
-                  setShowAddTagModal(false);
-                  setShowTagManager(true);
-                }}
-                className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1"
-              >
-                <Plus className="w-4 h-4" />
-                Create New Tag
-              </button>
-              <button
-                onClick={() => setShowAddTagModal(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Remove Tags from Selection Modal */}
+      {showRemoveTagModal && <BulkRemoveTagModal />}
 
       {/* Image Detail Modal */}
       {showImageModal && (

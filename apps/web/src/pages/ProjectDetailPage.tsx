@@ -60,7 +60,13 @@ export default function ProjectDetailPage() {
 
   // Get active tab from URL or default to 'readme'
   const activeTab = (searchParams.get('tab') as ProjectTabId) || 'readme';
-  
+
+  // Full-view mode for explore tab (must be at top to satisfy Rules of Hooks)
+  const { isFullView } = useExploreView();
+  const isExploreTab = activeTab === 'explore';
+  const showHeader = !isExploreTab || !isFullView;
+  const needsFullHeight = activeTab === 'explore';
+
   const handleTabChange = (tab: ProjectTabId) => {
     setSearchParams({ tab });
     // Cancel editing when switching tabs
@@ -246,14 +252,6 @@ export default function ProjectDetailPage() {
         return renderReadmeTab();
     }
   };
-
-  // Check if current tab needs full height (explore tab)
-  const needsFullHeight = activeTab === 'explore';
-
-  // Full-view mode for explore tab
-  const { isFullView } = useExploreView();
-  const isExploreTab = activeTab === 'explore';
-  const showHeader = !isExploreTab || !isFullView;
 
   return (
     <div className={needsFullHeight ? "flex flex-col h-[calc(100vh-4rem)]" : "space-y-6"}>

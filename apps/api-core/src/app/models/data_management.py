@@ -105,7 +105,7 @@ shared_images = Table(
 
 
 # ============================================================================
-# TAGS - Global user-defined tags
+# TAGS - Project-scoped user-defined tags
 # ============================================================================
 tags = Table(
     "tags",
@@ -118,11 +118,17 @@ tags = Table(
         comment="UUID primary key",
     ),
     Column(
+        "project_id",
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Reference to project",
+    ),
+    Column(
         "name",
         String(100),
         nullable=False,
-        unique=True,
-        comment="Tag name (unique globally)",
+        comment="Tag name (unique per project)",
     ),
     Column(
         "description",
@@ -151,12 +157,14 @@ tags = Table(
         server_default=text("now()"),
     ),
     # Indexes
+    Index("ix_tags_project_id", "project_id"),
     Index("ix_tags_name", "name"),
+    Index("ix_tags_unique", "project_id", "name", unique=True),
 )
 
 
 # ============================================================================
-# SHARED IMAGE TAGS - Junction table for many-to-many
+# SHARED IMAGE TAGS - Project-scoped junction table for many-to-many
 # ============================================================================
 shared_image_tags = Table(
     "shared_image_tags",
@@ -167,6 +175,13 @@ shared_image_tags = Table(
         primary_key=True,
         server_default=text("gen_random_uuid()"),
         comment="UUID primary key",
+    ),
+    Column(
+        "project_id",
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Reference to project",
     ),
     Column(
         "shared_image_id",
@@ -196,9 +211,10 @@ shared_image_tags = Table(
         server_default=text("now()"),
     ),
     # Indexes
+    Index("ix_shared_image_tags_project", "project_id"),
     Index("ix_shared_image_tags_image", "shared_image_id"),
     Index("ix_shared_image_tags_tag", "tag_id"),
-    Index("ix_shared_image_tags_unique", "shared_image_id", "tag_id", unique=True),
+    Index("ix_shared_image_tags_unique", "project_id", "shared_image_id", "tag_id", unique=True),
 )
 
 

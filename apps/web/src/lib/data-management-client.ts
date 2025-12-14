@@ -13,6 +13,7 @@ import { getAccessToken } from './api-client';
 
 export interface Tag {
   id: string;
+  project_id: number;
   name: string;
   description: string | null;
   color: string;
@@ -251,27 +252,6 @@ export const sharedImagesApi = {
   },
 
   /**
-   * Add tags to a shared image
-   */
-  async addTags(imageId: string, tagIds: string[]): Promise<Tag[]> {
-    const response: AxiosResponse<ApiResponse<Tag[]>> = await dataClient.post(
-      `/api/v1/shared-images/${imageId}/tags`,
-      { tag_ids: tagIds }
-    );
-    return response.data.data;
-  },
-
-  /**
-   * Remove a tag from a shared image
-   */
-  async removeTag(imageId: string, tagId: string): Promise<Tag[]> {
-    const response: AxiosResponse<ApiResponse<Tag[]>> = await dataClient.delete(
-      `/api/v1/shared-images/${imageId}/tags/${tagId}`
-    );
-    return response.data.data;
-  },
-
-  /**
    * Get all jobs and tasks associated with a shared image
    */
   async getImageJobs(imageId: string): Promise<JobAssociation[]> {
@@ -280,89 +260,74 @@ export const sharedImagesApi = {
     );
     return response.data.data;
   },
-
-  /**
-   * Bulk add tags to multiple images
-   */
-  async bulkTag(imageIds: string[], tagIds: string[]): Promise<BulkTagResponse> {
-    const response: AxiosResponse<ApiResponse<BulkTagResponse>> = await dataClient.post(
-      '/api/v1/shared-images/bulk-tag',
-      { shared_image_ids: imageIds, tag_ids: tagIds }
-    );
-    return response.data.data;
-  },
-
-  /**
-   * Bulk remove tags from multiple images
-   */
-  async bulkUntag(imageIds: string[], tagIds: string[]): Promise<BulkTagResponse> {
-    const response: AxiosResponse<ApiResponse<BulkTagResponse>> = await dataClient.delete(
-      '/api/v1/shared-images/bulk-tag',
-      { data: { shared_image_ids: imageIds, tag_ids: tagIds } }
-    );
-    return response.data.data;
-  },
 };
 
 // ============================================================================
-// Tags API
+// Tags API (Project-Scoped)
 // ============================================================================
 
 export const tagsApi = {
   /**
-   * List all tags
+   * List all tags for a project
    */
-  async list(params?: { search?: string; include_usage_count?: boolean }): Promise<Tag[]> {
+  async list(
+    projectId: number,
+    params?: { search?: string; include_usage_count?: boolean }
+  ): Promise<Tag[]> {
     const queryParams = new URLSearchParams();
     if (params?.search) queryParams.append('search', params.search);
     if (params?.include_usage_count) queryParams.append('include_usage_count', 'true');
 
     const response: AxiosResponse<ApiResponse<Tag[]>> = await dataClient.get(
-      `/api/v1/tags?${queryParams.toString()}`
+      `/api/v1/projects/${projectId}/tags?${queryParams.toString()}`
     );
     return response.data.data;
   },
 
   /**
-   * Get a single tag by ID
+   * Get a single tag by ID within a project
    */
-  async get(tagId: string): Promise<Tag> {
+  async get(projectId: number, tagId: string): Promise<Tag> {
     const response: AxiosResponse<ApiResponse<Tag>> = await dataClient.get(
-      `/api/v1/tags/${tagId}`
+      `/api/v1/projects/${projectId}/tags/${tagId}`
     );
     return response.data.data;
   },
 
   /**
-   * Create a new tag
+   * Create a new tag in a project
    */
-  async create(data: { name: string; description?: string; color?: string }): Promise<Tag> {
+  async create(
+    projectId: number,
+    data: { name: string; description?: string; color?: string }
+  ): Promise<Tag> {
     const response: AxiosResponse<ApiResponse<Tag>> = await dataClient.post(
-      '/api/v1/tags',
+      `/api/v1/projects/${projectId}/tags`,
       data
     );
     return response.data.data;
   },
 
   /**
-   * Update a tag
+   * Update a tag in a project
    */
   async update(
+    projectId: number,
     tagId: string,
     data: { name?: string; description?: string; color?: string }
   ): Promise<Tag> {
     const response: AxiosResponse<ApiResponse<Tag>> = await dataClient.patch(
-      `/api/v1/tags/${tagId}`,
+      `/api/v1/projects/${projectId}/tags/${tagId}`,
       data
     );
     return response.data.data;
   },
 
   /**
-   * Delete a tag
+   * Delete a tag from a project
    */
-  async delete(tagId: string): Promise<void> {
-    await dataClient.delete(`/api/v1/tags/${tagId}`);
+  async delete(projectId: number, tagId: string): Promise<void> {
+    await dataClient.delete(`/api/v1/projects/${projectId}/tags/${tagId}`);
   },
 };
 
@@ -461,6 +426,49 @@ export const projectImagesApi = {
 
     const response: AxiosResponse<ApiResponse<ExploreResponse>> = await dataClient.get(
       `/api/v1/projects/${projectId}/explore?${queryParams.toString()}`
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Add tags to an image in the project
+   */
+  async addTags(projectId: number, imageId: string, tagIds: string[]): Promise<Tag[]> {
+    const response: AxiosResponse<ApiResponse<Tag[]>> = await dataClient.post(
+      `/api/v1/projects/${projectId}/images/${imageId}/tags`,
+      { tag_ids: tagIds }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Remove a tag from an image in the project
+   */
+  async removeTag(projectId: number, imageId: string, tagId: string): Promise<Tag[]> {
+    const response: AxiosResponse<ApiResponse<Tag[]>> = await dataClient.delete(
+      `/api/v1/projects/${projectId}/images/${imageId}/tags/${tagId}`
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Bulk add tags to multiple images in the project
+   */
+  async bulkTag(projectId: number, imageIds: string[], tagIds: string[]): Promise<BulkTagResponse> {
+    const response: AxiosResponse<ApiResponse<BulkTagResponse>> = await dataClient.post(
+      `/api/v1/projects/${projectId}/images/bulk-tag`,
+      { shared_image_ids: imageIds, tag_ids: tagIds }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Bulk remove tags from multiple images in the project
+   */
+  async bulkUntag(projectId: number, imageIds: string[], tagIds: string[]): Promise<BulkTagResponse> {
+    const response: AxiosResponse<ApiResponse<BulkTagResponse>> = await dataClient.delete(
+      `/api/v1/projects/${projectId}/images/bulk-tag`,
+      { data: { shared_image_ids: imageIds, tag_ids: tagIds } }
     );
     return response.data.data;
   },

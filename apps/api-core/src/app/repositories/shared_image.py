@@ -124,12 +124,15 @@ class SharedImageRepository:
         return result.rowcount > 0
 
     @staticmethod
-    async def get_tags(connection: AsyncConnection, image_id: UUID) -> list[dict]:
-        """Get all tags for a shared image."""
+    async def get_tags(connection: AsyncConnection, image_id: UUID, project_id: int) -> list[dict]:
+        """Get all tags for a shared image in a specific project context."""
         stmt = (
             select(tags)
             .join(shared_image_tags, tags.c.id == shared_image_tags.c.tag_id)
-            .where(shared_image_tags.c.shared_image_id == image_id)
+            .where(
+                shared_image_tags.c.shared_image_id == image_id,
+                shared_image_tags.c.project_id == project_id,
+            )
             .order_by(tags.c.name)
         )
         result = await connection.execute(stmt)
