@@ -36,6 +36,23 @@ export interface SharedImage {
   updated_at: string;
   thumbnail_url: string | null;
   tags: Tag[];
+  annotation_summary?: AnnotationSummary;
+}
+
+/**
+ * Helper to build absolute thumbnail URL from relative path
+ */
+export function getAbsoluteThumbnailUrl(thumbnailUrl: string | null): string | null {
+  if (!thumbnailUrl) return null;
+
+  // If already absolute, return as-is
+  if (thumbnailUrl.startsWith('http://') || thumbnailUrl.startsWith('https://')) {
+    return thumbnailUrl;
+  }
+
+  // Build absolute URL using API base
+  const apiBase = API_BASE_URL;
+  return `${apiBase}${thumbnailUrl}`;
 }
 
 export interface BulkRegisterResponse {
@@ -75,12 +92,27 @@ export interface ExploreResponse {
   filters_applied: Record<string, unknown>;
 }
 
+export interface BboxPreview {
+  x_min: number;
+  y_min: number;
+  x_max: number;
+  y_max: number;
+  label_color: string;
+}
+
+export interface AnnotationSummary {
+  detection_count: number;
+  segmentation_count: number;
+  bboxes?: BboxPreview[];
+}
+
 export interface ExploreFilters {
   search?: string;
   tag_ids?: string[];
-  task_id?: number;
+  task_ids?: number[];
   job_id?: number;
   is_annotated?: boolean;
+  include_annotations?: boolean;
 }
 
 export interface ApiResponse<T> {
@@ -381,7 +413,9 @@ export const projectImagesApi = {
     if (filters?.tag_ids) {
       filters.tag_ids.forEach((id) => queryParams.append('tag_ids', id));
     }
-    if (filters?.task_id !== undefined) queryParams.append('task_id', filters.task_id.toString());
+    if (filters?.task_ids && filters.task_ids.length > 0) {
+      filters.task_ids.forEach((id) => queryParams.append('task_ids', id.toString()));
+    }
     if (filters?.job_id !== undefined) queryParams.append('job_id', filters.job_id.toString());
     if (filters?.is_annotated !== undefined) {
       queryParams.append('is_annotated', filters.is_annotated.toString());

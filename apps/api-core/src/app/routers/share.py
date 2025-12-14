@@ -182,15 +182,18 @@ async def get_thumbnail(
     path: str,
     current_user: Annotated[UserBase, Depends(get_current_active_user)],
     thumb: ThumbnailService = Depends(get_thumbnail_service),
+    size: str = Query(default="2x", regex="^(1x|2x|4x)$", description="Thumbnail size (1x=256px, 2x=512px, 4x=1024px)"),
 ):
-    """Get thumbnail for an image. Generates on-demand if not cached."""
+    """Get thumbnail for an image with specified size. Generates on-demand if not cached."""
     try:
-        thumbnail_path = await thumb.get_or_create_thumbnail(path)
+        thumbnail_path = await thumb.get_or_create_thumbnail(path, size)
         return FileResponse(
             thumbnail_path,
             media_type="image/jpeg",
             headers={"Cache-Control": "public, max-age=86400"},  # 24h cache
         )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Image not found")
     except RuntimeError as e:

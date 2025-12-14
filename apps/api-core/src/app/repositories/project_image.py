@@ -220,7 +220,7 @@ class ProjectImageRepository:
         page: int = 1,
         page_size: int = 50,
         tag_ids: list[UUID] | None = None,
-        task_id: int | None = None,
+        task_ids: list[int] | None = None,
         job_id: int | None = None,
         is_annotated: bool | None = None,
         search: str | None = None,
@@ -228,6 +228,9 @@ class ProjectImageRepository:
         """
         Explore images with combined filtering.
         Supports filtering by tags, task/job hierarchy, annotation status, and search.
+
+        Args:
+            task_ids: Filter by multiple task IDs (OR logic - images in ANY of the tasks)
         """
         # Base query - start with project pool
         base_query = (
@@ -272,12 +275,12 @@ class ProjectImageRepository:
                 )
                 base_query = base_query.where(shared_images.c.id.in_(annotated_subquery))
 
-        elif task_id is not None:
-            # Filter to images in specific task (across all jobs)
+        elif task_ids is not None and len(task_ids) > 0:
+            # Filter to images in ANY of the specified tasks (OR logic)
             task_images_subquery = (
                 select(images.c.shared_image_id)
                 .join(jobs, images.c.job_id == jobs.c.id)
-                .where(jobs.c.task_id == task_id)
+                .where(jobs.c.task_id.in_(task_ids))
                 .where(images.c.shared_image_id.isnot(None))
             )
             base_query = base_query.where(shared_images.c.id.in_(task_images_subquery))
@@ -286,7 +289,7 @@ class ProjectImageRepository:
                 annotated_subquery = (
                     select(images.c.shared_image_id)
                     .join(jobs, images.c.job_id == jobs.c.id)
-                    .where(jobs.c.task_id == task_id)
+                    .where(jobs.c.task_id.in_(task_ids))
                     .where(images.c.is_annotated == is_annotated)
                     .where(images.c.shared_image_id.isnot(None))
                 )

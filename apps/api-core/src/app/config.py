@@ -104,8 +104,13 @@ class Settings(BaseSettings):
     SHARE_MAX_UPLOAD_SIZE_MB: int = Field(
         default=50, description="Maximum upload file size in MB"
     )
-    SHARE_THUMBNAIL_SIZE: tuple[int, int] = Field(
-        default=(256, 256), description="Thumbnail dimensions (width, height)"
+    SHARE_THUMBNAIL_SIZES: dict[str, tuple[int, int]] = Field(
+        default={
+            "1x": (256, 256),    # Small zoom
+            "2x": (512, 512),    # Medium zoom (default)
+            "4x": (1024, 1024),  # Large zoom
+        },
+        description="Thumbnail dimensions for different zoom levels",
     )
     SHARE_THUMBNAIL_CACHE_DIR: Path = Field(
         default=Path("/data/cache/thumbnails"),

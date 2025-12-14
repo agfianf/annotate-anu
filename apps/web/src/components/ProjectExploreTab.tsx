@@ -1,35 +1,37 @@
 /**
  * ProjectExploreTab Component
- * FiftyOne-like image gallery for browsing, filtering, and tagging images
+ * FiftyOne-like image gallery with virtualization and infinite scroll
+ * Supports 10,000+ images with smooth performance
  */
 
 import {
   Check,
   ChevronDown,
-  Filter,
   Grid3X3,
   Image as ImageIcon,
   Loader2,
   Plus,
   RefreshCw,
   Search,
-  Sparkles,
   Tag,
-  Trash2,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
-  projectImagesApi,
   tagsApi,
   sharedImagesApi,
+  getAbsoluteThumbnailUrl,
   type SharedImage,
   type Tag as TagType,
   type ExploreFilters,
 } from '../lib/data-management-client';
 import { tasksApi } from '../lib/api-client';
+import { useInfiniteExploreImages } from '../hooks/useInfiniteExploreImages';
+import { useZoomLevel } from '../hooks/useZoomLevel';
+import { VirtualizedImageGrid, MultiTaskSelect } from './explore';
+import { ZoomControl } from './explore/ZoomControl';
 
 interface ProjectExploreTabProps {
   projectId: string;
@@ -47,19 +49,33 @@ const TAG_COLORS = [
   '#84CC16', // lime
 ];
 
+// Debounce hook for search
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps) {
   const queryClient = useQueryClient();
 
+  // Zoom level
+  const { zoomLevel, setZoomLevel, config: zoomConfig } = useZoomLevel();
+
+  // Search with debounce
+  const [searchInput, setSearchInput] = useState('');
+  const debouncedSearch = useDebounce(searchInput, 300);
+
   // Filters
-  const [search, setSearch] = useState('');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const [selectedTaskId, setSelectedTaskId] = useState<number | undefined>();
+  const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<number | undefined>();
   const [isAnnotatedFilter, setIsAnnotatedFilter] = useState<boolean | undefined>();
-
-  // Pagination
-  const [page, setPage] = useState(1);
-  const pageSize = 50;
 
   // Selection
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
@@ -72,27 +88,30 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const [showImageModal, setShowImageModal] = useState<SharedImage | null>(null);
 
   // Build filters object
-  const filters: ExploreFilters & { page: number; page_size: number } = useMemo(
+  const filters: ExploreFilters = useMemo(
     () => ({
-      search: search || undefined,
+      search: debouncedSearch || undefined,
       tag_ids: selectedTagIds.length > 0 ? selectedTagIds : undefined,
-      task_id: selectedTaskId,
+      task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
       job_id: selectedJobId,
       is_annotated: isAnnotatedFilter,
-      page,
-      page_size: pageSize,
     }),
-    [search, selectedTagIds, selectedTaskId, selectedJobId, isAnnotatedFilter, page]
+    [debouncedSearch, selectedTagIds, selectedTaskIds, selectedJobId, isAnnotatedFilter]
   );
 
-  // Fetch images
+  // Fetch images with infinite scroll
   const {
-    data: exploreData,
+    images,
+    total,
     isLoading: isLoadingImages,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
     refetch: refetchImages,
-  } = useQuery({
-    queryKey: ['project-explore', projectId, filters],
-    queryFn: () => projectImagesApi.explore(projectId, filters),
+  } = useInfiniteExploreImages({
+    projectId,
+    filters,
+    pageSize: 100,
     enabled: !!projectId,
   });
 
@@ -128,7 +147,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     mutationFn: ({ imageIds, tagIds }: { imageIds: string[]; tagIds: string[] }) =>
       sharedImagesApi.bulkTag(imageIds, tagIds),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['project-explore'] });
+      queryClient.invalidateQueries({ queryKey: ['project-explore-infinite'] });
       setSelectedImages(new Set());
       setShowAddTagModal(false);
       toast.success('Tags added');
@@ -138,25 +157,19 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     },
   });
 
-  // Reset pagination when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [search, selectedTagIds, selectedTaskId, selectedJobId, isAnnotatedFilter]);
-
-  // Clear selection when images change
+  // Clear selection when filters change
   useEffect(() => {
     setSelectedImages(new Set());
-  }, [exploreData]);
+  }, [filters]);
 
   // Handlers
   const handleSelectAll = useCallback(() => {
-    if (!exploreData?.images) return;
-    if (selectedImages.size === exploreData.images.length) {
+    if (selectedImages.size === images.length) {
       setSelectedImages(new Set());
     } else {
-      setSelectedImages(new Set(exploreData.images.map((img) => img.id)));
+      setSelectedImages(new Set(images.map((img) => img.id)));
     }
-  }, [exploreData, selectedImages]);
+  }, [images, selectedImages]);
 
   const handleToggleImage = useCallback((imageId: string) => {
     setSelectedImages((prev) => {
@@ -189,48 +202,30 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     });
   };
 
-  // Calculate pagination
-  const totalPages = exploreData ? Math.ceil(exploreData.total / pageSize) : 0;
-  const images = exploreData?.images || [];
-  const total = exploreData?.total || 0;
-
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0">
       {/* Top Bar - Filters */}
-      <div className="glass-strong rounded-2xl shadow-lg p-4 mb-4">
+      <div className="glass-strong rounded-2xl shadow-lg p-3 mb-3 relative z-20">
         <div className="flex flex-wrap items-center gap-4">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               placeholder="Search by filename..."
               className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
             />
           </div>
 
-          {/* Task Filter */}
-          <div className="relative">
-            <select
-              value={selectedTaskId || ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedTaskId(val ? parseInt(val) : undefined);
-                setSelectedJobId(undefined);
-              }}
-              className="appearance-none pl-3 pr-8 py-2 rounded-lg border border-gray-200 bg-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-            >
-              <option value="">All Tasks</option>
-              {tasks.map((task) => (
-                <option key={task.id} value={task.id}>
-                  {task.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-          </div>
+          {/* Multi-Task Filter */}
+          <MultiTaskSelect
+            tasks={tasks.map((t) => ({ id: t.id, name: t.name }))}
+            selectedTaskIds={selectedTaskIds}
+            onChange={setSelectedTaskIds}
+            placeholder="All Tasks"
+          />
 
           {/* Annotated Filter */}
           <div className="relative">
@@ -253,9 +248,13 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
           <button
             onClick={() => refetchImages()}
             className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Refresh"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
+
+          {/* Zoom Control */}
+          <ZoomControl currentZoom={zoomLevel} onZoomChange={setZoomLevel} />
         </div>
 
         {/* Tag Filters */}
@@ -331,14 +330,20 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       )}
 
       {/* Main Content */}
-      <div className="flex-1 glass-strong rounded-2xl shadow-lg overflow-hidden flex flex-col">
+      <div className="flex-1 glass-strong rounded-2xl shadow-lg overflow-hidden flex flex-col min-h-0 relative z-10">
         {/* Gallery Header */}
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center gap-3">
             <Grid3X3 className="w-5 h-5 text-emerald-600" />
             <span className="font-medium text-gray-700">
-              {isLoadingImages ? 'Loading...' : `${total} image(s)`}
+              {isLoadingImages ? 'Loading...' : `${total.toLocaleString()} image(s)`}
             </span>
+            {isFetchingNextPage && (
+              <span className="text-sm text-gray-400 flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading more...
+              </span>
+            )}
           </div>
           {images.length > 0 && (
             <button
@@ -353,109 +358,37 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               ) : (
                 <>
                   <Check className="w-4 h-4" />
-                  Select All
+                  Select All ({images.length})
                 </>
               )}
             </button>
           )}
         </div>
 
-        {/* Gallery Grid */}
-        <div className="flex-1 overflow-y-auto p-4">
-          {isLoadingImages ? (
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
-            </div>
-          ) : images.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-gray-500">
-              <ImageIcon className="w-16 h-16 text-gray-300 mb-4" />
-              <p className="text-lg font-medium">No images found</p>
-              <p className="text-sm">Try adjusting your filters or add images to the project pool</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3">
-              {images.map((image) => (
-                <div
-                  key={image.id}
-                  className={`relative group aspect-square rounded-lg overflow-hidden border-2 cursor-pointer transition-all ${
-                    selectedImages.has(image.id)
-                      ? 'border-emerald-500 ring-2 ring-emerald-500/30'
-                      : 'border-gray-200 hover:border-emerald-300'
-                  }`}
-                  onClick={() => handleToggleImage(image.id)}
-                  onDoubleClick={() => setShowImageModal(image)}
-                >
-                  {/* Thumbnail */}
-                  <img
-                    src={image.thumbnail_url || '/sample.webp'}
-                    alt={image.filename}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-
-                  {/* Selection Checkbox */}
-                  <div
-                    className={`absolute top-1 left-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                      selectedImages.has(image.id)
-                        ? 'bg-emerald-500 border-emerald-500'
-                        : 'bg-white/80 border-gray-300 opacity-0 group-hover:opacity-100'
-                    }`}
-                  >
-                    {selectedImages.has(image.id) && <Check className="w-3 h-3 text-white" />}
-                  </div>
-
-                  {/* Tags */}
-                  {image.tags.length > 0 && (
-                    <div className="absolute top-1 right-1 flex flex-wrap gap-0.5 max-w-[80%] justify-end">
-                      {image.tags.slice(0, 3).map((tag) => (
-                        <span
-                          key={tag.id}
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: tag.color }}
-                          title={tag.name}
-                        />
-                      ))}
-                      {image.tags.length > 3 && (
-                        <span className="text-[8px] text-white bg-black/50 px-1 rounded">
-                          +{image.tags.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Filename overlay */}
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <p className="text-[10px] text-white truncate">{image.filename}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-sm text-gray-500">
-              Page {page} of {totalPages}
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
+        {/* Virtualized Gallery Grid */}
+        {isLoadingImages ? (
+          <div className="flex items-center justify-center h-64">
+            <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
           </div>
+        ) : images.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+            <ImageIcon className="w-16 h-16 text-gray-300 mb-4" />
+            <p className="text-lg font-medium">No images found</p>
+            <p className="text-sm">Try adjusting your filters or add images to the project pool</p>
+          </div>
+        ) : (
+          <VirtualizedImageGrid
+            images={images}
+            selectedImages={selectedImages}
+            onToggleImage={handleToggleImage}
+            onImageDoubleClick={setShowImageModal}
+            targetRowHeight={zoomConfig.targetRowHeight}
+            thumbnailSize={zoomConfig.thumbnailSize}
+            spacing={12}
+            hasNextPage={hasNextPage}
+            isFetchingNextPage={isFetchingNextPage}
+            fetchNextPage={fetchNextPage}
+          />
         )}
       </div>
 
@@ -610,7 +543,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 {/* Image Preview */}
                 <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden">
                   <img
-                    src={showImageModal.thumbnail_url || '/sample.webp'}
+                    src={getAbsoluteThumbnailUrl(showImageModal.thumbnail_url) || '/sample.webp'}
                     alt={showImageModal.filename}
                     className="w-full h-full object-contain"
                   />
@@ -668,6 +601,27 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                       )}
                     </div>
                   </div>
+
+                  {/* Annotation Summary */}
+                  {showImageModal.annotation_summary && (
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-500 mb-2">Annotations</h4>
+                      <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Detections</span>
+                          <span className="text-gray-900">
+                            {showImageModal.annotation_summary.detection_count}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Segmentations</span>
+                          <span className="text-gray-900">
+                            {showImageModal.annotation_summary.segmentation_count}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

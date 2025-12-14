@@ -4,6 +4,7 @@
  */
 
 import {
+    ChevronLeft,
     ChevronRight,
     FolderKanban,
     HardDrive,
@@ -27,11 +28,11 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { path: '/dashboard', label: 'Overview', icon: <Home className="w-5 h-5" /> },
-  { path: '/dashboard/profile', label: 'Profile', icon: <User className="w-5 h-5" /> },
-  { path: '/dashboard/admin', label: 'Users', icon: <Users className="w-5 h-5" />, adminOnly: true },
-  { path: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className="w-5 h-5" /> },
-  { path: '/dashboard/files', label: 'File Share', icon: <HardDrive className="w-5 h-5" /> },
+  { path: '/dashboard', label: 'Overview', icon: <Home className="w-4 h-4" /> },
+  { path: '/dashboard/profile', label: 'Profile', icon: <User className="w-4 h-4" /> },
+  { path: '/dashboard/admin', label: 'Users', icon: <Users className="w-4 h-4" />, adminOnly: true },
+  { path: '/dashboard/projects', label: 'Projects', icon: <FolderKanban className="w-4 h-4" /> },
+  { path: '/dashboard/files', label: 'File Share', icon: <HardDrive className="w-4 h-4" /> },
 ];
 
 export default function DashboardLayout() {
@@ -39,6 +40,7 @@ export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -100,7 +102,7 @@ export default function DashboardLayout() {
               onClick={handleLogout}
               className="flex items-center gap-3 px-4 py-3 rounded-xl w-full text-left text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all mt-4"
             >
-              <LogOut className="w-5 h-5" />
+              <LogOut className="w-4 h-4" />
               Logout
             </button>
           </nav>
@@ -109,63 +111,109 @@ export default function DashboardLayout() {
 
       <div className="flex">
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex flex-col w-72 min-h-screen glass border-r border-gray-200 sticky top-0">
+        <aside className={`hidden lg:flex flex-col min-h-screen glass border-r border-gray-200 sticky top-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
           {/* Logo */}
-          <div className="p-6 border-b border-gray-200">
-            <Link to="/" className="flex items-center gap-3 group">
-              <img
-                src="/logo.png"
-                alt="Logo"
-                className="h-12 w-12 transition-transform group-hover:scale-105"
-              />
-              <span className="font-bold text-emerald-600 text-2xl">AnnotateANU</span>
-            </Link>
+          <div className={`border-b border-gray-200 transition-all ${isSidebarCollapsed ? 'p-4' : 'p-6'}`}>
+            <button
+              onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+              className="flex items-center gap-3 group w-full relative"
+              title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {!isSidebarCollapsed && (
+                <>
+                  <img
+                    src="/logo.png"
+                    alt="Logo"
+                    className="h-7 w-7 transition-all flex-shrink-0 group-hover:opacity-0"
+                  />
+                  <span className="font-bold text-emerald-600 text-xl transition-opacity">AnnotateANU</span>
+                  <ChevronLeft
+                    className="absolute left-0 w-7 h-7 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                  />
+                </>
+              )}
+              {isSidebarCollapsed && (
+                <>
+                  <img
+                    src="/logo.png"
+                    alt="Logo"
+                    className="h-7 w-7 transition-all flex-shrink-0 group-hover:opacity-0"
+                  />
+                  <ChevronRight
+                    className="absolute left-1/2 -translate-x-1/2 w-7 h-7 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
+                </>
+              )}
+            </button>
           </div>
 
           {/* User Info */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-emerald-50">
-              <div className="w-10 h-10 rounded-full bg-emerald-200 flex items-center justify-center text-emerald-700 font-semibold">
-                {user?.full_name?.charAt(0).toUpperCase() || user?.username?.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 truncate">{user?.full_name || user?.username}</p>
-                <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
-              </div>
+          <div className={`border-b border-gray-200 transition-all ${isSidebarCollapsed ? 'p-2' : 'p-4'}`}>
+            <div
+              className={`flex items-center rounded-lg transition-all ${
+                isSidebarCollapsed ? 'w-12 h-12 justify-center bg-emerald-50' : 'gap-3 px-3 py-2 bg-emerald-50'
+              }`}
+              title={isSidebarCollapsed ? `${user?.full_name || user?.username} (${user?.role})` : ''}
+            >
+              {isSidebarCollapsed ? (
+                <div className="w-8 h-8 rounded-full bg-emerald-200 flex items-center justify-center text-emerald-700 font-semibold text-sm">
+                  {user?.full_name?.charAt(0).toUpperCase() || user?.username?.charAt(0).toUpperCase()}
+                </div>
+              ) : (
+                <>
+                  <div className="w-10 h-10 rounded-full bg-emerald-200 flex items-center justify-center text-emerald-700 font-semibold flex-shrink-0">
+                    {user?.full_name?.charAt(0).toUpperCase() || user?.username?.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 truncate">{user?.full_name || user?.username}</p>
+                    <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4">
+          <nav className={`flex-1 transition-all ${isSidebarCollapsed ? 'p-2' : 'p-4'}`}>
             {filteredNavItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-1 transition-all group ${
+                title={isSidebarCollapsed ? item.label : ''}
+                className={`flex items-center rounded-lg mb-2 transition-all group ${
+                  isSidebarCollapsed ? 'w-12 h-12 justify-center' : 'gap-3 px-4 py-3'
+                } ${
                   isActive(item.path)
                     ? 'bg-emerald-100 text-emerald-700 shadow-sm'
                     : 'text-gray-600 hover:bg-emerald-50 hover:text-emerald-600'
                 }`}
               >
-                {item.icon}
-                <span className="flex-1">{item.label}</span>
-                <ChevronRight
-                  className={`w-4 h-4 opacity-0 -translate-x-2 transition-all ${
-                    isActive(item.path) ? 'opacity-100 translate-x-0' : 'group-hover:opacity-50 group-hover:translate-x-0'
-                  }`}
-                />
+                <span className="flex-shrink-0">{item.icon}</span>
+                {!isSidebarCollapsed && (
+                  <>
+                    <span className="flex-1">{item.label}</span>
+                    <ChevronRight
+                      className={`w-4 h-4 opacity-0 -translate-x-2 transition-all ${
+                        isActive(item.path) ? 'opacity-100 translate-x-0' : 'group-hover:opacity-50 group-hover:translate-x-0'
+                      }`}
+                    />
+                  </>
+                )}
               </Link>
             ))}
           </nav>
 
           {/* Logout */}
-          <div className="p-4 border-t border-gray-200">
+          <div className={`border-t border-gray-200 transition-all ${isSidebarCollapsed ? 'p-2' : 'p-4'}`}>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl w-full text-left text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all"
+              title={isSidebarCollapsed ? "Logout" : ''}
+              className={`flex items-center rounded-lg text-left text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all ${
+                isSidebarCollapsed ? 'w-12 h-12 justify-center' : 'w-full gap-3 px-4 py-3'
+              }`}
             >
-              <LogOut className="w-5 h-5" />
-              Logout
+              <LogOut className="w-4 h-4 flex-shrink-0" />
+              {!isSidebarCollapsed && <span>Logout</span>}
             </button>
           </div>
         </aside>

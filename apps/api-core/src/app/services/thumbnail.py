@@ -15,33 +15,37 @@ class ThumbnailService:
         """Initialize thumbnail service."""
         self.cache_dir = settings.SHARE_THUMBNAIL_CACHE_DIR
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.size = settings.SHARE_THUMBNAIL_SIZE
+        self.sizes = settings.SHARE_THUMBNAIL_SIZES
         self.quality = settings.SHARE_THUMBNAIL_QUALITY
         self.base_path = settings.SHARE_ROOT
 
-    def _get_cache_path(self, image_path: str) -> Path:
-        """Generate cache path for thumbnail based on image path hash.
+    def _get_cache_path(self, image_path: str, size_key: str = "2x") -> Path:
+        """Generate cache path for thumbnail based on image path hash and size.
 
         Parameters
         ----------
         image_path : str
             Relative path to image
+        size_key : str
+            Size key for thumbnail (1x, 2x, 4x)
 
         Returns
         -------
         Path
             Path to cached thumbnail
         """
-        path_hash = hashlib.md5(image_path.encode()).hexdigest()
+        path_hash = hashlib.md5(f"{image_path}_{size_key}".encode()).hexdigest()
         return self.cache_dir / f"{path_hash}.jpg"
 
-    async def get_or_create_thumbnail(self, relative_path: str) -> Path:
+    async def get_or_create_thumbnail(self, relative_path: str, size_key: str = "2x") -> Path:
         """Get existing thumbnail or create new one.
 
         Parameters
         ----------
         relative_path : str
             Relative path to image
+        size_key : str
+            Size key for thumbnail (1x, 2x, 4x)
 
         Returns
         -------
@@ -50,12 +54,18 @@ class ThumbnailService:
 
         Raises
         ------
+        ValueError
+            If invalid size_key provided
         FileNotFoundError
             If source image not found
         RuntimeError
             If thumbnail generation fails
         """
-        cache_path = self._get_cache_path(relative_path)
+        # Validate size_key
+        if size_key not in self.sizes:
+            raise ValueError(f"Invalid size_key: {size_key}. Must be one of {list(self.sizes.keys())}")
+
+        cache_path = self._get_cache_path(relative_path, size_key)
         source_path = self.base_path / relative_path
 
         # Check if source exists
@@ -69,11 +79,11 @@ class ThumbnailService:
             if cache_mtime >= source_mtime:
                 return cache_path
 
-        # Generate thumbnail
-        await self._generate_thumbnail(source_path, cache_path)
+        # Generate thumbnail with specified size
+        await self._generate_thumbnail(source_path, cache_path, self.sizes[size_key])
         return cache_path
 
-    async def _generate_thumbnail(self, source: Path, target: Path) -> None:
+    async def _generate_thumbnail(self, source: Path, target: Path, size: tuple[int, int]) -> None:
         """Generate thumbnail image.
 
         Parameters
@@ -82,6 +92,8 @@ class ThumbnailService:
             Path to source image
         target : Path
             Path to save thumbnail
+        size : tuple[int, int]
+            Thumbnail size (width, height)
 
         Raises
         ------
@@ -95,7 +107,7 @@ class ThumbnailService:
                     img = img.convert("RGB")
 
                 # Create thumbnail (maintains aspect ratio)
-                img.thumbnail(self.size, Image.Resampling.LANCZOS)
+                img.thumbnail(size, Image.Resampling.LANCZOS)
 
                 # Save to cache
                 img.save(target, "JPEG", quality=self.quality, optimize=True)

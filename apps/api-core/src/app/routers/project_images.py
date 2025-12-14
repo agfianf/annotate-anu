@@ -182,13 +182,16 @@ async def explore_project_images(
     page_size: int = Query(default=50, ge=1, le=200),
     search: str | None = Query(default=None, max_length=255),
     tag_ids: list[UUID] | None = Query(default=None),
-    task_id: int | None = Query(default=None),
+    task_ids: list[int] | None = Query(default=None),
     job_id: int | None = Query(default=None),
     is_annotated: bool | None = Query(default=None),
 ):
     """
     Explore images with combined filtering.
-    Supports filtering by tags, task/job hierarchy, annotation status, and search.
+    Supports filtering by tags, task/job hierarchy (multi-task), annotation status, and search.
+
+    Args:
+        task_ids: Filter by multiple task IDs (OR logic - images in ANY of the selected tasks)
     """
     project_id = project["id"]
 
@@ -198,7 +201,7 @@ async def explore_project_images(
         page=page,
         page_size=page_size,
         tag_ids=tag_ids,
-        task_id=task_id,
+        task_ids=task_ids,
         job_id=job_id,
         is_annotated=is_annotated,
         search=search,
@@ -214,8 +217,8 @@ async def explore_project_images(
         filters_applied["search"] = search
     if tag_ids:
         filters_applied["tag_ids"] = [str(t) for t in tag_ids]
-    if task_id is not None:
-        filters_applied["task_id"] = task_id
+    if task_ids is not None and len(task_ids) > 0:
+        filters_applied["task_ids"] = task_ids
     if job_id is not None:
         filters_applied["job_id"] = job_id
     if is_annotated is not None:

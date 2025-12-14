@@ -204,10 +204,45 @@ class ExploreFilter(BaseModel):
     """Filter options for exploring images."""
 
     tag_ids: list[UUID] | None = Field(None, description="Filter by tag IDs")
-    task_id: int | None = Field(None, description="Filter by task ID")
+    task_ids: list[int] | None = Field(None, description="Filter by task IDs (multi-select)")
     job_id: int | None = Field(None, description="Filter by job ID")
     is_annotated: bool | None = Field(None, description="Filter by annotation status")
     search: str | None = Field(None, max_length=255, description="Search filename")
+
+
+# ============================================================================
+# Annotation Preview Schemas (for thumbnails)
+# ============================================================================
+class BboxPreview(BaseModel):
+    """Minimal bbox for thumbnail overlay."""
+
+    x_min: float = Field(..., ge=0, le=1, description="Normalized x_min (0-1)")
+    y_min: float = Field(..., ge=0, le=1, description="Normalized y_min (0-1)")
+    x_max: float = Field(..., ge=0, le=1, description="Normalized x_max (0-1)")
+    y_max: float = Field(..., ge=0, le=1, description="Normalized y_max (0-1)")
+    label_color: str = Field(default="#10B981", description="Label color for rendering")
+
+
+class AnnotationSummary(BaseModel):
+    """Lightweight annotation summary for thumbnails."""
+
+    detection_count: int = Field(default=0, description="Number of detection annotations")
+    segmentation_count: int = Field(default=0, description="Number of segmentation annotations")
+    bboxes: list[BboxPreview] | None = Field(None, description="Simplified bboxes for overlay")
+
+
+class SharedImageWithAnnotations(SharedImageBase):
+    """Shared image response with annotation summary."""
+
+    id: UUID
+    checksum_sha256: str | None = None
+    metadata: dict | None = None
+    registered_by: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+    thumbnail_url: str | None = None
+    tags: list["TagResponse"] = Field(default_factory=list)
+    annotation_summary: AnnotationSummary | None = None
 
 
 class ExploreResponse(BaseModel):
@@ -246,5 +281,6 @@ class TaskCreateWithFilePaths(BaseModel):
             raise ValueError("distribution_order must be 'sequential' or 'random'")
 
 
-# Rebuild model to resolve forward references
+# Rebuild models to resolve forward references
 SharedImageResponse.model_rebuild()
+SharedImageWithAnnotations.model_rebuild()
