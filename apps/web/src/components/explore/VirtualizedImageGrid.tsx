@@ -21,6 +21,7 @@ interface VirtualizedImageGridProps {
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   fetchNextPage: () => void;
+  onRemoveTag?: (imageId: string, tagId: string) => void;
 }
 
 export function VirtualizedImageGrid({
@@ -34,6 +35,7 @@ export function VirtualizedImageGrid({
   hasNextPage,
   isFetchingNextPage,
   fetchNextPage,
+  onRemoveTag,
 }: VirtualizedImageGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -155,6 +157,7 @@ export function VirtualizedImageGrid({
               onImageDoubleClick={onImageDoubleClick}
               thumbnailSize={thumbnailSize}
               spacing={spacing}
+              onRemoveTag={onRemoveTag}
             />
           );
         })}

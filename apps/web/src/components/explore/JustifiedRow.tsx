@@ -17,6 +17,7 @@ interface JustifiedRowProps {
   onImageDoubleClick: (image: ImageWithRowInfo) => void;
   thumbnailSize: string;
   spacing: number;
+  onRemoveTag?: (imageId: string, tagId: string) => void;
 }
 
 export function JustifiedRow({
@@ -28,6 +29,7 @@ export function JustifiedRow({
   onImageDoubleClick,
   thumbnailSize,
   spacing,
+  onRemoveTag,
 }: JustifiedRowProps) {
   return (
     <div
@@ -62,6 +64,7 @@ export function JustifiedRow({
               height: `${row.height}px`,
               flexShrink: 0,
             }}
+            onRemoveTag={onRemoveTag ? (tagId: string) => onRemoveTag(image.id, tagId) : undefined}
           />
         );
       })}

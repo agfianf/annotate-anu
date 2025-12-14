@@ -96,6 +96,8 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
   const [showAddTagModal, setShowAddTagModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState<SharedImage | null>(null);
+  const [showImageTagSelector, setShowImageTagSelector] = useState(false);
+  const [selectedTagsForImage, setSelectedTagsForImage] = useState<string[]>([]);
 
   // Job association state for image modal
   const [selectedJobIdForAnnotation, setSelectedJobIdForAnnotation] = useState<number | null>(null);
@@ -162,7 +164,17 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const bulkTagMutation = useMutation({
     mutationFn: ({ imageIds, tagIds }: { imageIds: string[]; tagIds: string[] }) =>
       sharedImagesApi.bulkTag(imageIds, tagIds),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      // If adding to currently open modal image, fetch updated image data
+      if (showImageModal && variables.imageIds.includes(showImageModal.id)) {
+        // Refetch to get updated tags
+        queryClient.invalidateQueries({ queryKey: ['project-explore-infinite'] });
+        // Find updated image in the cache
+        const updatedImage = images.find(img => img.id === showImageModal.id);
+        if (updatedImage) {
+          setShowImageModal(updatedImage);
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['project-explore-infinite'] });
       setSelectedImages(new Set());
       setShowAddTagModal(false);
@@ -173,23 +185,30 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     },
   });
 
+  // Remove tag from specific image
+  const removeTagMutation = useMutation({
+    mutationFn: ({ imageId, tagId }: { imageId: string; tagId: string }) =>
+      sharedImagesApi.removeTag(imageId, tagId),
+    onSuccess: (updatedTags) => {
+      // Update modal image state if open
+      if (showImageModal) {
+        setShowImageModal({
+          ...showImageModal,
+          tags: updatedTags,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['project-explore-infinite'] });
+      toast.success('Tag removed');
+    },
+    onError: () => {
+      toast.error('Failed to remove tag');
+    },
+  });
+
   // Clear selection when filters change
   useEffect(() => {
     setSelectedImages(new Set());
   }, [filters]);
-
-  // Handle ESC key to exit full-view
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle ESC when in full-view and no modals are open
-      if (e.key === 'Escape' && isFullView && !showTagManager && !showAddTagModal && !showImageModal) {
-        exitFullView();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullView, exitFullView, showTagManager, showAddTagModal, showImageModal]);
 
   // Fetch jobs when image modal opens
   useEffect(() => {
@@ -258,6 +277,78 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       tagIds,
     });
   };
+
+  const handleRemoveTag = useCallback((imageId: string, tagId: string) => {
+    removeTagMutation.mutate({ imageId, tagId });
+  }, [removeTagMutation]);
+
+  const handleAddTagsToImage = useCallback((imageId: string, tagIds: string[]) => {
+    if (tagIds.length === 0) return;
+
+    // Optimistically update the modal state
+    if (showImageModal && showImageModal.id === imageId) {
+      const tagsToAdd = allTags.filter(tag => tagIds.includes(tag.id));
+      const updatedTags = [...showImageModal.tags, ...tagsToAdd];
+      setShowImageModal({
+        ...showImageModal,
+        tags: updatedTags,
+      });
+    }
+
+    bulkTagMutation.mutate({
+      imageIds: [imageId],
+      tagIds: tagIds,
+    });
+
+    // Reset selection
+    setSelectedTagsForImage([]);
+    setShowImageTagSelector(false);
+  }, [bulkTagMutation, showImageModal, allTags]);
+
+  // Navigation in fullscreen modal
+  const currentImageIndex = useMemo(() => {
+    if (!showImageModal) return -1;
+    return images.findIndex(img => img.id === showImageModal.id);
+  }, [showImageModal, images]);
+
+  const handlePreviousImage = useCallback(() => {
+    if (currentImageIndex > 0) {
+      setShowImageModal(images[currentImageIndex - 1]);
+    }
+  }, [currentImageIndex, images]);
+
+  const handleNextImage = useCallback(() => {
+    if (currentImageIndex < images.length - 1) {
+      setShowImageModal(images[currentImageIndex + 1]);
+    }
+  }, [currentImageIndex, images]);
+
+  // Handle keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Handle ESC key to exit full-view
+      if (e.key === 'Escape' && isFullView && !showTagManager && !showAddTagModal && !showImageModal) {
+        exitFullView();
+      }
+
+      // Handle arrow keys in fullscreen modal
+      if (showImageModal && !showTagManager && !showAddTagModal) {
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          handlePreviousImage();
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          handleNextImage();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          setShowImageModal(null);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullView, exitFullView, showTagManager, showAddTagModal, showImageModal, handlePreviousImage, handleNextImage]);
 
   const handleAnnotateClick = useCallback(() => {
     if (!jobsData || jobsData.length === 0) return;
@@ -480,6 +571,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             hasNextPage={hasNextPage}
             isFetchingNextPage={isFetchingNextPage}
             fetchNextPage={fetchNextPage}
+            onRemoveTag={handleRemoveTag}
           />
         )}
       </div>
@@ -617,32 +709,59 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       {/* Image Detail Modal */}
       {showImageModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[95vh] overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900 truncate">
-                {showImageModal.filename}
-              </h3>
-              <button
-                onClick={() => setShowImageModal(null)}
-                className="p-1 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <h3 className="text-lg font-semibold text-gray-900 truncate">
+                  {showImageModal.filename}
+                </h3>
+                <span className="text-sm text-gray-500 whitespace-nowrap">
+                  {currentImageIndex + 1} / {images.length}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Previous button */}
+                <button
+                  onClick={handlePreviousImage}
+                  disabled={currentImageIndex === 0}
+                  className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Previous (←)"
+                >
+                  <ChevronDown className="w-5 h-5 rotate-90" />
+                </button>
+                {/* Next button */}
+                <button
+                  onClick={handleNextImage}
+                  disabled={currentImageIndex === images.length - 1}
+                  className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Next (→)"
+                >
+                  <ChevronDown className="w-5 h-5 -rotate-90" />
+                </button>
+                {/* Close button */}
+                <button
+                  onClick={() => setShowImageModal(null)}
+                  className="p-2 text-gray-400 hover:text-gray-600"
+                  title="Close (ESC)"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Image Preview */}
-                <div className="aspect-square bg-gray-100 rounded-xl overflow-hidden">
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
+                {/* Image Preview - takes 3 columns on large screens */}
+                <div className="lg:col-span-3 bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center min-h-[400px] lg:min-h-0">
                   <img
                     src={getFullSizeThumbnailUrl(showImageModal.thumbnail_url) || '/sample.webp'}
                     alt={showImageModal.filename}
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-contain max-h-[70vh]"
                   />
                 </div>
 
-                {/* Details */}
-                <div className="space-y-4">
+                {/* Details - takes 1 column on large screens */}
+                <div className="lg:col-span-1 space-y-4 lg:overflow-y-auto">
                   <div>
                     <h4 className="text-sm font-medium text-gray-500 mb-1">File Info</h4>
                     <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm">
@@ -674,19 +793,97 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                   </div>
 
                   <div>
-                    <h4 className="text-sm font-medium text-gray-500 mb-2">Tags</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium text-gray-500">Tags</h4>
+                      {/* Add tags button */}
+                      <button
+                        onClick={() => setShowImageTagSelector(!showImageTagSelector)}
+                        className="text-xs px-3 py-1.5 border border-emerald-500 text-emerald-600 rounded-lg bg-white hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors flex items-center gap-1"
+                        disabled={bulkTagMutation.isPending}
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add Tags
+                      </button>
+                    </div>
+
+                    {/* Multi-select tag dropdown */}
+                    {showImageTagSelector && (
+                      <div className="mb-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                        <div className="max-h-40 overflow-y-auto space-y-2 mb-3">
+                          {allTags
+                            .filter(tag => !showImageModal.tags.some(t => t.id === tag.id))
+                            .map(tag => (
+                              <label
+                                key={tag.id}
+                                className="flex items-center gap-2 hover:bg-white p-2 rounded cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedTagsForImage.includes(tag.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedTagsForImage([...selectedTagsForImage, tag.id]);
+                                    } else {
+                                      setSelectedTagsForImage(selectedTagsForImage.filter(id => id !== tag.id));
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                                />
+                                <span
+                                  className="w-3 h-3 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: tag.color }}
+                                />
+                                <span className="text-sm text-gray-700">{tag.name}</span>
+                              </label>
+                            ))}
+                          {allTags.filter(tag => !showImageModal.tags.some(t => t.id === tag.id)).length === 0 && (
+                            <p className="text-sm text-gray-500 text-center py-2">All tags already added</p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAddTagsToImage(showImageModal.id, selectedTagsForImage)}
+                            disabled={selectedTagsForImage.length === 0 || bulkTagMutation.isPending}
+                            className="flex-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white text-xs font-medium rounded-lg transition-colors"
+                          >
+                            Add {selectedTagsForImage.length > 0 && `(${selectedTagsForImage.length})`}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowImageTagSelector(false);
+                              setSelectedTagsForImage([]);
+                            }}
+                            className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-xs font-medium rounded-lg"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex flex-wrap gap-2">
                       {showImageModal.tags.map((tag) => (
-                        <span
+                        <div
                           key={tag.id}
-                          className="px-3 py-1 rounded-full text-xs font-medium"
+                          className="px-3 py-1 rounded-full text-xs font-medium flex items-center gap-2 group"
                           style={{
                             backgroundColor: `${tag.color}20`,
                             color: tag.color,
                           }}
                         >
-                          {tag.name}
-                        </span>
+                          <span>{tag.name}</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveTag(showImageModal.id, tag.id);
+                            }}
+                            disabled={removeTagMutation.isPending}
+                            className="opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
+                            title="Remove tag"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
                       ))}
                       {showImageModal.tags.length === 0 && (
                         <span className="text-sm text-gray-400">No tags assigned</span>
