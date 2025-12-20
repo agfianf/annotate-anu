@@ -64,50 +64,41 @@ class Settings(BaseSettings):
     BCRYPT_ROUNDS: int = Field(default=12, description="Bcrypt hashing rounds")
 
     # Security (legacy - for encryption)
-    SECRET_KEY: str = Field(
-        default="change-me-in-production", description="Secret key for signing"
-    )
+    SECRET_KEY: str = Field(default="change-me-in-production", description="Secret key for signing")
     ENCRYPTION_KEY: str = Field(
         default="change-me-in-production-32-chars",
         description="Key for encrypting sensitive data",
     )
 
     # Health check settings
-    HEALTH_CHECK_TIMEOUT: int = Field(
-        default=10, description="Health check timeout in seconds"
-    )
-    HEALTH_CHECK_INTERVAL: int = Field(
-        default=300, description="Health check interval in seconds"
-    )
+    HEALTH_CHECK_TIMEOUT: int = Field(default=10, description="Health check timeout in seconds")
+    HEALTH_CHECK_INTERVAL: int = Field(default=300, description="Health check interval in seconds")
 
     # Inference proxy settings
     SAM3_API_URL: str = Field(
         default="http://localhost:8000",
         description="SAM3 API inference service URL",
     )
-    INFERENCE_TIMEOUT: int = Field(
-        default=120, description="Inference request timeout in seconds"
-    )
+    INFERENCE_TIMEOUT: int = Field(default=120, description="Inference request timeout in seconds")
 
     # File Share Settings
     SHARE_ROOT: Path = Field(
         default=Path("/data/share"),
         description="Root directory for shared file storage",
     )
-    SHARE_MAX_DEPTH: int = Field(
-        default=5, description="Maximum folder depth allowed"
-    )
+    SHARE_MAX_DEPTH: int = Field(default=5, description="Maximum folder depth allowed")
     SHARE_ALLOWED_EXTENSIONS: set[str] = Field(
         default={".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"},
         description="Allowed file extensions for upload",
     )
-    SHARE_MAX_UPLOAD_SIZE_MB: int = Field(
-        default=50, description="Maximum upload file size in MB"
+    SHARE_MAX_UPLOAD_SIZE_MB: int = Field(default=50, description="Maximum upload file size in MB")
+    SHARE_MAX_UPLOAD_FILES: int = Field(
+        default=100000, description="Maximum number of files per upload request"
     )
     SHARE_THUMBNAIL_SIZES: dict[str, tuple[int, int]] = Field(
         default={
-            "1x": (256, 256),    # Small zoom
-            "2x": (512, 512),    # Medium zoom (default)
+            "1x": (256, 256),  # Small zoom
+            "2x": (512, 512),  # Medium zoom (default)
             "4x": (1024, 1024),  # Large zoom
         },
         description="Thumbnail dimensions for different zoom levels",

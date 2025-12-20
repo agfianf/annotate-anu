@@ -827,18 +827,18 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             <RefreshCw className="w-4 h-4" />
           </button>
 
+          {/* Zoom Control */}
+          <ZoomControl currentZoom={zoomLevel} onZoomChange={setZoomLevel} />
+
           {/* Full View Toggle */}
           <button
             onClick={toggleFullView}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors ml-auto"
             title={isFullView ? "Exit full view (ESC)" : "Enter full view"}
             aria-label={isFullView ? "Exit full view" : "Enter full view"}
           >
             {isFullView ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
-
-          {/* Zoom Control */}
-          <ZoomControl currentZoom={zoomLevel} onZoomChange={setZoomLevel} />
         </div>
 
         {/* Tag Filters */}

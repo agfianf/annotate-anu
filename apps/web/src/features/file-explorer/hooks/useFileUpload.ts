@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useState } from 'react'
 import { shareApi } from '../api/share'
-import { fileTreeKeys } from './useFileTree'
 import type { UploadFile, UploadResponse } from '../types'
+import { fileTreeKeys } from './useFileTree'
 
 // Fallback for crypto.randomUUID (not available in all contexts)
 const generateId = (): string => {
@@ -65,15 +65,27 @@ export function useFileUpload(options?: UseFileUploadOptions) {
 
       options?.onSuccess?.(response)
     },
-    onError: (error: Error) => {
+    onError: (error: unknown) => {
+      // Parse error message from axios response
+      let errorMessage = 'Upload failed'
+      
+      // Check if it's an axios error with response data
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { message?: string; detail?: string } } }
+        const responseData = axiosError.response?.data
+        errorMessage = responseData?.message || responseData?.detail || errorMessage
+      } else if (error instanceof Error) {
+        errorMessage = error.message
+      }
+
       setUploadQueue((prev) =>
         prev.map((item) => ({
           ...item,
           status: 'error' as const,
-          error: error.message,
+          error: errorMessage,
         }))
       )
-      options?.onError?.(error)
+      options?.onError?.(new Error(errorMessage))
     },
   })
 

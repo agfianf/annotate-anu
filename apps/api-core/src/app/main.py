@@ -2,19 +2,22 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.formparsers import MultiPartParser
 
 from app.config import settings
 from app.helpers.database import get_async_engine, metadata
 from app.helpers.logger import logger
 from app.integrations.redis import RedisClient
 from app.routers import admin as admin_router
-from app.routers import auth as auth_router
 from app.routers import annotations as annotations_router
+from app.routers import auth as auth_router
 from app.routers import images as images_router
 from app.routers import jobs as jobs_router
+
 # from app.routers import models as models_router  # TODO: Enable when app.models.byom is implemented
 from app.routers import project_images as project_images_router
 from app.routers import projects as projects_router
@@ -23,6 +26,9 @@ from app.routers import shared_images as shared_images_router
 from app.routers import tags as tags_router
 from app.routers import tasks as tasks_router
 from app.services.health_checker import HealthChecker
+
+# Configure Starlette's MultiPartParser to allow more files (default is 1000)
+MultiPartParser.max_files = settings.SHARE_MAX_UPLOAD_FILES
 
 
 @asynccontextmanager
@@ -89,30 +95,55 @@ app.add_middleware(
 )
 
 
-# Exception handlers
+# Exception handlers with standardized response format: { data, message, success, status_code, meta }
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle validation errors with standardized format."""
+    errors = exc.errors()
+    # Extract first error message for main message
+    first_error = errors[0] if errors else {}
+    field = ".".join(str(loc) for loc in first_error.get("loc", [])) if first_error else "unknown"
+    msg = first_error.get("msg", "Validation error")
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            "data": None,
+            "message": f"{field}: {msg}",
+            "success": False,
+            "status_code": 422,
+            "meta": {"errors": errors},
+        },
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTP exceptions with standardized format."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "data": None,
+            "message": exc.detail,
+            "success": False,
+            "status_code": exc.status_code,
+            "meta": None,
+        },
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handle uncaught exceptions.
-
-    Parameters
-    ----------
-    request : Request
-        FastAPI request
-    exc : Exception
-        Raised exception
-
-    Returns
-    -------
-    JSONResponse
-        Error response
-    """
+    """Handle uncaught exceptions with standardized format."""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={
-            "error": "Internal Server Error",
+            "data": None,
             "message": str(exc),
+            "success": False,
             "status_code": 500,
+            "meta": None,
         },
     )
 

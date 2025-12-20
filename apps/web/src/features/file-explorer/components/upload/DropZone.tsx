@@ -1,6 +1,6 @@
-import { useCallback } from 'react'
+import { File, FolderUp, Upload } from 'lucide-react'
+import { useCallback, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, FolderUp } from 'lucide-react'
 
 interface DropZoneProps {
   onFilesAdded: (files: File[]) => void
@@ -11,6 +11,8 @@ export function DropZone({
   onFilesAdded,
   acceptedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'],
 }: DropZoneProps) {
+  const folderInputRef = useRef<HTMLInputElement>(null)
+
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
       onFilesAdded(acceptedFiles)
@@ -18,30 +20,64 @@ export function DropZone({
     [onFilesAdded]
   )
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: {
       'image/*': acceptedExtensions,
     },
     multiple: true,
+    noClick: true, // Disable click to allow custom buttons
+    noKeyboard: true,
   })
+
+  const handleFolderSelect = useCallback(() => {
+    folderInputRef.current?.click()
+  }, [])
+
+  const handleFolderChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files
+      if (files && files.length > 0) {
+        // Filter to accepted extensions
+        const validFiles = Array.from(files).filter((file) => {
+          const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+          return acceptedExtensions.includes(ext)
+        })
+        onFilesAdded(validFiles)
+      }
+      // Reset input to allow re-selecting the same folder
+      e.target.value = ''
+    },
+    [acceptedExtensions, onFilesAdded]
+  )
 
   return (
     <div
       {...getRootProps()}
       className={`
-        border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
+        border-2 border-dashed rounded-lg p-6 text-center
         transition-colors duration-200
         ${
           isDragActive
             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-            : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+            : 'border-gray-300 dark:border-gray-600'
         }
       `}
     >
       <input {...getInputProps()} />
+      {/* Hidden folder input with webkitdirectory */}
+      <input
+        ref={folderInputRef}
+        type="file"
+        className="hidden"
+        onChange={handleFolderChange}
+        // @ts-expect-error - webkitdirectory is a non-standard attribute
+        webkitdirectory=""
+        directory=""
+        multiple
+      />
 
-      <div className="flex flex-col items-center gap-3">
+      <div className="flex flex-col items-center gap-4">
         {isDragActive ? (
           <>
             <FolderUp className="w-12 h-12 text-blue-500" />
@@ -49,15 +85,36 @@ export function DropZone({
           </>
         ) : (
           <>
-            <Upload className="w-12 h-12 text-gray-400" />
+            <Upload className="w-10 h-10 text-gray-400" />
             <div>
-              <p className="text-lg font-medium text-gray-700 dark:text-gray-200">
-                Drag and drop files here
+              <p className="text-base font-medium text-gray-700 dark:text-gray-200">
+                Drag and drop files or folders here
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                or click to select files
+                or use the buttons below
               </p>
             </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-3 mt-2">
+              <button
+                type="button"
+                onClick={open}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <File className="w-4 h-4" />
+                Select Files
+              </button>
+              <button
+                type="button"
+                onClick={handleFolderSelect}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+              >
+                <FolderUp className="w-4 h-4" />
+                Select Folder
+              </button>
+            </div>
+
             <p className="text-xs text-gray-400 mt-2">
               Supported: {acceptedExtensions.join(', ')}
             </p>
@@ -67,3 +124,4 @@ export function DropZone({
     </div>
   )
 }
+

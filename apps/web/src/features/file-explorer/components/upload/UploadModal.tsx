@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
-import { X, Upload } from 'lucide-react'
+import { Upload, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import toast from 'react-hot-toast'
 import { useFileUpload } from '../../hooks/useFileUpload'
 import { PathAutocomplete } from '../PathAutocomplete'
 import { DropZone } from './DropZone'
 import { UploadQueue } from './UploadQueue'
-import toast from 'react-hot-toast'
 
 interface UploadModalProps {
   isOpen: boolean
@@ -66,8 +67,8 @@ export function UploadModal({
 
   if (!isOpen) return null
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+  return createPortal(
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50"
@@ -75,7 +76,7 @@ export function UploadModal({
       />
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-lg mx-4">
+      <div className="relative z-10 bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-lg mx-4">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -155,6 +156,7 @@ export function UploadModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

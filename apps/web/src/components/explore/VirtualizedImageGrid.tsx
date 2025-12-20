@@ -3,11 +3,11 @@
  * Renders only visible rows for smooth performance with 10,000+ images
  */
 
-import { useRef, useEffect, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2 } from 'lucide-react';
-import type { SharedImage } from '../../lib/data-management-client';
+import { useEffect, useRef, useState } from 'react';
 import { useJustifiedRows } from '../../hooks/useJustifiedRows';
+import type { SharedImage } from '../../lib/data-management-client';
 import { JustifiedRow } from './JustifiedRow';
 
 interface VirtualizedImageGridProps {
@@ -76,13 +76,20 @@ export function VirtualizedImageGrid({
   });
 
   // Remeasure virtualizer when layout changes (container resize, zoom change)
+  // Use requestAnimationFrame to defer measure() outside React's render cycle
+  // This prevents the "flushSync called from inside lifecycle" warning
   useEffect(() => {
-    rowVirtualizer.measure();
+    const rafId = requestAnimationFrame(() => {
+      rowVirtualizer.measure();
+    });
+    return () => cancelAnimationFrame(rafId);
   }, [layout, rowVirtualizer]);
+
+  // Get virtual items for rendering and infinite scroll
+  const virtualItems = rowVirtualizer.getVirtualItems();
 
   // Infinite scroll trigger
   useEffect(() => {
-    const virtualItems = rowVirtualizer.getVirtualItems();
     const lastItem = virtualItems[virtualItems.length - 1];
 
     if (
@@ -94,7 +101,7 @@ export function VirtualizedImageGrid({
       fetchNextPage();
     }
   }, [
-    rowVirtualizer.getVirtualItems(),
+    virtualItems.length, // Use length instead of calling getVirtualItems() in dependency
     layout.rows.length,
     hasNextPage,
     isFetchingNextPage,
@@ -114,7 +121,7 @@ export function VirtualizedImageGrid({
           position: 'relative',
         }}
       >
-        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+        {virtualItems.map((virtualRow) => {
           const isLoaderRow = virtualRow.index >= layout.rows.length;
 
           if (isLoaderRow) {

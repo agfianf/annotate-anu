@@ -1,6 +1,6 @@
 """Standardized JSON response helpers."""
 
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
 from pydantic import BaseModel, Field
 
@@ -21,10 +21,12 @@ class JsonResponse(BaseModel, Generic[DataT, MetaT]):
     """Standardized JSON response format.
 
     This is the standard response format for all API endpoints.
+    Format: { data, message, success, status_code, meta }
     """
 
     data: DataT | None = Field(default=None, description="Response data")
     message: str = Field(..., description="Human-readable message")
+    success: bool = Field(default=True, description="Whether the request was successful")
     status_code: int = Field(..., description="HTTP status code")
     meta: MetaT | None = Field(default=None, description="Metadata (pagination, etc)")
 
@@ -40,9 +42,13 @@ class ErrorDetail(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """Error response format."""
+    """Standardized error response format.
 
-    error: str = Field(..., description="Error type or code")
+    Format: { data, message, success, status_code, meta }
+    """
+
+    data: None = Field(default=None, description="Always null for errors")
     message: str = Field(..., description="Human-readable error message")
+    success: bool = Field(default=False, description="Always false for errors")
     status_code: int = Field(..., description="HTTP status code")
-    details: list[ErrorDetail] | None = Field(default=None, description="Detailed error information")
+    meta: dict | None = Field(default=None, description="Additional error details")
