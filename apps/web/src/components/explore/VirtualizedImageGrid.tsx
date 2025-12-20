@@ -5,7 +5,7 @@
 
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useJustifiedRows } from '../../hooks/useJustifiedRows';
 import type { SharedImage } from '../../lib/data-management-client';
 import { JustifiedRow } from './JustifiedRow';
@@ -56,6 +56,9 @@ export function VirtualizedImageGrid({
     return () => resizeObserver.disconnect();
   }, []);
 
+  // Force re-render state - used by onChange to trigger updates outside React's render cycle
+  const [, forceUpdate] = useState(0);
+  
   // Calculate justified layout
   const { layout, imagesWithRowInfo } = useJustifiedRows({
     images,
@@ -63,6 +66,16 @@ export function VirtualizedImageGrid({
     targetRowHeight,
     spacing,
   });
+
+  // Custom onChange handler that defers updates to avoid flushSync warning
+  // See: https://github.com/TanStack/virtual/issues/613
+  const handleOnChange = useCallback(() => {
+    // Use queueMicrotask to defer the state update outside of React's render cycle
+    // This prevents the "flushSync was called from inside a lifecycle method" warning
+    queueMicrotask(() => {
+      forceUpdate((prev) => prev + 1);
+    });
+  }, []);
 
   // TanStack Virtual with dynamic row heights
   const rowVirtualizer = useVirtualizer({
@@ -73,6 +86,8 @@ export function VirtualizedImageGrid({
       return layout.rows[index].height + spacing;
     },
     overscan: 2,
+    // Custom onChange to avoid flushSync warning
+    onChange: handleOnChange,
   });
 
   // Remeasure virtualizer when layout changes (container resize, zoom change)

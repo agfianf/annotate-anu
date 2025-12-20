@@ -38,6 +38,7 @@ import {
   type Tag as TagType
 } from '../lib/data-management-client';
 import { MultiTaskSelect, VirtualizedImageGrid } from './explore';
+import { FullscreenImage } from './explore/FullscreenImage';
 import { ZoomControl } from './explore/ZoomControl';
 import TagSelectorDropdown from './TagSelectorDropdown';
 
@@ -1108,8 +1109,8 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
                 {/* Image Preview - takes 3 columns on large screens */}
                 <div className="lg:col-span-3 bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center min-h-[400px] lg:min-h-0">
-                  <img
-                    src={getFullSizeThumbnailUrl(showImageModal.thumbnail_url) || '/sample.webp'}
+                  <FullscreenImage
+                    src={getFullSizeThumbnailUrl(showImageModal.thumbnail_url)}
                     alt={showImageModal.filename}
                     className="w-full h-full object-contain max-h-[70vh]"
                   />
