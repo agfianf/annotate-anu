@@ -2,8 +2,9 @@
 // Generated from api-core SQLAlchemy models
 // https://dbdiagram.io
 //
-// Last Updated: 2025-12-13
+// Last Updated: 2025-12-20
 // Recent Changes:
+// - Made tags project-specific (added project_id to tags and shared_image_tags)
 // - Added Data Management feature tables (shared_images, tags, shared_image_tags, project_images)
 // - Enhanced images table with shared_image_id reference
 // - Added support for file share image registry with tagging system
@@ -187,28 +188,33 @@ Table shared_images {
 
 Table tags {
   id uuid [pk, default: `gen_random_uuid()`, note: 'UUID primary key']
-  name varchar(100) [unique, not null, note: 'Tag name (globally unique)']
+  project_id int [not null, ref: > projects.id, note: 'Reference to project']
+  name varchar(100) [not null, note: 'Tag name (unique per project)']
   description varchar(500) [note: 'Tag description']
   color varchar(7) [default: '#6B7280', note: 'Hex color code for UI display']
   created_by uuid [ref: > users.id, note: 'User who created this tag']
   created_at timestamptz [not null, default: `now()`]
 
   indexes {
+    project_id [name: 'ix_tags_project_id']
     name [name: 'ix_tags_name']
+    (project_id, name) [unique, name: 'ix_tags_unique']
   }
 }
 
 Table shared_image_tags {
   id uuid [pk, default: `gen_random_uuid()`, note: 'UUID primary key']
+  project_id int [not null, ref: > projects.id, note: 'Reference to project']
   shared_image_id uuid [not null, ref: > shared_images.id, note: 'Parent shared image']
   tag_id uuid [not null, ref: > tags.id, note: 'Applied tag']
   created_by uuid [ref: > users.id, note: 'User who tagged the image']
   created_at timestamptz [not null, default: `now()`]
 
   indexes {
+    project_id [name: 'ix_shared_image_tags_project']
     shared_image_id [name: 'ix_shared_image_tags_image']
     tag_id [name: 'ix_shared_image_tags_tag']
-    (shared_image_id, tag_id) [unique, name: 'ix_shared_image_tags_unique']
+    (project_id, shared_image_id, tag_id) [unique, name: 'ix_shared_image_tags_unique']
   }
 }
 
