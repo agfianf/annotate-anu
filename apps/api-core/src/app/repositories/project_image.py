@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import delete, func, insert, select
+from sqlalchemy import delete, func, insert, literal, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.models.data_management import project_images, shared_image_tags, shared_images, tags
@@ -463,15 +463,17 @@ class ProjectImageRepository:
             histogram = [{"bucket_start": min_val, "bucket_end": max_val, "count": stats.total}]
         else:
             bucket_width = (max_val - min_val) / num_buckets
+            # Use literal() to ensure values are treated as SQL literals, not parameters
+            bucket_expr = func.floor((column - literal(min_val)) / literal(bucket_width))
             histogram_stmt = (
                 select(
-                    func.floor((column - min_val) / bucket_width).label("bucket"),
+                    bucket_expr.label("bucket"),
                     func.count().label("count"),
                 )
                 .select_from(project_images)
                 .join(shared_images, project_images.c.shared_image_id == shared_images.c.id)
                 .where(*base_where)
-                .group_by(func.floor((column - min_val) / bucket_width))
+                .group_by(bucket_expr)
                 .order_by("bucket")
             )
 

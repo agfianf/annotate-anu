@@ -21,6 +21,9 @@ export function NumericRangeFilter({
   const [localMin, setLocalMin] = useState(currentRange?.min ?? min_value);
   const [localMax, setLocalMax] = useState(currentRange?.max ?? max_value);
   const [isDragging, setIsDragging] = useState(false);
+  const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
+  const [activeThumb, setActiveThumb] = useState<'min' | 'max' | null>(null);
+  const [hoverThumb, setHoverThumb] = useState<'min' | 'max' | null>(null);
 
   // Update local state when props change (unless dragging)
   // useMemo/useEffect to sync if needed, but simplistic approach first
@@ -48,11 +51,49 @@ export function NumericRangeFilter({
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setActiveThumb(null);
     commitChange();
   };
 
-  const isFiltered = currentRange !== null;
+  const isFiltered = currentRange !== null && (
+    currentRange.min !== min_value || currentRange.max !== max_value
+  );
   const title = aggregation.display_name || aggregation.name;
+
+  // Handle mouse movement to detect which thumb is closer
+  const handleSliderMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (activeThumb) return; // Don't change hover state while dragging
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = x / rect.width;
+    const mouseValue = min_value + percentage * (max_value - min_value);
+
+    // Calculate distance to each thumb
+    const distToMin = Math.abs(mouseValue - localMin);
+    const distToMax = Math.abs(mouseValue - localMax);
+
+    // Set hover state based on which thumb is closer
+    setHoverThumb(distToMin < distToMax ? 'min' : 'max');
+  };
+
+  const handleSliderMouseLeave = () => {
+    setHoverThumb(null);
+  };
+
+  // Calculate z-index for sliders to prevent overlap issues
+  const getSliderZIndex = (slider: 'min' | 'max') => {
+    // If actively dragging a specific thumb, give it priority
+    if (activeThumb === slider) return 20;
+    if (activeThumb && activeThumb !== slider) return 10;
+
+    // If hovering, prioritize the thumb closest to mouse
+    if (hoverThumb === slider) return 15;
+    if (hoverThumb && hoverThumb !== slider) return 10;
+
+    // Default: both at same level (DOM order makes max on top)
+    return 10;
+  };
 
   return (
     <SidebarSection
@@ -63,7 +104,7 @@ export function NumericRangeFilter({
       <div className="space-y-3 font-mono text-xs">
         {/* Statistics Header */}
         <div className="flex justify-between text-[10px] text-emerald-900/50 tracking-tighter">
-          <span>Range: {min_value.toFixed(0)} - {max_value.toFixed(0)}{unit}</span>
+          <span>Range: {min_value.toFixed(1)} - {max_value.toFixed(1)}{unit}</span>
           <span>Avg: {mean.toFixed(1)}{unit}</span>
         </div>
 
@@ -77,25 +118,33 @@ export function NumericRangeFilter({
             return (
               <div
                 key={i}
-                className="flex-1 transition-all duration-150 relative group"
+                className="flex-1 transition-all duration-150 relative cursor-pointer"
                 style={{
                   height: `${Math.max(height, 5)}%`,
                   backgroundColor: inRange
                     ? '#10B981' // Emerald-500
                     : '#D1FAE5', // Emerald-100
                 }}
+                onMouseEnter={() => setHoveredBarIndex(i)}
+                onMouseLeave={() => setHoveredBarIndex(null)}
               >
-                 {/* Tooltip */}
-                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-white border border-emerald-100 shadow-lg text-emerald-900 text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                   {bucket.bucket_start.toFixed(0)}-{bucket.bucket_end.toFixed(0)}{unit}: {bucket.count}
-                 </div>
+                 {/* Tooltip - only show for hovered bar */}
+                 {hoveredBarIndex === i && (
+                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-white border border-emerald-100 shadow-lg text-emerald-900 text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap z-10 pointer-events-none">
+                     {bucket.bucket_start.toFixed(1)}-{bucket.bucket_end.toFixed(1)}{unit}: {bucket.count}
+                   </div>
+                 )}
               </div>
             );
           })}
         </div>
 
         {/* Range Slider (dual thumb) - Custom Style */}
-        <div className="relative h-6 select-none">
+        <div
+          className="relative h-6 select-none"
+          onMouseMove={handleSliderMouseMove}
+          onMouseLeave={handleSliderMouseLeave}
+        >
           {/* Track */}
           <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-[2px] bg-emerald-100" />
           
@@ -116,9 +165,11 @@ export function NumericRangeFilter({
             step={(max_value - min_value) / 100}
             value={localMin}
             onChange={(e) => setLocalMin(parseFloat(e.target.value))}
+            onMouseDown={() => setActiveThumb('min')}
             onMouseUp={handleMouseUp}
             onTouchEnd={handleMouseUp}
-            className="absolute w-full h-full opacity-0 cursor-pointer z-10"
+            className="absolute w-full h-full opacity-0 cursor-pointer"
+            style={{ zIndex: getSliderZIndex('min') }}
           />
           <input
             type="range"
@@ -127,9 +178,11 @@ export function NumericRangeFilter({
             step={(max_value - min_value) / 100}
             value={localMax}
             onChange={(e) => setLocalMax(parseFloat(e.target.value))}
+            onMouseDown={() => setActiveThumb('max')}
             onMouseUp={handleMouseUp}
             onTouchEnd={handleMouseUp}
-            className="absolute w-full h-full opacity-0 cursor-pointer z-10"
+            className="absolute w-full h-full opacity-0 cursor-pointer"
+            style={{ zIndex: getSliderZIndex('max') }}
           />
 
           {/* Visible Thumbs (Pixelated Square Style) */}

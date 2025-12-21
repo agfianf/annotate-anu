@@ -9,6 +9,7 @@ import { getAbsoluteThumbnailUrl } from '../../lib/data-management-client';
 import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
 import { AnnotationOverlay } from './AnnotationOverlay';
 import type { VisibilityState } from '../../hooks/useExploreVisibility';
+import { MetadataBadge } from './MetadataBadge';
 
 interface ImageThumbnailProps {
   image: SharedImage;
@@ -79,6 +80,32 @@ export const ImageThumbnail = memo(function ImageThumbnail({
       return visibility.tags[tag.id] !== false;
     });
   }, [image.tags, visibility]);
+
+  // Filter metadata based on visibility state
+  const visibleMetadata = useMemo(() => {
+    if (!visibility) return [];
+    const fields: Array<'filename' | 'dimensions' | 'fileSize'> = [];
+    if (visibility.metadata.filename) fields.push('filename');
+    if (visibility.metadata.dimensions) fields.push('dimensions');
+    if (visibility.metadata.fileSize) fields.push('fileSize');
+    return fields;
+  }, [visibility]);
+
+  // Format metadata values for display
+  const getMetadataValue = (image: SharedImage, field: 'filename' | 'dimensions' | 'fileSize'): string => {
+    switch (field) {
+      case 'filename':
+        return image.filename;
+      case 'dimensions':
+        return image.width && image.height ? `${image.width}×${image.height}` : 'N/A';
+      case 'fileSize':
+        return image.file_size_bytes
+          ? `${(image.file_size_bytes / (1024 * 1024)).toFixed(1)} MB`
+          : 'N/A';
+      default:
+        return '';
+    }
+  };
 
   // Combine detection and segmentation bboxes for overlay
   const overlayBboxes = useMemo(() => {
@@ -284,6 +311,23 @@ export const ImageThumbnail = memo(function ImageThumbnail({
             })}
           </div>
         </>
+      )}
+
+      {/* Metadata badges - positioned at top-left */}
+      {visibleMetadata.length > 0 && (
+        <div
+          className="absolute top-1 left-1 flex flex-col items-start pointer-events-none"
+          style={{ gap: `${Math.round(2 * scaleFactor)}px` }}
+        >
+          {visibleMetadata.map((field) => (
+            <MetadataBadge
+              key={field}
+              field={field}
+              value={getMetadataValue(image, field)}
+              scaleFactor={scaleFactor}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

@@ -24,7 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useExploreView } from '../contexts/ExploreViewContext';
-import { useExploreFilters } from '../hooks/useExploreFilters';
+import { useExploreFilters, useSidebarAggregations } from '../hooks/useExploreFilters';
 import { useExploreVisibility } from '../hooks/useExploreVisibility';
 import { useInfiniteExploreImages } from '../hooks/useInfiniteExploreImages';
 import { useZoomLevel } from '../hooks/useZoomLevel';
@@ -106,12 +106,20 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     setHeightRange: setSidebarHeightRange,
     setSizeRange: setSidebarSizeRange,
     setFilepathFilter: setSidebarFilepathFilter,
+    setImageUids,
     clearFilters: clearSidebarFilters,
     hasActiveFilters: hasSidebarFilters,
   } = useExploreFilters();
 
   // Visibility state for controlling tag display on thumbnails
   const visibilityState = useExploreVisibility(projectId);
+
+  // Fetch sidebar aggregations for metadata filters
+  const {
+    widthAggregation,
+    heightAggregation,
+    sizeAggregation,
+  } = useSidebarAggregations(projectId, sidebarFilters);
 
   // Filters
   // Filters (Main Toolbar)
@@ -162,6 +170,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         file_size_min: sidebarFilters.sizeRange?.min,
         file_size_max: sidebarFilters.sizeRange?.max,
         filepath_pattern: sidebarFilters.filepathPattern,
+        image_uids: sidebarFilters.imageUids && sidebarFilters.imageUids.length > 0 ? sidebarFilters.imageUids : undefined,
       };
     },
     [debouncedSearch, sidebarFilters, selectedTaskIds, selectedJobId, isAnnotatedFilter, getIncludedTagIds, getExcludedTagIds]
@@ -1141,6 +1150,16 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               setIncludeMatchMode={setIncludeMatchMode}
               setExcludeMatchMode={setExcludeMatchMode}
               visibility={visibilityState}
+              // Metadata filter handlers
+              onImageUidsChange={setImageUids}
+              onWidthRangeChange={setSidebarWidthRange}
+              onHeightRangeChange={setSidebarHeightRange}
+              onSizeRangeChange={setSidebarSizeRange}
+              onFilepathChange={setSidebarFilepathFilter}
+              // Metadata aggregations
+              widthAggregation={widthAggregation}
+              heightAggregation={heightAggregation}
+              sizeAggregation={sizeAggregation}
             />
           </>
         )}

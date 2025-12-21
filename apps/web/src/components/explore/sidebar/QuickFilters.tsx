@@ -1,4 +1,5 @@
 import type { SizeDistribution } from '@/lib/data-management-client';
+import { useState } from 'react';
 
 interface QuickFiltersProps {
   sizeDistribution: SizeDistribution;
@@ -17,6 +18,7 @@ export function QuickFilters({
   selectedSizes,
   onToggleSize,
 }: QuickFiltersProps) {
+  const [hoveredSize, setHoveredSize] = useState<string | null>(null);
   const total = sizeDistribution.small + sizeDistribution.medium + sizeDistribution.large;
 
   if (total === 0) {
@@ -45,13 +47,23 @@ export function QuickFilters({
             <span className="flex-1 text-left font-medium">{config.label}</span>
             <span className="text-xs text-emerald-900/40">{config.description}</span>
             <div className="flex items-center gap-1 min-w-[60px] justify-end">
-              <div className="w-12 h-1.5 bg-emerald-100 rounded-full overflow-hidden">
+              <div
+                className="w-12 h-1.5 bg-emerald-100 rounded-full overflow-hidden relative cursor-pointer"
+                onMouseEnter={() => setHoveredSize(size)}
+                onMouseLeave={() => setHoveredSize(null)}
+              >
                 <div
                   className={`h-full rounded-full transition-all ${
                     isSelected ? 'bg-emerald-500' : 'bg-emerald-300'
                   }`}
                   style={{ width: `${percentage}%` }}
                 />
+                {/* Tooltip - only show for hovered bar */}
+                {hoveredSize === size && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-white border border-emerald-100 shadow-lg text-emerald-900 text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap z-10 pointer-events-none">
+                    {config.label}: {count} ({percentage}%)
+                  </div>
+                )}
               </div>
               <span className="text-xs text-emerald-900/50 w-8 text-right">{count}</span>
             </div>

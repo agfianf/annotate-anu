@@ -3,9 +3,10 @@
  * Handles shared images, tags, and project image pool operations
  */
 
-import type { AxiosInstance, AxiosResponse } from 'axios';
+import type { AxiosInstance, AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import axios from 'axios';
-import { getAccessToken } from './api-client';
+import { getAccessToken, getRefreshToken, setTokens, clearTokens, getStoredUser } from './api-client';
+import type { ApiResponse as AuthApiResponse, TokenOnlyResponse } from './api-client';
 
 // ============================================================================
 // Types
@@ -168,6 +169,7 @@ export interface ExploreFilters {
   file_size_max?: number;
   filepath_pattern?: string;
   include_annotations?: boolean;
+  image_uids?: string[]; // Filter by specific image UIDs
 }
 
 export interface ApiResponse<T> {
@@ -213,6 +215,89 @@ dataClient.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+// Response interceptor - handle 401 and refresh token
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+}> = [];
+
+const processQueue = (error: unknown, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else if (token) {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
+dataClient.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            if (originalRequest.headers) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
+            return dataClient(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        clearTokens();
+        window.location.href = '/login';
+        return Promise.reject(error);
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('refresh_token', refreshToken);
+
+        const response = await axios.post<AuthApiResponse<TokenOnlyResponse>>(
+          `${API_BASE_URL}/api/v1/auth/refresh`,
+          formData,
+          { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+
+        const { access_token, expires_in } = response.data.data;
+        const user = getStoredUser();
+        if (user) {
+          setTokens(access_token, refreshToken, user, expires_in);
+        }
+
+        processQueue(null, access_token);
+
+        if (originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+        }
+        return dataClient(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+        clearTokens();
+        window.location.href = '/login';
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    return Promise.reject(error);
+  }
 );
 
 // ============================================================================
@@ -565,6 +650,17 @@ export const projectImagesApi = {
     if (filters?.job_id !== undefined) queryParams.append('job_id', filters.job_id.toString());
     if (filters?.is_annotated !== undefined) {
       queryParams.append('is_annotated', filters.is_annotated.toString());
+    }
+    // Metadata filters - round width/height to integers as backend expects int
+    if (filters?.width_min !== undefined) queryParams.append('width_min', Math.round(filters.width_min).toString());
+    if (filters?.width_max !== undefined) queryParams.append('width_max', Math.round(filters.width_max).toString());
+    if (filters?.height_min !== undefined) queryParams.append('height_min', Math.round(filters.height_min).toString());
+    if (filters?.height_max !== undefined) queryParams.append('height_max', Math.round(filters.height_max).toString());
+    if (filters?.file_size_min !== undefined) queryParams.append('file_size_min', Math.round(filters.file_size_min).toString());
+    if (filters?.file_size_max !== undefined) queryParams.append('file_size_max', Math.round(filters.file_size_max).toString());
+    if (filters?.filepath_pattern) queryParams.append('filepath_pattern', filters.filepath_pattern);
+    if (filters?.image_uids && filters.image_uids.length > 0) {
+      filters.image_uids.forEach((id) => queryParams.append('image_uids', id));
     }
 
     const response: AxiosResponse<ApiResponse<ExploreResponse>> = await dataClient.get(

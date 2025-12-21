@@ -287,6 +287,7 @@ async def get_sidebar_aggregations(
         CategoricalAggregation,
         CategoricalValueCount,
         ComputedFieldsAggregation,
+        HistogramBucket,
         NumericAggregation,
         SidebarAggregationResponse,
         SizeDistribution,
@@ -353,8 +354,6 @@ async def get_sidebar_aggregations(
                 connection, project_id, schema["id"], filtered_image_ids
             )
             if stats["histogram"]:  # Only include if there's data
-                from app.schemas.data_management import HistogramBucket
-
                 numeric_aggregations.append(
                     NumericAggregation(
                         schema_id=schema["id"],
@@ -405,20 +404,22 @@ async def get_sidebar_aggregations(
     )
     file_size_stats = to_numeric_agg(size_stats_raw, "file_size_bytes", "File Size")
 
-    return JsonResponse(
-        data=SidebarAggregationResponse(
-            total_images=total_images,
-            filtered_images=filtered_images_count,
-            tags=tag_counts,
-            categorical_attributes=categorical_aggregations,
-            numeric_attributes=numeric_aggregations,
-            computed=ComputedFieldsAggregation(
-                size_distribution=SizeDistribution(**size_dist),
-                width_stats=width_stats,
-                height_stats=height_stats,
-                file_size_stats=file_size_stats,
-            ),
+    response_data = SidebarAggregationResponse(
+        total_images=total_images,
+        filtered_images=filtered_images_count,
+        tags=tag_counts,
+        categorical_attributes=categorical_aggregations,
+        numeric_attributes=numeric_aggregations,
+        computed=ComputedFieldsAggregation(
+            size_distribution=SizeDistribution(**size_dist),
+            width_stats=width_stats,
+            height_stats=height_stats,
+            file_size_stats=file_size_stats,
         ),
+    )
+
+    return JsonResponse(
+        data=response_data.model_dump(),
         message="Sidebar aggregations",
         status_code=status.HTTP_200_OK,
     )

@@ -3,13 +3,16 @@ import { Database, Eye, EyeOff, Layers, RefreshCw, Tag, Trash2 } from 'lucide-re
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { UseExploreVisibilityReturn } from '@/hooks/useExploreVisibility';
 import type { ExploreFiltersState } from '@/hooks/useExploreFilters';
-import { tagsApi, tagCategoriesApi } from '@/lib/data-management-client';
+import { tagsApi, tagCategoriesApi, type NumericAggregation } from '@/lib/data-management-client';
 import { UnifiedSidebarRow } from './UnifiedSidebarRow';
 import { UnifiedSidebarSection } from './UnifiedSidebarSection';
 import { TagCreationInline } from './TagCreationInline';
 import { CategoryCreationInline } from './CategoryCreationInline';
 import { CategoryConfigPanel } from './CategoryConfigPanel';
 import { FilterModeSelector } from './FilterModeSelector';
+import { ImageUidSelector } from '../ImageUidSelector';
+import { NumericRangeFilter } from '../NumericRangeFilter';
+import { FilepathFilter } from '../FilepathFilter';
 
 interface UnifiedExploreSidebarProps {
   projectId: string;
@@ -18,6 +21,16 @@ interface UnifiedExploreSidebarProps {
   setIncludeMatchMode: (mode: 'AND' | 'OR') => void;
   setExcludeMatchMode: (mode: 'AND' | 'OR') => void;
   visibility: UseExploreVisibilityReturn;
+  // Metadata filter handlers
+  onImageUidsChange: (imageUids: string[]) => void;
+  onWidthRangeChange: (min: number, max: number) => void;
+  onHeightRangeChange: (min: number, max: number) => void;
+  onSizeRangeChange: (min: number, max: number) => void;
+  onFilepathChange: (pattern: string) => void;
+  // Metadata aggregations
+  widthAggregation?: NumericAggregation;
+  heightAggregation?: NumericAggregation;
+  sizeAggregation?: NumericAggregation;
 }
 
 type ActiveForm = 'tag' | 'category' | `cat-${string}` | null;
@@ -26,6 +39,51 @@ const MIN_SIDEBAR_WIDTH = 240; // 60 * 4 = 240px (w-60)
 const MAX_SIDEBAR_WIDTH = 480; // 120 * 4 = 480px (w-120)
 const DEFAULT_SIDEBAR_WIDTH = 288; // 72 * 4 = 288px (w-72)
 
+// Helper: Convert bytes to KB with 1 decimal precision
+function bytesToKB(bytes: number): number {
+  return Math.round((bytes / 1024) * 10) / 10;
+}
+
+// Helper: Convert KB to bytes
+function kbToBytes(kb: number): number {
+  return Math.round(kb * 1024);
+}
+
+// Helper: Convert bytes to MB with 1 decimal precision
+function bytesToMB(bytes: number): number {
+  return Math.round((bytes / (1024 * 1024)) * 10) / 10;
+}
+
+// Helper: Convert MB to bytes
+function mbToBytes(mb: number): number {
+  return Math.round(mb * 1024 * 1024);
+}
+
+// Helper: Determine best unit for file size display (KB or MB)
+function getBestSizeUnit(agg: NumericAggregation): 'KB' | 'MB' {
+  // If max value is less than 1 MB, use KB
+  return agg.max_value < 1024 * 1024 ? 'KB' : 'MB';
+}
+
+// Helper: Convert size aggregation from bytes to KB or MB
+function convertSizeAggregation(
+  agg: NumericAggregation,
+  unit: 'KB' | 'MB'
+): NumericAggregation {
+  const converter = unit === 'KB' ? bytesToKB : bytesToMB;
+  return {
+    ...agg,
+    min_value: converter(agg.min_value),
+    max_value: converter(agg.max_value),
+    mean: converter(agg.mean),
+    histogram: agg.histogram.map((bucket) => ({
+      ...bucket,
+      bucket_start: converter(bucket.bucket_start),
+      bucket_end: converter(bucket.bucket_end),
+    })),
+  };
+}
+
 export function UnifiedExploreSidebar({
   projectId,
   filters,
@@ -33,6 +91,14 @@ export function UnifiedExploreSidebar({
   setIncludeMatchMode,
   setExcludeMatchMode,
   visibility,
+  onImageUidsChange,
+  onWidthRangeChange,
+  onHeightRangeChange,
+  onSizeRangeChange,
+  onFilepathChange,
+  widthAggregation,
+  heightAggregation,
+  sizeAggregation,
 }: UnifiedExploreSidebarProps) {
   const queryClient = useQueryClient();
   const [activeForm, setActiveForm] = useState<ActiveForm>(null);
@@ -558,23 +624,101 @@ export function UnifiedExploreSidebar({
               title="Metadata"
               icon={<Database className="h-3.5 w-3.5 text-emerald-500" />}
               color="#10B981"
+              defaultExpanded={true}
             >
-              <div className="space-y-0.5">
-                {metadataFields.map((field) => (
-                  <UnifiedSidebarRow
-                    key={field.name}
-                    name={field.name}
-                    color={field.color}
-                    isFiltered={false}
-                    isVisible={visibility.isMetadataVisible(
-                      field.name as 'filename' | 'dimensions' | 'fileSize'
-                    )}
-                    onToggleVisibility={() =>
-                      visibility.toggleMetadata(field.name as 'filename' | 'dimensions' | 'fileSize')
-                    }
-                    // NO onToggleFilter for metadata (not filterable via tags)
+              <div className="space-y-4 px-2 py-2">
+                {/* Image UID Selector */}
+                <ImageUidSelector
+                  projectId={projectId}
+                  selectedImageIds={filters.imageUids || []}
+                  onSelectionChange={onImageUidsChange}
+                />
+
+                {/* Width Filter */}
+                {widthAggregation ? (
+                  <NumericRangeFilter
+                    aggregation={widthAggregation}
+                    currentRange={filters.widthRange ?? null}
+                    onRangeChange={onWidthRangeChange}
+                    unit="px"
                   />
-                ))}
+                ) : (
+                  <div className="text-xs text-emerald-500/50 font-mono py-2">
+                    Width: No data available
+                  </div>
+                )}
+
+                {/* Height Filter */}
+                {heightAggregation ? (
+                  <NumericRangeFilter
+                    aggregation={heightAggregation}
+                    currentRange={filters.heightRange ?? null}
+                    onRangeChange={onHeightRangeChange}
+                    unit="px"
+                  />
+                ) : (
+                  <div className="text-xs text-emerald-500/50 font-mono py-2">
+                    Height: No data available
+                  </div>
+                )}
+
+                {/* File Size Filter */}
+                {sizeAggregation ? (() => {
+                  const sizeUnit = getBestSizeUnit(sizeAggregation);
+                  const converter = sizeUnit === 'KB' ? bytesToKB : bytesToMB;
+                  const reverseConverter = sizeUnit === 'KB' ? kbToBytes : mbToBytes;
+
+                  return (
+                    <NumericRangeFilter
+                      aggregation={convertSizeAggregation(sizeAggregation, sizeUnit)}
+                      currentRange={
+                        filters.sizeRange
+                          ? {
+                              min: converter(filters.sizeRange.min),
+                              max: converter(filters.sizeRange.max),
+                            }
+                          : null
+                      }
+                      onRangeChange={(min, max) => {
+                        // Convert back to bytes before sending to parent
+                        onSizeRangeChange(reverseConverter(min), reverseConverter(max));
+                      }}
+                      unit={sizeUnit}
+                    />
+                  );
+                })() : (
+                  <div className="text-xs text-emerald-500/50 font-mono py-2">
+                    File Size: No data available
+                  </div>
+                )}
+
+                {/* Filepath Pattern Filter */}
+                <FilepathFilter
+                  currentValue={filters.filepathPattern || ''}
+                  onChange={onFilepathChange}
+                />
+
+                {/* Metadata Visibility Controls - Separate section */}
+                <div className="border-t border-emerald-100 pt-3 mt-3">
+                  <label className="text-[9px] text-emerald-900/50 font-mono uppercase tracking-wider mb-2 block">
+                    Display on Thumbnails
+                  </label>
+                  <div className="space-y-1">
+                    {metadataFields.map((field) => (
+                      <UnifiedSidebarRow
+                        key={field.name}
+                        name={field.name}
+                        color={field.color}
+                        isVisible={visibility.isMetadataVisible(
+                          field.name as 'filename' | 'dimensions' | 'fileSize'
+                        )}
+                        onToggleVisibility={() =>
+                          visibility.toggleMetadata(field.name as 'filename' | 'dimensions' | 'fileSize')
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
             </UnifiedSidebarSection>
           </div>

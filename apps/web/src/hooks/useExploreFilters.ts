@@ -13,6 +13,7 @@ export interface ExploreFiltersState {
   heightRange?: { min: number; max: number };
   sizeRange?: { min: number; max: number };
   filepathPattern?: string;
+  imageUids?: string[]; // Filter by specific image UIDs
 }
 
 const defaultFilters: ExploreFiltersState = {
@@ -29,7 +30,7 @@ export function useSidebarAggregations(projectId: string, filters: ExploreFilter
     .filter(([_, mode]) => mode === 'include')
     .map(([id]) => id);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['sidebar-aggregations', projectId, Object.keys(filters.tagFilters)],
     queryFn: () =>
       projectImagesApi.getSidebarAggregations(projectId, {
@@ -38,6 +39,24 @@ export function useSidebarAggregations(projectId: string, filters: ExploreFilter
     staleTime: 30000, // 30 seconds
     refetchOnWindowFocus: false,
   });
+
+  // Extract metadata aggregations from computed
+  const widthAggregation = query.data?.computed?.width_stats;
+  const heightAggregation = query.data?.computed?.height_stats;
+  const sizeAggregation = query.data?.computed?.file_size_stats;
+
+  // Debug logging
+  if (query.data && !widthAggregation) {
+    console.log('[useSidebarAggregations] API response:', query.data);
+    console.log('[useSidebarAggregations] Computed field:', query.data.computed);
+  }
+
+  return {
+    ...query,
+    widthAggregation,
+    heightAggregation,
+    sizeAggregation,
+  };
 }
 
 export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>) {
@@ -143,6 +162,10 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     setFilters((prev) => ({ ...prev, filepathPattern: pattern }));
   }, []);
 
+  const setImageUids = useCallback((imageUids: string[]) => {
+    setFilters((prev) => ({ ...prev, imageUids }));
+  }, []);
+
   const clearFilters = useCallback(() => {
     setFilters(defaultFilters);
   }, []);
@@ -172,10 +195,12 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     heightRange: filters.heightRange,
     sizeRange: filters.sizeRange,
     filepathPattern: filters.filepathPattern,
+    imageUids: filters.imageUids,
     setWidthRange,
     setHeightRange,
     setSizeRange,
     setFilepathFilter,
+    setImageUids,
   };
 }
 
