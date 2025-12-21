@@ -1,6 +1,6 @@
 import type { NumericAggregation } from '@/lib/data-management-client';
 import { SlidersHorizontal } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { SidebarSection } from './SidebarSection';
 
 interface NumericRangeFilterProps {
@@ -24,6 +24,12 @@ export function NumericRangeFilter({
   const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null);
   const [activeThumb, setActiveThumb] = useState<'min' | 'max' | null>(null);
   const [hoverThumb, setHoverThumb] = useState<'min' | 'max' | null>(null);
+
+  // Histogram drag selection state
+  const [histogramDragStart, setHistogramDragStart] = useState<number | null>(null);
+  const [histogramDragCurrent, setHistogramDragCurrent] = useState<number | null>(null);
+  const histogramRef = useRef<HTMLDivElement>(null);
+  const dragTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Update local state when props change (unless dragging)
   // useMemo/useEffect to sync if needed, but simplistic approach first
@@ -95,6 +101,103 @@ export function NumericRangeFilter({
     return 10;
   };
 
+  // Debounced filter application
+  const applyHistogramSelection = useCallback(
+    (min: number, max: number) => {
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current);
+      }
+      dragTimeoutRef.current = setTimeout(() => {
+        setLocalMin(min);
+        setLocalMax(max);
+        onRangeChange(min, max);
+      }, 100);
+    },
+    [onRangeChange]
+  );
+
+  // Clean up timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (dragTimeoutRef.current) {
+        clearTimeout(dragTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Get bin index from mouse position
+  const getBinIndexFromMouse = (e: React.MouseEvent<HTMLDivElement>): number | null => {
+    if (!histogramRef.current) return null;
+    const rect = histogramRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const binIndex = Math.floor((x / rect.width) * histogram.length);
+    return Math.max(0, Math.min(histogram.length - 1, binIndex));
+  };
+
+  // Handle histogram bar click - select single bin
+  const handleBarClick = (index: number) => {
+    const bin = histogram[index];
+    if (!bin) return;
+    applyHistogramSelection(bin.bucket_start, bin.bucket_end);
+  };
+
+  // Handle histogram drag start
+  const handleHistogramMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const binIndex = getBinIndexFromMouse(e);
+    if (binIndex === null) return;
+    setHistogramDragStart(binIndex);
+    setHistogramDragCurrent(binIndex);
+    setIsDragging(true);
+  };
+
+  // Handle histogram drag move
+  const handleHistogramMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (histogramDragStart === null) return;
+    const binIndex = getBinIndexFromMouse(e);
+    if (binIndex === null) return;
+    setHistogramDragCurrent(binIndex);
+  };
+
+  // Handle histogram drag end
+  const handleHistogramMouseUp = useCallback(() => {
+    if (histogramDragStart === null || histogramDragCurrent === null) {
+      setIsDragging(false);
+      setHistogramDragStart(null);
+      setHistogramDragCurrent(null);
+      return;
+    }
+
+    const startIndex = Math.min(histogramDragStart, histogramDragCurrent);
+    const endIndex = Math.max(histogramDragStart, histogramDragCurrent);
+    const startBin = histogram[startIndex];
+    const endBin = histogram[endIndex];
+
+    if (startBin && endBin) {
+      applyHistogramSelection(startBin.bucket_start, endBin.bucket_end);
+    }
+
+    setIsDragging(false);
+    setHistogramDragStart(null);
+    setHistogramDragCurrent(null);
+  }, [histogramDragStart, histogramDragCurrent, histogram, applyHistogramSelection]);
+
+  // Calculate selection overlay position
+  const selectionOverlay = useMemo(() => {
+    if (histogramDragStart === null || histogramDragCurrent === null) return null;
+    const startIndex = Math.min(histogramDragStart, histogramDragCurrent);
+    const endIndex = Math.max(histogramDragStart, histogramDragCurrent);
+    const left = (startIndex / histogram.length) * 100;
+    const width = ((endIndex - startIndex + 1) / histogram.length) * 100;
+    return { left, width };
+  }, [histogramDragStart, histogramDragCurrent, histogram.length]);
+
+  // Handle global mouse up (in case mouse leaves component)
+  useEffect(() => {
+    if (!isDragging) return;
+    window.addEventListener('mouseup', handleHistogramMouseUp);
+    return () => window.removeEventListener('mouseup', handleHistogramMouseUp);
+  }, [isDragging, handleHistogramMouseUp]);
+
   return (
     <SidebarSection
       title={title}
@@ -108,35 +211,78 @@ export function NumericRangeFilter({
           <span>Avg: {mean.toFixed(1)}{unit}</span>
         </div>
 
-        {/* Histogram Visualization */}
-        <div className="h-16 flex items-end gap-[1px] border-b border-emerald-200 pb-1">
-          {histogram.map((bucket, i) => {
-            const height = (bucket.count / maxCount) * 100;
-            const inRange =
-              bucket.bucket_start >= localMin && bucket.bucket_end <= localMax;
+        {/* Histogram Visualization - Interactive 1D Range Selector */}
+        <div
+          ref={histogramRef}
+          className="h-16 relative border-b border-emerald-200 pb-1 select-none"
+          onMouseDown={handleHistogramMouseDown}
+          onMouseMove={handleHistogramMouseMove}
+          onMouseUp={handleHistogramMouseUp}
+          style={{ cursor: isDragging ? 'ew-resize' : 'pointer' }}
+        >
+          {/* Histogram Bars Container */}
+          <div className="h-full flex items-end gap-[1px]">
+            {histogram.map((bucket, i) => {
+              const height = (bucket.count / maxCount) * 100;
+              const inRange =
+                bucket.bucket_start >= localMin && bucket.bucket_end <= localMax;
 
-            return (
-              <div
-                key={i}
-                className="flex-1 transition-all duration-150 relative cursor-pointer"
-                style={{
-                  height: `${Math.max(height, 5)}%`,
-                  backgroundColor: inRange
-                    ? '#10B981' // Emerald-500
-                    : '#D1FAE5', // Emerald-100
-                }}
-                onMouseEnter={() => setHoveredBarIndex(i)}
-                onMouseLeave={() => setHoveredBarIndex(null)}
-              >
-                 {/* Tooltip - only show for hovered bar */}
-                 {hoveredBarIndex === i && (
-                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-white border border-emerald-100 shadow-lg text-emerald-900 text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap z-10 pointer-events-none">
-                     {bucket.bucket_start.toFixed(1)}-{bucket.bucket_end.toFixed(1)}{unit}: {bucket.count}
-                   </div>
-                 )}
-              </div>
-            );
-          })}
+              // Check if bin is in drag selection
+              const inDragSelection =
+                histogramDragStart !== null &&
+                histogramDragCurrent !== null &&
+                i >= Math.min(histogramDragStart, histogramDragCurrent) &&
+                i <= Math.max(histogramDragStart, histogramDragCurrent);
+
+              const isHovered = hoveredBarIndex === i;
+
+              return (
+                <div
+                  key={i}
+                  className="flex-1 relative transition-all duration-200 ease-in-out"
+                  style={{
+                    height: `${Math.max(height, 5)}%`,
+                    backgroundColor: inDragSelection
+                      ? '#059669' // Emerald-600 (active drag)
+                      : inRange
+                      ? '#10B981' // Emerald-500 (in current range)
+                      : isHovered
+                      ? '#A7F3D0' // Emerald-200 (hovered)
+                      : '#D1FAE5', // Emerald-100 (default)
+                    opacity: inDragSelection || inRange || isHovered ? 1 : 0.6,
+                    transform: isHovered ? 'scaleY(1.05)' : 'scaleY(1)',
+                    transformOrigin: 'bottom',
+                  }}
+                  onMouseEnter={() => setHoveredBarIndex(i)}
+                  onMouseLeave={() => setHoveredBarIndex(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleBarClick(i);
+                  }}
+                >
+                  {/* Tooltip - only show for hovered bar when not dragging */}
+                  {isHovered && !isDragging && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-white border border-emerald-100 shadow-lg text-emerald-900 text-[9px] px-1.5 py-0.5 rounded whitespace-nowrap z-10 pointer-events-none animate-in fade-in-0 slide-in-from-bottom-1 duration-150">
+                      {bucket.bucket_start.toFixed(1)}-{bucket.bucket_end.toFixed(1)}{unit}: {bucket.count}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Selection Overlay - shown during drag */}
+          {selectionOverlay && (
+            <div
+              className="absolute inset-y-0 bg-emerald-500/20 border-x-2 border-emerald-500 pointer-events-none transition-all duration-100 ease-out"
+              style={{
+                left: `${selectionOverlay.left}%`,
+                width: `${selectionOverlay.width}%`,
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 via-emerald-500/20 to-emerald-500/10 animate-pulse" />
+            </div>
+          )}
         </div>
 
         {/* Range Slider (dual thumb) - Custom Style */}
