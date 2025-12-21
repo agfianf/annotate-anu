@@ -12,6 +12,7 @@ import {
     getAccessToken,
     getRefreshToken,
     getStoredUser,
+    refreshTokenIfNeeded,
     setTokens,
 } from '../lib/api-client';
 
@@ -48,11 +49,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (token && storedUser) {
         try {
+          // Proactively refresh token if expired (avoids 401 error)
+          await refreshTokenIfNeeded();
+
           // Verify token is still valid by fetching current user
           const currentUser = await authApi.getMe();
           setUser(currentUser);
         } catch {
-          // Token invalid, clear storage
+          // Token invalid or refresh failed, clear storage
           clearTokens();
           setUser(null);
         }
@@ -65,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const response = await authApi.login(email, password);
-    setTokens(response.access_token, response.refresh_token, response.user);
+    setTokens(response.access_token, response.refresh_token, response.user, response.expires_in);
     setUser(response.user);
   }, []);
 
@@ -78,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role?: string;
   }) => {
     const response = await authApi.register(data);
-    setTokens(response.access_token, response.refresh_token, response.user);
+    setTokens(response.access_token, response.refresh_token, response.user, response.expires_in);
     setUser(response.user);
   }, []);
 

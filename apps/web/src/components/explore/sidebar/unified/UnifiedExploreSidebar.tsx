@@ -264,6 +264,55 @@ export function UnifiedExploreSidebar({
   const totalTags = (uncategorizedTags?.length || 0) +
     (categories?.reduce((sum, cat) => sum + (cat.tags?.length || 0), 0) || 0);
 
+  // Collect all tag and category IDs for bulk operations
+  const handleShowAll = () => {
+    const allTagIds: string[] = [];
+    const allCategoryIds: string[] = [];
+
+    // Collect uncategorized tags
+    if (uncategorizedTags) {
+      allTagIds.push(...uncategorizedTags.map(tag => tag.id));
+    }
+
+    // Collect categories and their tags
+    if (categories) {
+      categories.forEach(category => {
+        if (category.id) {
+          allCategoryIds.push(category.id);
+          if (category.tags) {
+            allTagIds.push(...category.tags.map(tag => tag.id));
+          }
+        }
+      });
+    }
+
+    visibility.showAll(allTagIds, allCategoryIds);
+  };
+
+  const handleHideAll = () => {
+    const allTagIds: string[] = [];
+    const allCategoryIds: string[] = [];
+
+    // Collect uncategorized tags
+    if (uncategorizedTags) {
+      allTagIds.push(...uncategorizedTags.map(tag => tag.id));
+    }
+
+    // Collect categories and their tags
+    if (categories) {
+      categories.forEach(category => {
+        if (category.id) {
+          allCategoryIds.push(category.id);
+          if (category.tags) {
+            allTagIds.push(...category.tags.map(tag => tag.id));
+          }
+        }
+      });
+    }
+
+    visibility.hideAll(allTagIds, allCategoryIds);
+  };
+
   return (
     <div
       ref={sidebarRef}
@@ -290,14 +339,14 @@ export function UnifiedExploreSidebar({
             <RefreshCw className={`h-3 w-3 ${isRefetching ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={visibility.showAll}
+            onClick={handleShowAll}
             className="p-1.5 text-orange-600/60 hover:text-orange-700 hover:bg-orange-100 rounded-sm transition-all"
             title="Show all"
           >
             <Eye className="h-3 w-3" />
           </button>
           <button
-            onClick={visibility.hideAll}
+            onClick={handleHideAll}
             className="p-1.5 text-orange-600/60 hover:text-orange-700 hover:bg-orange-100 rounded-sm transition-all"
             title="Hide all"
           >
@@ -362,8 +411,8 @@ export function UnifiedExploreSidebar({
             {/* LABELS Section (Categorized Tags) */}
             <UnifiedSidebarSection
               title="Labels"
-              icon={<Layers className="h-3.5 w-3.5 text-orange-500" />}
-              color="#F97316"
+              icon={<Layers className="h-3.5 w-3.5 text-blue-500" />}
+              color="#3B82F6"
               count={categories?.filter(cat => cat.id !== null).length}
               showAddButton
               onAddClick={() => setActiveForm('category')}
@@ -465,8 +514,8 @@ export function UnifiedExploreSidebar({
               {/* Inline Category Creation Form */}
               {activeForm === 'category' && (
                 <CategoryCreationInline
-                  onCreate={(name, displayName, color) =>
-                    createCategoryMutation.mutate({ name, display_name: displayName, color })
+                  onCreate={(name, color) =>
+                    createCategoryMutation.mutate({ name, display_name: name, color })
                   }
                   onCancel={() => setActiveForm(null)}
                 />

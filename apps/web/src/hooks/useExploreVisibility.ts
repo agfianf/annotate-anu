@@ -173,7 +173,7 @@ export function useExploreVisibility(projectId: string) {
   /**
    * Show all items (reset to default visible state)
    */
-  const showAll = useCallback(() => {
+  const showAll = useCallback((_allTagIds?: string[], _allCategoryIds?: string[], _allLabelNames?: string[]) => {
     setVisibility({
       tags: {},
       categories: {},
@@ -189,20 +189,25 @@ export function useExploreVisibility(projectId: string) {
   /**
    * Hide all items
    */
-  const hideAll = useCallback(() => {
+  const hideAll = useCallback((allTagIds?: string[], allCategoryIds?: string[], allLabelNames?: string[]) => {
     setVisibility((prev) => {
       // Get all current tag/category/label IDs and set them to false
       const hiddenTags: Record<string, boolean> = {};
       const hiddenCategories: Record<string, boolean> = {};
       const hiddenLabels: Record<string, boolean> = {};
 
-      Object.keys(prev.tags).forEach((id) => {
+      // If provided, use all IDs; otherwise fall back to existing keys
+      const tagIds = allTagIds || Object.keys(prev.tags);
+      const categoryIds = allCategoryIds || Object.keys(prev.categories);
+      const labelNames = allLabelNames || Object.keys(prev.labels);
+
+      tagIds.forEach((id) => {
         hiddenTags[id] = false;
       });
-      Object.keys(prev.categories).forEach((id) => {
+      categoryIds.forEach((id) => {
         hiddenCategories[id] = false;
       });
-      Object.keys(prev.labels).forEach((id) => {
+      labelNames.forEach((id) => {
         hiddenLabels[id] = false;
       });
 

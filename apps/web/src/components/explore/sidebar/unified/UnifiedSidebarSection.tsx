@@ -34,14 +34,17 @@ export function UnifiedSidebarSection({
 
   // Determine hover and background colors based on main color
   const isOrange = color === '#F97316';
-  const hoverBg = isOrange ? 'hover:bg-orange-50' : 'hover:bg-emerald-50';
-  const textColor = isOrange ? 'text-orange-900/80' : 'text-emerald-900/80';
-  const countColor = isOrange ? 'text-orange-600/60' : 'text-emerald-600/60';
-  const contentBg = isOrange ? 'bg-orange-50/20' : 'bg-emerald-50/20';
+  const isBlue = color === '#3B82F6';
+  const hoverBg = isOrange ? 'hover:bg-orange-50' : isBlue ? 'hover:bg-blue-50' : 'hover:bg-emerald-50';
+  const textColor = isOrange ? 'text-orange-900/80' : isBlue ? 'text-blue-900/80' : 'text-emerald-900/80';
+  const countColor = isOrange ? 'text-orange-600/60' : isBlue ? 'text-blue-600/60' : 'text-emerald-600/60';
+  const contentBg = isOrange ? 'bg-orange-50/20' : isBlue ? 'bg-blue-50/20' : 'bg-emerald-50/20';
   const addButtonColors = isOrange
     ? 'text-orange-500/60 hover:text-orange-600 hover:bg-orange-50'
+    : isBlue
+    ? 'text-blue-500/60 hover:text-blue-600 hover:bg-blue-50'
     : 'text-emerald-500/60 hover:text-emerald-600 hover:bg-emerald-50';
-  const chevronColor = isOrange ? 'text-orange-400' : 'text-emerald-400';
+  const chevronColor = isOrange ? 'text-orange-400' : isBlue ? 'text-blue-400' : 'text-emerald-400';
 
   return (
     <div

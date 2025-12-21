@@ -1,37 +1,26 @@
 import { Check, X } from 'lucide-react';
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
+import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';
 
 interface CategoryCreationInlineProps {
   /** Callback when category is created */
-  onCreate: (name: string, displayName: string, color: string) => void;
+  onCreate: (name: string, color: string) => void;
   /** Callback when cancelled */
   onCancel: () => void;
 }
 
-const PRESET_COLORS = [
-  '#F97316', // Orange
-  '#EF4444', // Red
-  '#10B981', // Emerald
-  '#3B82F6', // Blue
-  '#8B5CF6', // Purple
-  '#F59E0B', // Amber
-  '#EC4899', // Pink
-  '#6B7280', // Gray
-];
-
 export function CategoryCreationInline({ onCreate, onCancel }: CategoryCreationInlineProps) {
   const [name, setName] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [selectedColor, setSelectedColor] = useState('#F97316');
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const colorButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleSubmit = () => {
     const trimmedName = name.trim();
-    const trimmedDisplayName = displayName.trim();
 
     if (trimmedName) {
-      onCreate(trimmedName, trimmedDisplayName || trimmedName, selectedColor);
+      onCreate(trimmedName, selectedColor);
       setName('');
-      setDisplayName('');
     }
   };
 
@@ -53,39 +42,33 @@ export function CategoryCreationInline({ onCreate, onCancel }: CategoryCreationI
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Category name (e.g., 'maturity')..."
+        placeholder="Category name (e.g., 'Maturity Level')..."
         className="w-full px-2 py-1.5 text-sm border border-orange-200 rounded focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
         autoFocus
-      />
-
-      {/* Display Name Input (Optional) */}
-      <input
-        type="text"
-        value={displayName}
-        onChange={(e) => setDisplayName(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="Display name (optional, e.g., 'Maturity Level')..."
-        className="w-full px-2 py-1.5 text-sm border border-orange-200 rounded focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
       />
 
       {/* Color Picker */}
       <div className="flex items-center gap-2">
         <span className="text-xs text-slate-600 font-medium">Color:</span>
-        <div className="flex gap-1.5">
-          {PRESET_COLORS.map((color) => (
-            <button
-              key={color}
-              onClick={() => setSelectedColor(color)}
-              className={`w-5 h-5 rounded-full transition-all ${
-                selectedColor === color
-                  ? 'ring-2 ring-orange-400 ring-offset-1 scale-110'
-                  : 'hover:scale-105'
-              }`}
-              style={{ backgroundColor: color }}
-              title={color}
-            />
-          ))}
-        </div>
+        <button
+          ref={colorButtonRef}
+          type="button"
+          onClick={() => setShowColorPicker(!showColorPicker)}
+          className="flex items-center gap-2 px-2 py-1 border border-orange-200 rounded hover:border-orange-300 transition-all"
+        >
+          <div
+            className="w-5 h-5 rounded border border-gray-300"
+            style={{ backgroundColor: selectedColor }}
+          />
+          <span className="text-xs font-mono text-gray-600">{selectedColor}</span>
+        </button>
+        <ColorPickerPopup
+          selectedColor={selectedColor}
+          onColorChange={setSelectedColor}
+          isOpen={showColorPicker}
+          onClose={() => setShowColorPicker(false)}
+          anchorEl={colorButtonRef.current}
+        />
       </div>
 
       {/* Actions */}

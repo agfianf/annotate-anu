@@ -54,6 +54,55 @@ export function VisibilitySidebar({
   // Count total tags across all categories
   const totalTags = tagCategories?.reduce((sum, cat) => sum + (cat.tags?.length || 0), 0) || 0;
 
+  // Collect all tag and category IDs for bulk operations
+  const handleShowAll = () => {
+    const allTagIds: string[] = [];
+    const allCategoryIds: string[] = [];
+
+    // Collect tag categories and their tags
+    if (tagCategories) {
+      tagCategories.forEach(category => {
+        if (category.id) {
+          allCategoryIds.push(category.id);
+        }
+        if (category.tags) {
+          allTagIds.push(...category.tags.map(tag => tag.id));
+        }
+      });
+    }
+
+    // Collect attribute schemas
+    if (categoricalSchemas) {
+      allCategoryIds.push(...categoricalSchemas.map(schema => schema.id));
+    }
+
+    visibility.showAll(allTagIds, allCategoryIds);
+  };
+
+  const handleHideAll = () => {
+    const allTagIds: string[] = [];
+    const allCategoryIds: string[] = [];
+
+    // Collect tag categories and their tags
+    if (tagCategories) {
+      tagCategories.forEach(category => {
+        if (category.id) {
+          allCategoryIds.push(category.id);
+        }
+        if (category.tags) {
+          allTagIds.push(...category.tags.map(tag => tag.id));
+        }
+      });
+    }
+
+    // Collect attribute schemas
+    if (categoricalSchemas) {
+      allCategoryIds.push(...categoricalSchemas.map(schema => schema.id));
+    }
+
+    visibility.hideAll(allTagIds, allCategoryIds);
+  };
+
   return (
     <div className="h-full flex flex-col bg-white/80 backdrop-blur-xl border-r border-emerald-100 w-72 shadow-2xl font-sans text-sm text-slate-700">
       {/* Header */}
@@ -76,14 +125,14 @@ export function VisibilitySidebar({
             <RefreshCw className={`h-3 w-3 ${isRefetching ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={visibility.showAll}
+            onClick={handleShowAll}
             className="p-1.5 text-emerald-600/60 hover:text-emerald-700 hover:bg-emerald-100 rounded-sm transition-all"
             title="Show all"
           >
             <Eye className="h-3 w-3" />
           </button>
           <button
-            onClick={visibility.hideAll}
+            onClick={handleHideAll}
             className="p-1.5 text-emerald-600/60 hover:text-emerald-700 hover:bg-emerald-100 rounded-sm transition-all"
             title="Hide all"
           >

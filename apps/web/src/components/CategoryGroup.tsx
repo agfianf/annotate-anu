@@ -15,6 +15,7 @@ interface CategoryGroupProps {
   onSelectAll: (categoryId: string) => void;
   showUsageCount?: boolean;
   searchQuery?: string;
+  isDefaultExpanded?: boolean;
 }
 
 export default function CategoryGroup({
@@ -23,8 +24,9 @@ export default function CategoryGroup({
   onToggleTag,
   onSelectAll,
   showUsageCount = false,
+  isDefaultExpanded = false,
 }: CategoryGroupProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(isDefaultExpanded);
   const checkboxRef = useRef<HTMLInputElement>(null);
 
   const categoryTags = category.tags || [];

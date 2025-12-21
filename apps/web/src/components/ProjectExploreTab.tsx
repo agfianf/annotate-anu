@@ -490,11 +490,6 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       enabled: !!projectId && showAddTagModal,
     });
 
-    const uncategorizedTags = useMemo(
-      () => allTags.filter((t) => t.category_id === null),
-      [allTags]
-    );
-
     // Auto-focus search input
     useEffect(() => {
       if (searchInputRef.current) {
@@ -502,17 +497,11 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       }
     }, []);
 
-    // Filter categories and uncategorized tags based on search
+    // Filter categories based on search
     const filteredCategories = useMemo(
       () => filterCategoriesBySearch(categoriesWithTags, searchTag),
       [searchTag, categoriesWithTags]
     );
-
-    const filteredUncategorizedTags = useMemo(() => {
-      if (!searchTag.trim()) return uncategorizedTags;
-      const searchLower = searchTag.toLowerCase();
-      return uncategorizedTags.filter((t) => t.name.toLowerCase().includes(searchLower));
-    }, [searchTag, uncategorizedTags]);
 
     const handleToggleTag = (tagId: string) => {
       setSelectedTagIds((prev) =>
@@ -583,7 +572,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
           {/* Tags List */}
           <div className="flex-1 overflow-y-auto px-2 py-2">
-            {filteredCategories.length === 0 && filteredUncategorizedTags.length === 0 ? (
+            {filteredCategories.length === 0 ? (
               <div className="py-12 text-center">
                 {searchTag.trim() ? (
                   <>
@@ -625,66 +614,15 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                     onSelectAll={handleSelectAllInCategory}
                     showUsageCount={true}
                     searchQuery={searchTag}
+                    isDefaultExpanded={category.name?.toLowerCase() === 'uncategorized'}
                   />
                 ))}
-
-                {/* Uncategorized Tags Section */}
-                {filteredUncategorizedTags.length > 0 && (
-                  <div className="mt-3">
-                    <div className="text-xs text-gray-500 uppercase tracking-wide px-3 py-1.5 bg-gray-50 border-t border-gray-100 font-semibold rounded-t-lg">
-                      Uncategorized Tags
-                    </div>
-                    <div className="space-y-1 mt-1">
-                      {filteredUncategorizedTags.map((tag) => {
-                        const isSelected = selectedTagIds.includes(tag.id);
-                        return (
-                          <label
-                            key={tag.id}
-                            className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleToggleTag(tag.id)}
-                              className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                            />
-                            <span
-                              className="w-3 h-3 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: tag.color }}
-                            />
-                            <span className="text-sm text-gray-700 flex-1 font-medium">
-                              {tag.name}
-                            </span>
-                            {tag.usage_count !== undefined && (
-                              <span className="text-xs text-gray-400 font-mono">
-                                ({tag.usage_count})
-                              </span>
-                            )}
-                            {isSelected && (
-                              <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                            )}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-between gap-3">
-            <button
-              onClick={() => {
-                setShowAddTagModal(false);
-                setShowTagManager(true);
-              }}
-              className="text-sm text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1.5 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Create New Tag
-            </button>
+          <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex items-center justify-end gap-3">
             <div className="flex items-center gap-2">
               <button
                 onClick={handleClose}
@@ -742,11 +680,6 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         .filter((cat) => cat.tags && cat.tags.length > 0);
     }, [tagsFromSelectedImages, allCategories]);
 
-    const uncategorizedRelevantTags = useMemo(
-      () => tagsFromSelectedImages.filter((t) => t.category_id === null),
-      [tagsFromSelectedImages]
-    );
-
     // Auto-focus search input
     useEffect(() => {
       if (searchInputRef.current) {
@@ -754,17 +687,11 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       }
     }, []);
 
-    // Filter categories and uncategorized tags based on search
+    // Filter categories based on search
     const filteredCategories = useMemo(
       () => filterCategoriesBySearch(categoriesWithRelevantTags, searchTag),
       [searchTag, categoriesWithRelevantTags]
     );
-
-    const filteredUncategorizedTags = useMemo(() => {
-      if (!searchTag.trim()) return uncategorizedRelevantTags;
-      const searchLower = searchTag.toLowerCase();
-      return uncategorizedRelevantTags.filter((t) => t.name.toLowerCase().includes(searchLower));
-    }, [searchTag, uncategorizedRelevantTags]);
 
     const handleToggleTag = (tagId: string) => {
       setSelectedTagIds((prev) =>
@@ -835,7 +762,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
           {/* Tags List */}
           <div className="flex-1 overflow-y-auto px-2 py-2">
-            {filteredCategories.length === 0 && filteredUncategorizedTags.length === 0 ? (
+            {filteredCategories.length === 0 ? (
               <div className="py-12 text-center">
                 {searchTag.trim() ? (
                   <>
@@ -872,45 +799,9 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                     onSelectAll={handleSelectAllInCategory}
                     showUsageCount={false}
                     searchQuery={searchTag}
+                    isDefaultExpanded={category.name?.toLowerCase() === 'uncategorized'}
                   />
                 ))}
-
-                {/* Uncategorized Tags Section */}
-                {filteredUncategorizedTags.length > 0 && (
-                  <div className="mt-3">
-                    <div className="text-xs text-gray-500 uppercase tracking-wide px-3 py-1.5 bg-gray-50 border-t border-gray-100 font-semibold rounded-t-lg">
-                      Uncategorized Tags
-                    </div>
-                    <div className="space-y-1 mt-1">
-                      {filteredUncategorizedTags.map((tag) => {
-                        const isSelected = selectedTagIds.includes(tag.id);
-                        return (
-                          <label
-                            key={tag.id}
-                            className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 rounded-lg cursor-pointer transition-colors group"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleToggleTag(tag.id)}
-                              className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
-                            />
-                            <span
-                              className="w-3 h-3 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: tag.color }}
-                            />
-                            <span className="text-sm text-gray-700 flex-1 font-medium">
-                              {tag.name}
-                            </span>
-                            {isSelected && (
-                              <Check className="w-4 h-4 text-red-600 flex-shrink-0" />
-                            )}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -1039,13 +930,6 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               )}
             </button>
           ))}
-          <button
-            onClick={() => setShowTagManager(true)}
-            className="px-2 py-1 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full flex items-center gap-1"
-          >
-            <Plus className="w-3 h-3" />
-            New Tag
-          </button>
           {sidebarFilters.selectedTagIds.length > 0 && (
             <button
               onClick={() => setSidebarTagIds([])}
@@ -1061,11 +945,20 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       {/* Floating Selection Actions Bar */}
       {selectedImages.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-5 duration-300">
-          <div className="bg-emerald-600 text-white rounded-full shadow-2xl px-6 py-3 flex items-center gap-4 border border-emerald-700">
+          <div
+            className="text-white rounded-full shadow-2xl px-6 py-3 flex items-center gap-4 border"
+            style={{
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.3) 100%)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              borderColor: 'rgba(16, 185, 129, 0.4)',
+              boxShadow: '0 8px 32px rgba(16, 185, 129, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.1) inset'
+            }}
+          >
             <span className="text-sm font-medium">
               {selectedImages.size} selected
             </span>
-            <div className="h-5 w-px bg-emerald-400"></div>
+            <div className="h-5 w-px bg-white/30"></div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowAddTagModal(true)}
@@ -1077,7 +970,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               <button
                 onClick={() => setShowRemoveTagModal(true)}
                 disabled={getTagsFromSelectedImages().length === 0}
-                className="p-2.5 bg-red-500/20 hover:bg-red-500/30 disabled:bg-white/10 disabled:cursor-not-allowed backdrop-blur-sm text-white rounded-full flex items-center transition-all"
+                className="p-2.5 bg-red-500/60 hover:bg-red-500/80 disabled:bg-white/10 disabled:cursor-not-allowed backdrop-blur-sm text-white rounded-full flex items-center transition-all shadow-lg shadow-red-500/30"
                 title="Remove Tags"
               >
                 <Delete className="w-4 h-4 rotate-45" />

@@ -180,6 +180,7 @@ export interface ProjectActivity {
 const ACCESS_TOKEN_KEY = 'access_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'user';
+const TOKEN_EXPIRY_KEY = 'token_expiry';
 
 // Token management
 export const getAccessToken = (): string | null => localStorage.getItem(ACCESS_TOKEN_KEY);
@@ -189,16 +190,72 @@ export const getStoredUser = (): User | null => {
   return user ? JSON.parse(user) : null;
 };
 
-export const setTokens = (accessToken: string, refreshToken: string, user: User): void => {
+export const getTokenExpiry = (): number | null => {
+  const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
+  return expiry ? parseInt(expiry, 10) : null;
+};
+
+export const isTokenExpired = (): boolean => {
+  const expiry = getTokenExpiry();
+  if (!expiry) return true;
+  // Add 30 second buffer to refresh before actual expiration
+  return Date.now() >= expiry - 30000;
+};
+
+export const setTokens = (accessToken: string, refreshToken: string, user: User, expiresIn?: number): void => {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
   localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
+
+  if (expiresIn) {
+    const expiryTime = Date.now() + expiresIn * 1000;
+    localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
+  }
 };
 
 export const clearTokens = (): void => {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(TOKEN_EXPIRY_KEY);
+};
+
+/**
+ * Proactively refresh the access token if it's expired
+ * Returns true if token was refreshed, false if no refresh was needed
+ */
+export const refreshTokenIfNeeded = async (): Promise<boolean> => {
+  if (!isTokenExpired()) {
+    return false; // Token is still valid
+  }
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    clearTokens();
+    throw new Error('No refresh token available');
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append('refresh_token', refreshToken);
+
+    const response = await axios.post<ApiResponse<TokenOnlyResponse>>(
+      `${import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001'}/api/v1/auth/refresh`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+
+    const { access_token, expires_in } = response.data.data;
+    const user = getStoredUser();
+    if (user) {
+      setTokens(access_token, refreshToken, user, expires_in);
+    }
+
+    return true;
+  } catch (error) {
+    clearTokens();
+    throw error;
+  }
 };
 
 // API Base URL - Uses VITE_CORE_API_URL for management APIs (auth, projects, admin, etc.)
@@ -281,10 +338,10 @@ apiClient.interceptors.response.use(
           { headers: { 'Content-Type': 'multipart/form-data' } }
         );
 
-        const { access_token } = response.data.data;
+        const { access_token, expires_in } = response.data.data;
         const user = getStoredUser();
         if (user) {
-          setTokens(access_token, refreshToken, user);
+          setTokens(access_token, refreshToken, user, expires_in);
         }
 
         processQueue(null, access_token);

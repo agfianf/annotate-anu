@@ -1,6 +1,7 @@
 import { Check, ChevronDown, ChevronRight, X } from 'lucide-react';
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import type { TagCategory } from '@/lib/data-management-client';
+import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';
 import { BatchTagCreation } from './BatchTagCreation';
 
 interface CategoryConfigPanelProps {
@@ -18,17 +19,6 @@ interface CategoryConfigPanelProps {
   onCreateTags: (tags: Array<{ name: string; color: string }>) => Promise<void>;
 }
 
-const PRESET_COLORS = [
-  '#F97316', // Orange
-  '#EF4444', // Red
-  '#10B981', // Emerald
-  '#3B82F6', // Blue
-  '#8B5CF6', // Purple
-  '#F59E0B', // Amber
-  '#EC4899', // Pink
-  '#6B7280', // Gray
-];
-
 export function CategoryConfigPanel({
   category,
   onUpdate,
@@ -43,6 +33,8 @@ export function CategoryConfigPanel({
   const [isEditing, setIsEditing] = useState(false);
   const [editedName, setEditedName] = useState(category.name);
   const [editedColor, setEditedColor] = useState(category.color);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const colorButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleSaveEdit = () => {
     const trimmedName = editedName.trim();
@@ -156,22 +148,25 @@ export function CategoryConfigPanel({
                 {/* Color Picker */}
                 <div>
                   <label className="block text-xs text-slate-600 font-medium mb-1">Color</label>
-                  <div className="flex gap-1.5">
-                    {PRESET_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => setEditedColor(color)}
-                        className={`w-6 h-6 rounded-full transition-all ${
-                          editedColor === color
-                            ? 'ring-2 ring-orange-400 ring-offset-1 scale-110'
-                            : 'hover:scale-105'
-                        }`}
-                        style={{ backgroundColor: color }}
-                        title={color}
-                      />
-                    ))}
-                  </div>
+                  <button
+                    ref={colorButtonRef}
+                    type="button"
+                    onClick={() => setShowColorPicker(!showColorPicker)}
+                    className="flex items-center gap-2 px-2 py-1 border border-orange-200 rounded hover:border-orange-300 transition-all"
+                  >
+                    <div
+                      className="w-5 h-5 rounded border border-gray-300"
+                      style={{ backgroundColor: editedColor }}
+                    />
+                    <span className="text-xs font-mono text-gray-600">{editedColor}</span>
+                  </button>
+                  <ColorPickerPopup
+                    selectedColor={editedColor}
+                    onColorChange={setEditedColor}
+                    isOpen={showColorPicker}
+                    onClose={() => setShowColorPicker(false)}
+                    anchorEl={colorButtonRef.current}
+                  />
                 </div>
 
                 {/* Edit Actions */}

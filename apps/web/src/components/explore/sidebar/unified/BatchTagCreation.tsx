@@ -1,5 +1,6 @@
 import { Check, Plus, X, Trash2 } from 'lucide-react';
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
+import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';
 
 interface TagInput {
   id: string;
@@ -15,17 +16,6 @@ interface BatchTagCreationProps {
   /** Callback when cancelled */
   onCancel: () => void;
 }
-
-const PRESET_COLORS = [
-  '#F97316', // Orange
-  '#EF4444', // Red
-  '#10B981', // Emerald
-  '#3B82F6', // Blue
-  '#8B5CF6', // Purple
-  '#F59E0B', // Amber
-  '#EC4899', // Pink
-  '#6B7280', // Gray
-];
 
 // Generate unique ID for tag inputs
 let nextId = 0;
@@ -45,6 +35,7 @@ export function BatchTagCreation({
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openColorPicker, setOpenColorPicker] = useState<string | null>(null);
+  const colorButtonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
 
   const handleNameChange = (id: string, name: string) => {
     setTagInputs((prev) =>
@@ -123,50 +114,26 @@ export function BatchTagCreation({
               disabled={isSubmitting}
             />
 
-            {/* Color Picker - Dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setOpenColorPicker(openColorPicker === input.id ? null : input.id)}
-                className="w-6 h-6 rounded border-2 border-orange-200 hover:border-orange-400 transition-colors"
-                style={{ backgroundColor: input.color }}
-                title="Choose color"
-                disabled={isSubmitting}
-              />
-
-              {/* Color Dropdown */}
-              {openColorPicker === input.id && (
-                <>
-                  {/* Click-outside overlay */}
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setOpenColorPicker(null)}
-                  />
-                  <div className="absolute right-0 top-full mt-1 bg-white border border-orange-100 rounded-lg shadow-lg z-50 p-2">
-                    <div className="flex gap-1.5">
-                      {PRESET_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() => {
-                            handleColorChange(input.id, color);
-                            setOpenColorPicker(null);
-                          }}
-                          className={`w-5 h-5 rounded-full transition-all ${
-                            input.color === color
-                              ? 'ring-2 ring-orange-400 ring-offset-1 scale-110'
-                              : 'hover:scale-105'
-                          }`}
-                          style={{ backgroundColor: color }}
-                          title={color}
-                          disabled={isSubmitting}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            {/* Color Picker Button */}
+            <button
+              ref={(el) => {
+                if (el) colorButtonRefs.current.set(input.id, el);
+                else colorButtonRefs.current.delete(input.id);
+              }}
+              type="button"
+              onClick={() => setOpenColorPicker(openColorPicker === input.id ? null : input.id)}
+              className="w-6 h-6 rounded border-2 border-orange-200 hover:border-orange-400 transition-colors"
+              style={{ backgroundColor: input.color }}
+              title="Choose color"
+              disabled={isSubmitting}
+            />
+            <ColorPickerPopup
+              selectedColor={input.color}
+              onColorChange={(color) => handleColorChange(input.id, color)}
+              isOpen={openColorPicker === input.id}
+              onClose={() => setOpenColorPicker(null)}
+              anchorEl={colorButtonRefs.current.get(input.id) || null}
+            />
 
             {/* Remove Row Button */}
             <button
