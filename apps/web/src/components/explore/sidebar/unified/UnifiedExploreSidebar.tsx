@@ -337,11 +337,11 @@ export function UnifiedExploreSidebar({
   return (
     <div
       ref={sidebarRef}
-      className="h-full flex flex-col bg-white/80 backdrop-blur-xl border-r border-orange-100 shadow-2xl font-sans text-sm text-slate-700 relative"
+      className="h-full flex flex-col bg-white/70 backdrop-blur-2xl border border-orange-200/40 shadow-[0_8px_32px_rgba(251,146,60,0.12)] rounded-2xl font-sans text-sm text-slate-700 relative overflow-hidden"
       style={{ width: `${sidebarWidth}px`, minWidth: `${MIN_SIDEBAR_WIDTH}px`, maxWidth: `${MAX_SIDEBAR_WIDTH}px` }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-orange-100 bg-orange-50/30 backdrop-blur-xl">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-orange-200/40 bg-gradient-to-r from-orange-50/40 to-orange-100/30 backdrop-blur-xl">
         <div className="flex items-center gap-2">
           <div className="p-1 border border-orange-200 bg-white/50 rounded-sm">
             <Layers className="h-3 w-3 text-orange-600" />

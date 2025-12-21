@@ -22,6 +22,7 @@
     "immer": "^11.0.1",
     "jszip": "^3.10.1",
     "konva": "^10.0.12",
+    "liquid-glass-react": "^1.1.1",
     "lucide-react": "^0.561.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
