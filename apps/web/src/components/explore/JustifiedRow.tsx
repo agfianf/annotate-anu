@@ -6,6 +6,7 @@
 import type { VirtualItem } from '@tanstack/react-virtual';
 import type { LayoutRow } from '../../lib/justified-layout';
 import type { ImageWithRowInfo } from '../../hooks/useJustifiedRows';
+import type { VisibilityState } from '../../hooks/useExploreVisibility';
 import { ImageThumbnail } from './ImageThumbnail';
 
 interface JustifiedRowProps {
@@ -18,6 +19,10 @@ interface JustifiedRowProps {
   thumbnailSize: string;
   spacing: number;
   onRemoveTag?: (imageId: string, tagId: string) => void;
+  /** Optional visibility state for filtering displayed tags */
+  visibility?: VisibilityState;
+  /** Map of category_id to category color for thumbnail tag borders */
+  categoryColorMap?: Record<string, string>;
 }
 
 export function JustifiedRow({
@@ -30,6 +35,8 @@ export function JustifiedRow({
   thumbnailSize,
   spacing,
   onRemoveTag,
+  visibility,
+  categoryColorMap,
 }: JustifiedRowProps) {
   return (
     <div
@@ -65,6 +72,8 @@ export function JustifiedRow({
               flexShrink: 0,
             }}
             onRemoveTag={onRemoveTag ? (tagId: string) => onRemoveTag(image.id, tagId) : undefined}
+            visibility={visibility}
+            categoryColorMap={categoryColorMap}
           />
         );
       })}

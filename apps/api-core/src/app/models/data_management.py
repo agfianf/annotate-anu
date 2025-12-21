@@ -105,6 +105,71 @@ shared_images = Table(
 
 
 # ============================================================================
+# TAG CATEGORIES - Project-scoped categories for organizing tags
+# ============================================================================
+tag_categories = Table(
+    "tag_categories",
+    metadata,
+    Column(
+        "id",
+        UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+        comment="UUID primary key",
+    ),
+    Column(
+        "project_id",
+        Integer,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Reference to project",
+    ),
+    Column(
+        "name",
+        String(100),
+        nullable=False,
+        comment="Category name (unique per project)",
+    ),
+    Column(
+        "display_name",
+        String(255),
+        nullable=True,
+        comment="Display name for UI",
+    ),
+    Column(
+        "color",
+        String(7),
+        nullable=False,
+        server_default=text("'#6B7280'"),
+        comment="Hex color for UI (inherited by tags)",
+    ),
+    Column(
+        "sidebar_order",
+        Integer,
+        nullable=False,
+        server_default=text("0"),
+        comment="Order in sidebar display",
+    ),
+    Column(
+        "created_by",
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="User who created this category",
+    ),
+    Column(
+        "created_at",
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("now()"),
+    ),
+    # Indexes
+    Index("ix_tag_categories_project_id", "project_id"),
+    Index("ix_tag_categories_project_name", "project_id", "name", unique=True),
+)
+
+
+# ============================================================================
 # TAGS - Project-scoped user-defined tags
 # ============================================================================
 tags = Table(
@@ -125,6 +190,13 @@ tags = Table(
         comment="Reference to project",
     ),
     Column(
+        "category_id",
+        UUID(as_uuid=True),
+        ForeignKey("tag_categories.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Reference to tag category (optional)",
+    ),
+    Column(
         "name",
         String(100),
         nullable=False,
@@ -141,7 +213,7 @@ tags = Table(
         String(7),
         nullable=False,
         server_default=text("'#6B7280'"),
-        comment="Hex color for UI",
+        comment="Hex color for UI (overrides category color if set)",
     ),
     Column(
         "created_by",
@@ -158,6 +230,7 @@ tags = Table(
     ),
     # Indexes
     Index("ix_tags_project_id", "project_id"),
+    Index("ix_tags_category_id", "category_id"),
     Index("ix_tags_name", "name"),
     Index("ix_tags_unique", "project_id", "name", unique=True),
 )

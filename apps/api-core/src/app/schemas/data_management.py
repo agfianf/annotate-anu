@@ -66,7 +66,9 @@ class SharedImageBulkRegisterResponse(BaseModel):
     """Response for bulk registration."""
 
     registered: list[SharedImageResponse]
-    already_existed: list[str] = Field(default_factory=list, description="Paths that already existed")
+    already_existed: list[str] = Field(
+        default_factory=list, description="Paths that already existed"
+    )
     failed: list[str] = Field(default_factory=list, description="Paths that failed to register")
     total_registered: int
     total_already_existed: int
@@ -91,7 +93,7 @@ class TagBase(BaseModel):
 class TagCreate(TagBase):
     """Schema for creating a tag."""
 
-    pass
+    category_id: UUID | None = Field(None, description="Optional category ID")
 
 
 class TagUpdate(BaseModel):
@@ -100,6 +102,7 @@ class TagUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = None
     color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    category_id: UUID | None = Field(None, description="Optional category ID")
 
 
 class TagResponse(BaseModel):
@@ -107,12 +110,70 @@ class TagResponse(BaseModel):
 
     id: UUID
     project_id: int
+    category_id: UUID | None = None
     name: str
     description: str | None = None
     color: str
     created_by: UUID | None = None
     created_at: datetime
     usage_count: int | None = None
+
+
+# ============================================================================
+# Tag Category Schemas
+# ============================================================================
+class TagCategoryBase(BaseModel):
+    """Base schema for tag categories."""
+
+    name: str = Field(..., min_length=1, max_length=100, description="Category name")
+    display_name: str | None = Field(None, max_length=255, description="Display name for UI")
+    color: str = Field(
+        default="#6B7280",
+        pattern=r"^#[0-9A-Fa-f]{6}$",
+        description="Hex color for UI (inherited by tags)",
+    )
+    sidebar_order: int = Field(default=0, description="Order in sidebar display")
+
+
+class TagCategoryCreate(TagCategoryBase):
+    """Schema for creating a tag category."""
+
+    pass
+
+
+class TagCategoryUpdate(BaseModel):
+    """Schema for updating a tag category."""
+
+    name: str | None = Field(None, min_length=1, max_length=100)
+    display_name: str | None = None
+    color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    sidebar_order: int | None = None
+
+
+class TagCategoryResponse(BaseModel):
+    """Tag category response schema."""
+
+    id: UUID | None = None  # None for virtual "uncategorized" category
+    project_id: int
+    name: str
+    display_name: str | None = None
+    color: str
+    sidebar_order: int
+    created_by: UUID | None = None
+    created_at: datetime | None = None  # None for virtual categories
+    tag_count: int | None = None
+    tags: list["TagResponse"] = Field(default_factory=list)
+
+
+class TagCategoryReorderRequest(BaseModel):
+    """Schema for reordering tag categories."""
+
+    category_orders: list[dict] = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="List of {id: UUID, sidebar_order: int}",
+    )
 
 
 # ============================================================================
@@ -239,7 +300,9 @@ class JobAssociationInfo(BaseModel):
     """Job and task information for a shared image."""
 
     job_id: int
-    job_status: str = Field(..., description="Job status: pending, assigned, in_progress, completed, etc.")
+    job_status: str = Field(
+        ..., description="Job status: pending, assigned, in_progress, completed, etc."
+    )
     job_sequence: int = Field(..., description="Sequence number within task")
     job_is_archived: bool
     task_id: int
@@ -300,6 +363,200 @@ class TaskCreateWithFilePaths(BaseModel):
             raise ValueError("distribution_order must be 'sequential' or 'random'")
 
 
+# ============================================================================
+# Attribute Schemas (FiftyOne-style categorized attributes)
+# ============================================================================
+class AttributeSchemaBase(BaseModel):
+    """Base schema for attribute schemas."""
+
+    name: str = Field(..., min_length=1, max_length=100, description="Attribute name")
+    display_name: str | None = Field(None, max_length=255, description="Display name")
+    field_type: str = Field(
+        ...,
+        pattern=r"^(categorical|numeric|boolean|string)$",
+        description="Field type: categorical, numeric, boolean, string",
+    )
+    allowed_values: list[str] | None = Field(
+        None, description="Allowed values for categorical fields"
+    )
+    default_value: str | None = Field(None, max_length=255, description="Default value")
+    min_value: float | None = Field(None, description="Minimum value for numeric fields")
+    max_value: float | None = Field(None, description="Maximum value for numeric fields")
+    unit: str | None = Field(None, max_length=50, description="Unit for numeric fields")
+    color: str = Field(
+        default="#6B7280",
+        pattern=r"^#[0-9A-Fa-f]{6}$",
+        description="Hex color for UI",
+    )
+    icon: str | None = Field(None, max_length=50, description="Icon name for UI")
+    sidebar_order: int = Field(default=0, description="Order in sidebar")
+    is_filterable: bool = Field(default=True, description="Show in sidebar filter")
+    is_visible: bool = Field(default=True, description="Visible in UI")
+
+
+class AttributeSchemaCreate(AttributeSchemaBase):
+    """Schema for creating an attribute schema."""
+
+    pass
+
+
+class AttributeSchemaUpdate(BaseModel):
+    """Schema for updating an attribute schema."""
+
+    name: str | None = Field(None, min_length=1, max_length=100)
+    display_name: str | None = None
+    field_type: str | None = Field(None, pattern=r"^(categorical|numeric|boolean|string)$")
+    allowed_values: list[str] | None = None
+    default_value: str | None = None
+    min_value: float | None = None
+    max_value: float | None = None
+    unit: str | None = None
+    color: str | None = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    icon: str | None = None
+    sidebar_order: int | None = None
+    is_filterable: bool | None = None
+    is_visible: bool | None = None
+
+
+class AttributeSchemaResponse(AttributeSchemaBase):
+    """Attribute schema response."""
+
+    id: UUID
+    project_id: int
+    created_by: UUID | None = None
+    created_at: datetime
+
+
+class ImageAttributeBase(BaseModel):
+    """Base schema for image attributes."""
+
+    attribute_schema_id: UUID = Field(..., description="Attribute schema ID")
+    value_categorical: str | None = Field(None, max_length=255)
+    value_numeric: float | None = None
+    value_boolean: bool | None = None
+    value_string: str | None = None
+    value_json: dict | None = None
+    confidence: float | None = Field(None, ge=0, le=1, description="Confidence score")
+    source: str = Field(default="manual", max_length=50, description="Source")
+
+
+class ImageAttributeSet(BaseModel):
+    """Schema for setting an attribute value on an image."""
+
+    attribute_schema_id: UUID
+    value: str | float | bool | dict | None = Field(
+        ..., description="Value (type must match field_type)"
+    )
+    confidence: float | None = Field(None, ge=0, le=1)
+    source: str = Field(default="manual", max_length=50)
+
+
+class BulkAttributeSet(BaseModel):
+    """Schema for bulk setting attributes on multiple images."""
+
+    shared_image_ids: list[UUID] = Field(..., min_length=1, max_length=500, description="Image IDs")
+    attribute_schema_id: UUID
+    value: str | float | bool | dict | None = Field(..., description="Value to set on all images")
+    source: str = Field(default="manual", max_length=50)
+
+
+class ImageAttributeResponse(BaseModel):
+    """Image attribute response."""
+
+    id: UUID
+    project_id: int
+    shared_image_id: UUID
+    attribute_schema_id: UUID
+    value_categorical: str | None = None
+    value_numeric: float | None = None
+    value_boolean: bool | None = None
+    value_string: str | None = None
+    value_json: dict | None = None
+    confidence: float | None = None
+    source: str
+    created_by: UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+# ============================================================================
+# Sidebar Aggregation Schemas (FiftyOne-style sidebar)
+# ============================================================================
+class TagCount(BaseModel):
+    """Tag with usage count for sidebar."""
+
+    id: UUID
+    name: str
+    color: str
+    count: int
+
+
+class CategoricalValueCount(BaseModel):
+    """Categorical value with count."""
+
+    value: str
+    count: int
+
+
+class CategoricalAggregation(BaseModel):
+    """Aggregation for a categorical attribute."""
+
+    schema_id: UUID
+    name: str
+    display_name: str | None
+    color: str
+    values: list[CategoricalValueCount]
+
+
+class HistogramBucket(BaseModel):
+    """Histogram bucket for numeric fields."""
+
+    bucket_start: float
+    bucket_end: float
+    count: int
+
+
+class NumericAggregation(BaseModel):
+    """Aggregation for a numeric attribute."""
+
+    schema_id: UUID
+    name: str
+    display_name: str | None
+    min_value: float
+    max_value: float
+    mean: float
+    histogram: list[HistogramBucket]
+
+
+class SizeDistribution(BaseModel):
+    """Image size distribution."""
+
+    small: int = Field(default=0, description="<0.5 megapixels")
+    medium: int = Field(default=0, description="0.5-2 megapixels")
+    large: int = Field(default=0, description=">2 megapixels")
+
+
+class ComputedFieldsAggregation(BaseModel):
+    """Computed fields aggregation."""
+
+    size_distribution: SizeDistribution = Field(default_factory=SizeDistribution)
+    width_stats: NumericAggregation | None = None
+    height_stats: NumericAggregation | None = None
+    file_size_stats: NumericAggregation | None = None
+
+
+class SidebarAggregationResponse(BaseModel):
+    """Response for sidebar aggregation endpoint."""
+
+    total_images: int
+    filtered_images: int
+    tags: list[TagCount] = Field(default_factory=list)
+    categorical_attributes: list[CategoricalAggregation] = Field(default_factory=list)
+    numeric_attributes: list[NumericAggregation] = Field(default_factory=list)
+    computed: ComputedFieldsAggregation = Field(default_factory=ComputedFieldsAggregation)
+
+
 # Rebuild models to resolve forward references
 SharedImageResponse.model_rebuild()
 SharedImageWithAnnotations.model_rebuild()
+TagCategoryResponse.model_rebuild()

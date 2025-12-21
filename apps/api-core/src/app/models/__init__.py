@@ -8,10 +8,12 @@ from app.models.annotation import (
     pose_skeletons,
     segmentations,
 )
+from app.models.attribute import attribute_schemas, image_attributes
 from app.models.data_management import (
     project_images,
     shared_image_tags,
     shared_images,
+    tag_categories,
     tags,
 )
 from app.models.history import annotation_events, version_snapshots
@@ -47,8 +49,11 @@ __all__ = [
     "project_activity",
     # Data Management
     "shared_images",
+    "tag_categories",
     "tags",
     "shared_image_tags",
     "project_images",
+    # Attributes
+    "attribute_schemas",
+    "image_attributes",
 ]
-

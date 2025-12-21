@@ -8,6 +8,7 @@ import type { SharedImage } from '../../lib/data-management-client';
 import { getAbsoluteThumbnailUrl } from '../../lib/data-management-client';
 import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
 import { AnnotationOverlay } from './AnnotationOverlay';
+import type { VisibilityState } from '../../hooks/useExploreVisibility';
 
 interface ImageThumbnailProps {
   image: SharedImage;
@@ -17,6 +18,10 @@ interface ImageThumbnailProps {
   thumbnailSize: string; // '1x' | '2x' | '4x'
   style?: React.CSSProperties; // For width/height
   onRemoveTag?: (tagId: string) => void;
+  /** Optional visibility state to filter displayed tags */
+  visibility?: VisibilityState;
+  /** Map of category_id to category color for border styling */
+  categoryColorMap?: Record<string, string>;
 }
 
 export const ImageThumbnail = memo(function ImageThumbnail({
@@ -27,6 +32,8 @@ export const ImageThumbnail = memo(function ImageThumbnail({
   thumbnailSize,
   style,
   onRemoveTag,
+  visibility,
+  categoryColorMap = {},
 }: ImageThumbnailProps) {
   // Build thumbnail URL with size parameter
   const thumbnailUrl = useMemo(() => {
@@ -63,6 +70,15 @@ export const ImageThumbnail = memo(function ImageThumbnail({
 
   // Fetch image with authentication
   const { blobUrl, isLoading, error } = useAuthenticatedImage(thumbnailUrl);
+
+  // Filter tags based on visibility state
+  const visibleTags = useMemo(() => {
+    if (!visibility) return image.tags; // Show all if no visibility control
+    return image.tags.filter((tag) => {
+      // Check if individual tag is visible (default to visible if not set)
+      return visibility.tags[tag.id] !== false;
+    });
+  }, [image.tags, visibility]);
 
   // Combine detection and segmentation bboxes for overlay
   const overlayBboxes = useMemo(() => {
@@ -159,7 +175,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
       )}
 
       {/* Tags - positioned at bottom, solid background, always visible */}
-      {image.tags.length > 0 && (
+      {visibleTags.length > 0 && (
         <>
           {/* Default state: Show first 2 tags with text, rest as dots */}
           <div
@@ -167,30 +183,34 @@ export const ImageThumbnail = memo(function ImageThumbnail({
             style={{ gap: `${tagStyles.gap}px` }}
           >
             {/* First 2 tags with text */}
-            {image.tags.slice(0, 2).map((tag) => (
-              <span
-                key={tag.id}
-                className="rounded-md font-medium truncate"
-                style={{
-                  backgroundColor: tag.color,
-                  color: 'white',
-                  fontSize: `${tagStyles.fontSize}px`,
-                  padding: tagStyles.padding,
-                  maxWidth: `${tagStyles.maxWidth}px`,
-                }}
-                title={tag.name}
-              >
-                {tag.name}
-              </span>
-            ))}
+            {visibleTags.slice(0, 2).map((tag) => {
+              const categoryColor = tag.category_id ? categoryColorMap[tag.category_id] : undefined;
+              return (
+                <span
+                  key={tag.id}
+                  className="rounded-md font-medium truncate"
+                  style={{
+                    backgroundColor: tag.color,
+                    color: 'white',
+                    fontSize: `${tagStyles.fontSize}px`,
+                    padding: tagStyles.padding,
+                    maxWidth: `${tagStyles.maxWidth}px`,
+                    border: categoryColor ? `2px solid ${categoryColor}` : undefined,
+                  }}
+                  title={tag.name}
+                >
+                  {tag.name}
+                </span>
+              );
+            })}
 
             {/* Remaining tags as colored dots */}
-            {image.tags.length > 2 && (
+            {visibleTags.length > 2 && (
               <div
                 className="flex items-center"
                 style={{ gap: `${tagStyles.dotGap}px` }}
               >
-                {image.tags.slice(2, 5).map((tag) => (
+                {visibleTags.slice(2, 5).map((tag) => (
                   <span
                     key={tag.id}
                     className="rounded-full"
@@ -202,7 +222,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
                     title={tag.name}
                   />
                 ))}
-                {image.tags.length > 5 && (
+                {visibleTags.length > 5 && (
                   <span
                     className="text-white bg-black rounded font-medium"
                     style={{
@@ -210,7 +230,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
                       padding: `0 ${tagStyles.dotGap * 2}px`,
                     }}
                   >
-                    +{image.tags.length - 5}
+                    +{visibleTags.length - 5}
                   </span>
                 )}
               </div>
@@ -222,42 +242,46 @@ export const ImageThumbnail = memo(function ImageThumbnail({
             className="absolute bottom-1 left-1 right-1 hidden group-hover:flex flex-wrap"
             style={{ gap: `${tagStyles.gap}px` }}
           >
-            {image.tags.map((tag) => (
-              <div
-                key={tag.id}
-                className="flex items-center rounded-md font-medium"
-                style={{
-                  backgroundColor: tag.color,
-                  color: 'white',
-                  fontSize: `${tagStyles.fontSize}px`,
-                  padding: tagStyles.padding,
-                  gap: `${tagStyles.gap}px`,
-                }}
-              >
-                <span
-                  className="truncate"
-                  style={{ maxWidth: `${tagStyles.maxWidth}px` }}
+            {visibleTags.map((tag) => {
+              const categoryColor = tag.category_id ? categoryColorMap[tag.category_id] : undefined;
+              return (
+                <div
+                  key={tag.id}
+                  className="flex items-center rounded-md font-medium"
+                  style={{
+                    backgroundColor: tag.color,
+                    color: 'white',
+                    fontSize: `${tagStyles.fontSize}px`,
+                    padding: tagStyles.padding,
+                    gap: `${tagStyles.gap}px`,
+                    border: categoryColor ? `2px solid ${categoryColor}` : undefined,
+                  }}
                 >
-                  {tag.name}
-                </span>
-                {onRemoveTag && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveTag(tag.id);
-                    }}
-                    className="hover:text-red-300 transition-colors"
-                    style={{
-                      width: `${tagStyles.xButtonSize}px`,
-                      height: `${tagStyles.xButtonSize}px`,
-                    }}
-                    title="Remove tag"
+                  <span
+                    className="truncate"
+                    style={{ maxWidth: `${tagStyles.maxWidth}px` }}
                   >
-                    <X style={{ width: '100%', height: '100%' }} />
-                  </button>
-                )}
-              </div>
-            ))}
+                    {tag.name}
+                  </span>
+                  {onRemoveTag && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveTag(tag.id);
+                      }}
+                      className="hover:text-red-300 transition-colors"
+                      style={{
+                        width: `${tagStyles.xButtonSize}px`,
+                        height: `${tagStyles.xButtonSize}px`,
+                      }}
+                      title="Remove tag"
+                    >
+                      <X style={{ width: '100%', height: '100%' }} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

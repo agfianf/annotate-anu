@@ -8,6 +8,7 @@ import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useJustifiedRows } from '../../hooks/useJustifiedRows';
 import type { SharedImage } from '../../lib/data-management-client';
+import type { VisibilityState } from '../../hooks/useExploreVisibility';
 import { JustifiedRow } from './JustifiedRow';
 
 interface VirtualizedImageGridProps {
@@ -22,6 +23,10 @@ interface VirtualizedImageGridProps {
   isFetchingNextPage: boolean;
   fetchNextPage: () => void;
   onRemoveTag?: (imageId: string, tagId: string) => void;
+  /** Optional visibility state for filtering displayed tags */
+  visibility?: VisibilityState;
+  /** Map of category_id to category color for thumbnail tag borders */
+  categoryColorMap?: Record<string, string>;
 }
 
 export function VirtualizedImageGrid({
@@ -36,6 +41,8 @@ export function VirtualizedImageGrid({
   isFetchingNextPage,
   fetchNextPage,
   onRemoveTag,
+  visibility,
+  categoryColorMap,
 }: VirtualizedImageGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -180,6 +187,8 @@ export function VirtualizedImageGrid({
               thumbnailSize={thumbnailSize}
               spacing={spacing}
               onRemoveTag={onRemoveTag}
+              visibility={visibility}
+              categoryColorMap={categoryColorMap}
             />
           );
         })}

@@ -14,6 +14,7 @@ from app.helpers.logger import logger
 from app.integrations.redis import RedisClient
 from app.routers import admin as admin_router
 from app.routers import annotations as annotations_router
+from app.routers import attributes as attributes_router
 from app.routers import auth as auth_router
 from app.routers import images as images_router
 from app.routers import jobs as jobs_router
@@ -23,6 +24,7 @@ from app.routers import project_images as project_images_router
 from app.routers import projects as projects_router
 from app.routers import share as share_router
 from app.routers import shared_images as shared_images_router
+from app.routers import tag_categories as tag_categories_router
 from app.routers import tags as tags_router
 from app.routers import tasks as tasks_router
 from app.services.health_checker import HealthChecker
@@ -85,10 +87,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware
+# CORS middleware - allow all origins in dev mode
+cors_origins = settings.CORS_ORIGINS if not settings.API_CORE_DEBUG else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -159,8 +162,10 @@ app.include_router(annotations_router.router)
 # app.include_router(models_router.router)  # TODO: Enable when app.models.byom is implemented
 app.include_router(share_router.router)
 app.include_router(shared_images_router.router)
+app.include_router(tag_categories_router.router)
 app.include_router(tags_router.router)
 app.include_router(project_images_router.router)
+app.include_router(attributes_router.router)
 
 
 # Root endpoint

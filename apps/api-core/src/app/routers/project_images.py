@@ -150,7 +150,9 @@ async def remove_images_from_pool(
     )
 
 
-@router.get("/{project_id}/images/available", response_model=JsonResponse[list[SharedImageResponse], None])
+@router.get(
+    "/{project_id}/images/available", response_model=JsonResponse[list[SharedImageResponse], None]
+)
 async def get_available_images(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -190,10 +192,18 @@ async def explore_project_images(
     task_ids: list[int] | None = Query(default=None),
     job_id: int | None = Query(default=None),
     is_annotated: bool | None = Query(default=None),
+    # Metadata filters
+    width_min: int | None = Query(default=None, ge=0),
+    width_max: int | None = Query(default=None, ge=0),
+    height_min: int | None = Query(default=None, ge=0),
+    height_max: int | None = Query(default=None, ge=0),
+    file_size_min: int | None = Query(default=None, ge=0),
+    file_size_max: int | None = Query(default=None, ge=0),
+    filepath_pattern: str | None = Query(default=None, max_length=255),
 ):
     """
     Explore images with combined filtering.
-    Supports filtering by tags, task/job hierarchy (multi-task), annotation status, and search.
+    Supports filtering by tags, task/job hierarchy (multi-task), annotation status, search, and metadata.
 
     Args:
         task_ids: Filter by multiple task IDs (OR logic - images in ANY of the selected tasks)
@@ -210,6 +220,13 @@ async def explore_project_images(
         job_id=job_id,
         is_annotated=is_annotated,
         search=search,
+        width_min=width_min,
+        width_max=width_max,
+        height_min=height_min,
+        height_max=height_max,
+        file_size_min=file_size_min,
+        file_size_max=file_size_max,
+        filepath_pattern=filepath_pattern,
     )
 
     enriched = []
@@ -242,10 +259,166 @@ async def explore_project_images(
     )
 
 
+@router.get("/{project_id}/explore/sidebar", response_model=JsonResponse[dict, None])
+async def get_sidebar_aggregations(
+    project: Annotated[dict, Depends(ProjectPermission("viewer"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+    tag_ids: list[UUID] | None = Query(default=None),
+    attribute_filters: str | None = Query(default=None),  # JSON encoded
+    sidebar_mode: str = Query(default="best"),  # "all", "fast", "best"
+):
+    """
+    Get sidebar aggregations for FiftyOne-style filtering.
+    Returns tag counts, categorical attribute aggregations, numeric stats, and size distribution.
+    """
+    from app.repositories.attribute import AttributeSchemaRepository, ImageAttributeRepository
+    from app.schemas.data_management import (
+        CategoricalAggregation,
+        CategoricalValueCount,
+        ComputedFieldsAggregation,
+        NumericAggregation,
+        SidebarAggregationResponse,
+        SizeDistribution,
+        TagCount,
+    )
+
+    project_id = project["id"]
+
+    # Get total and filtered image counts
+    total_images = await ProjectImageRepository.get_pool_count(connection, project_id)
+
+    # Get image IDs matching current filters (for dependent aggregations)
+    filtered_image_ids = None
+    if tag_ids:
+        # Get images that have all the selected tags
+        filtered_images, _ = await ProjectImageRepository.explore(
+            connection,
+            project_id=project_id,
+            page=1,
+            page_size=100000,  # Get all matching IDs
+            tag_ids=tag_ids,
+        )
+        filtered_image_ids = [img["id"] for img in filtered_images]
+
+    filtered_images_count = len(filtered_image_ids) if filtered_image_ids else total_images
+
+    # Get tag counts with usage
+    tags_with_count = await TagRepository.list_with_usage_count(connection, project_id)
+    tag_counts = [
+        TagCount(
+            id=t["id"],
+            name=t["name"],
+            color=t["color"],
+            count=t.get("usage_count", 0),
+        )
+        for t in tags_with_count
+    ]
+
+    # Get attribute schemas
+    schemas = await AttributeSchemaRepository.list_for_project(
+        connection, project_id, is_filterable=True
+    )
+
+    # Build categorical and numeric aggregations
+    categorical_aggregations = []
+    numeric_aggregations = []
+
+    for schema in schemas:
+        if schema["field_type"] == "categorical":
+            values = await ImageAttributeRepository.get_categorical_aggregation(
+                connection, project_id, schema["id"], filtered_image_ids
+            )
+            categorical_aggregations.append(
+                CategoricalAggregation(
+                    schema_id=schema["id"],
+                    name=schema["name"],
+                    display_name=schema.get("display_name"),
+                    color=schema["color"],
+                    values=[CategoricalValueCount(**v) for v in values],
+                )
+            )
+        elif schema["field_type"] == "numeric":
+            stats = await ImageAttributeRepository.get_numeric_aggregation(
+                connection, project_id, schema["id"], filtered_image_ids
+            )
+            if stats["histogram"]:  # Only include if there's data
+                from app.schemas.data_management import HistogramBucket
+
+                numeric_aggregations.append(
+                    NumericAggregation(
+                        schema_id=schema["id"],
+                        name=schema["name"],
+                        display_name=schema.get("display_name"),
+                        min_value=stats["min_value"],
+                        max_value=stats["max_value"],
+                        mean=stats["mean"],
+                        histogram=[HistogramBucket(**b) for b in stats["histogram"]],
+                    )
+                )
+
+    # Get size distribution (for computed fields)
+    size_dist = await ProjectImageRepository.get_size_distribution(connection, project_id)
+
+    # Get Metadata Stats (Width, Height, File Size)
+    from uuid import UUID
+
+    from app.models.data_management import shared_images
+
+    # Helper to convert stats dict to NumericAggregation
+    def to_numeric_agg(stats, name, display_name):
+        # Use deterministic UUID for built-in metadata to avoid frontend key issues
+        # Or just use a dummy one since it's in a specific named field
+        dummy_id = UUID("00000000-0000-0000-0000-000000000000")
+        return NumericAggregation(
+            schema_id=dummy_id,
+            name=name,
+            display_name=display_name,
+            min_value=stats["min_value"],
+            max_value=stats["max_value"],
+            mean=stats["mean"],
+            histogram=[HistogramBucket(**h) for h in stats["histogram"]],
+        )
+
+    width_stats_raw = await ProjectImageRepository.get_numeric_stats(
+        connection, project_id, shared_images.c.width, filtered_image_ids
+    )
+    width_stats = to_numeric_agg(width_stats_raw, "width", "Width")
+
+    height_stats_raw = await ProjectImageRepository.get_numeric_stats(
+        connection, project_id, shared_images.c.height, filtered_image_ids
+    )
+    height_stats = to_numeric_agg(height_stats_raw, "height", "Height")
+
+    size_stats_raw = await ProjectImageRepository.get_numeric_stats(
+        connection, project_id, shared_images.c.file_size_bytes, filtered_image_ids
+    )
+    file_size_stats = to_numeric_agg(size_stats_raw, "file_size_bytes", "File Size")
+
+    return JsonResponse(
+        data=SidebarAggregationResponse(
+            total_images=total_images,
+            filtered_images=filtered_images_count,
+            tags=tag_counts,
+            categorical_attributes=categorical_aggregations,
+            numeric_attributes=numeric_aggregations,
+            computed=ComputedFieldsAggregation(
+                size_distribution=SizeDistribution(**size_dist),
+                width_stats=width_stats,
+                height_stats=height_stats,
+                file_size_stats=file_size_stats,
+            ),
+        ),
+        message="Sidebar aggregations",
+        status_code=status.HTTP_200_OK,
+    )
+
+
 # ============================================================================
 # Image Tagging (Project-Scoped)
 # ============================================================================
-@router.post("/{project_id}/images/{image_id}/tags", response_model=JsonResponse[list[TagResponse], None])
+@router.post(
+    "/{project_id}/images/{image_id}/tags", response_model=JsonResponse[list[TagResponse], None]
+)
 async def add_tags_to_image(
     image_id: UUID,
     payload: AddTagsRequest,
@@ -296,7 +469,10 @@ async def add_tags_to_image(
     )
 
 
-@router.delete("/{project_id}/images/{image_id}/tags/{tag_id}", response_model=JsonResponse[list[TagResponse], None])
+@router.delete(
+    "/{project_id}/images/{image_id}/tags/{tag_id}",
+    response_model=JsonResponse[list[TagResponse], None],
+)
 async def remove_tag_from_image(
     image_id: UUID,
     tag_id: UUID,

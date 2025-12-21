@@ -6,40 +6,46 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Check,
-  ChevronDown,
-  Delete,
-  Grid3X3,
-  Image as ImageIcon,
-  Loader2,
-  Maximize2,
-  Minimize2,
-  Plus,
-  RefreshCw,
-  Search,
-  Tag,
-  X
+    Check,
+    ChevronDown,
+    Delete,
+    Grid3X3,
+    Image as ImageIcon,
+    Loader2,
+    Maximize2,
+    Minimize2,
+    Plus,
+    RefreshCw,
+    Search,
+    Tag,
+    X
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useExploreView } from '../contexts/ExploreViewContext';
+import { useExploreFilters } from '../hooks/useExploreFilters';
+import { useExploreVisibility } from '../hooks/useExploreVisibility';
 import { useInfiniteExploreImages } from '../hooks/useInfiniteExploreImages';
 import { useZoomLevel } from '../hooks/useZoomLevel';
 import { tasksApi } from '../lib/api-client';
 import {
-  getFullSizeThumbnailUrl,
-  projectImagesApi,
-  sharedImagesApi,
-  tagsApi,
-  type ExploreFilters,
-  type JobAssociation,
-  type SharedImage,
-  type Tag as TagType
+    getFullSizeThumbnailUrl,
+    projectImagesApi,
+    sharedImagesApi,
+    tagCategoriesApi,
+    tagsApi,
+    type ExploreFilters,
+    type JobAssociation,
+    type SharedImage,
+    type Tag as TagType
 } from '../lib/data-management-client';
+import { filterCategoriesBySearch } from '../lib/tag-utils';
 import { MultiTaskSelect, VirtualizedImageGrid } from './explore';
 import { FullscreenImage } from './explore/FullscreenImage';
+import { UnifiedExploreSidebar } from './explore/sidebar/unified';
 import { ZoomControl } from './explore/ZoomControl';
+import CategoryGroup from './CategoryGroup';
 import TagSelectorDropdown from './TagSelectorDropdown';
 
 interface ProjectExploreTabProps {
@@ -84,8 +90,30 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const [searchInput, setSearchInput] = useState('');
   const debouncedSearch = useDebounce(searchInput, 300);
 
+  // Sidebar filters state
+  const {
+    filters: sidebarFilters,
+    toggleTag: toggleSidebarTag,
+    toggleAttributeValue: toggleSidebarAttributeValue,
+    setNumericRange: setSidebarNumericRange,
+    toggleSizeFilter: toggleSidebarSizeFilter,
+    setWidthRange: setSidebarWidthRange,
+    setHeightRange: setSidebarHeightRange,
+    setSizeRange: setSidebarSizeRange,
+    setFilepathFilter: setSidebarFilepathFilter,
+    clearFilters: clearSidebarFilters,
+    hasActiveFilters: hasSidebarFilters,
+    setTagIds: setSidebarTagIds,
+  } = useExploreFilters();
+
+  // Visibility state for controlling tag display on thumbnails
+  const visibilityState = useExploreVisibility(projectId);
+
   // Filters
-  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  // Filters (Main Toolbar)
+  // Converting local state to usage of sidebarFilters where appropriate or keeping separate if strictly top-bar specific?
+  // We should unify tags.
+  // const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]); // Removed in favor of sidebarFilters
   const [selectedTaskIds, setSelectedTaskIds] = useState<number[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<number | undefined>();
   const [isAnnotatedFilter, setIsAnnotatedFilter] = useState<boolean | undefined>();
@@ -111,12 +139,20 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const filters: ExploreFilters = useMemo(
     () => ({
       search: debouncedSearch || undefined,
-      tag_ids: selectedTagIds.length > 0 ? selectedTagIds : undefined,
+      tag_ids: sidebarFilters.selectedTagIds.length > 0 ? sidebarFilters.selectedTagIds : undefined,
       task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
       job_id: selectedJobId,
       is_annotated: isAnnotatedFilter,
+      // Metadata filters from sidebar
+      width_min: sidebarFilters.widthRange?.min,
+      width_max: sidebarFilters.widthRange?.max,
+      height_min: sidebarFilters.heightRange?.min,
+      height_max: sidebarFilters.heightRange?.max,
+      file_size_min: sidebarFilters.sizeRange?.min,
+      file_size_max: sidebarFilters.sizeRange?.max,
+      filepath_pattern: sidebarFilters.filepathPattern,
     }),
-    [debouncedSearch, selectedTagIds, selectedTaskIds, selectedJobId, isAnnotatedFilter]
+    [debouncedSearch, sidebarFilters, selectedTaskIds, selectedJobId, isAnnotatedFilter]
   );
 
   // Fetch images with infinite scroll
@@ -141,6 +177,24 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     queryFn: () => tagsApi.list(Number(projectId), { include_usage_count: true }),
     enabled: !!projectId,
   });
+
+  // Fetch tag categories for dropdown
+  const { data: tagCategories = [] } = useQuery({
+    queryKey: ['tag-categories', projectId],
+    queryFn: () => tagCategoriesApi.list(Number(projectId), { include_tags: true }),
+    enabled: !!projectId,
+  });
+
+  // Create category color map for thumbnail tag borders
+  const categoryColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    tagCategories.forEach((category) => {
+      if (category.id) {
+        map[category.id] = category.color;
+      }
+    });
+    return map;
+  }, [tagCategories]);
 
   // Fetch tasks for filter dropdown
   const { data: tasks = [] } = useQuery({
@@ -288,11 +342,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     });
   }, []);
 
-  const handleToggleTag = useCallback((tagId: string) => {
-    setSelectedTagIds((prev) =>
-      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
-    );
-  }, []);
+
 
   const handleCreateTag = () => {
     if (!newTagName.trim()) return;
@@ -433,6 +483,18 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
     const searchInputRef = useRef<HTMLInputElement>(null);
 
+    // Fetch categories with tags
+    const { data: categoriesWithTags = [] } = useQuery({
+      queryKey: ['tag-categories', projectId],
+      queryFn: () => tagCategoriesApi.list(Number(projectId), { include_tags: true }),
+      enabled: !!projectId && showAddTagModal,
+    });
+
+    const uncategorizedTags = useMemo(
+      () => allTags.filter((t) => t.category_id === null),
+      [allTags]
+    );
+
     // Auto-focus search input
     useEffect(() => {
       if (searchInputRef.current) {
@@ -440,16 +502,35 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       }
     }, []);
 
-    // Filter tags based on search
-    const filteredTags = useMemo(() => {
-      if (!searchTag.trim()) return allTags;
+    // Filter categories and uncategorized tags based on search
+    const filteredCategories = useMemo(
+      () => filterCategoriesBySearch(categoriesWithTags, searchTag),
+      [searchTag, categoriesWithTags]
+    );
+
+    const filteredUncategorizedTags = useMemo(() => {
+      if (!searchTag.trim()) return uncategorizedTags;
       const searchLower = searchTag.toLowerCase();
-      return allTags.filter((tag) => tag.name.toLowerCase().includes(searchLower));
-    }, [searchTag]);
+      return uncategorizedTags.filter((t) => t.name.toLowerCase().includes(searchLower));
+    }, [searchTag, uncategorizedTags]);
 
     const handleToggleTag = (tagId: string) => {
       setSelectedTagIds((prev) =>
         prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+      );
+    };
+
+    const handleSelectAllInCategory = (categoryId: string) => {
+      const category = categoriesWithTags.find((c) => c.id === categoryId);
+      if (!category?.tags) return;
+
+      const categoryTagIds = category.tags.map((t) => t.id);
+      const allSelected = categoryTagIds.every((id) => selectedTagIds.includes(id));
+
+      setSelectedTagIds((prev) =>
+        allSelected
+          ? prev.filter((id) => !categoryTagIds.includes(id))
+          : [...new Set([...prev, ...categoryTagIds])]
       );
     };
 
@@ -502,7 +583,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
           {/* Tags List */}
           <div className="flex-1 overflow-y-auto px-2 py-2">
-            {filteredTags.length === 0 ? (
+            {filteredCategories.length === 0 && filteredUncategorizedTags.length === 0 ? (
               <div className="py-12 text-center">
                 {searchTag.trim() ? (
                   <>
@@ -533,38 +614,61 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 )}
               </div>
             ) : (
-              <div className="space-y-1">
-                {filteredTags.map((tag) => {
-                  const isSelected = selectedTagIds.includes(tag.id);
-                  return (
-                    <label
-                      key={tag.id}
-                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleToggleTag(tag.id)}
-                        className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                      />
-                      <span
-                        className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: tag.color }}
-                      />
-                      <span className="text-sm text-gray-700 flex-1 font-medium">
-                        {tag.name}
-                      </span>
-                      {tag.usage_count !== undefined && (
-                        <span className="text-xs text-gray-400 font-mono">
-                          ({tag.usage_count})
-                        </span>
-                      )}
-                      {isSelected && (
-                        <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                      )}
-                    </label>
-                  );
-                })}
+              <div className="space-y-2">
+                {/* Categorized Tags */}
+                {filteredCategories.map((category) => (
+                  <CategoryGroup
+                    key={category.id}
+                    category={category}
+                    selectedTagIds={selectedTagIds}
+                    onToggleTag={handleToggleTag}
+                    onSelectAll={handleSelectAllInCategory}
+                    showUsageCount={true}
+                    searchQuery={searchTag}
+                  />
+                ))}
+
+                {/* Uncategorized Tags Section */}
+                {filteredUncategorizedTags.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-500 uppercase tracking-wide px-3 py-1.5 bg-gray-50 border-t border-gray-100 font-semibold rounded-t-lg">
+                      Uncategorized Tags
+                    </div>
+                    <div className="space-y-1 mt-1">
+                      {filteredUncategorizedTags.map((tag) => {
+                        const isSelected = selectedTagIds.includes(tag.id);
+                        return (
+                          <label
+                            key={tag.id}
+                            className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors group"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleTag(tag.id)}
+                              className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                            />
+                            <span
+                              className="w-3 h-3 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                            <span className="text-sm text-gray-700 flex-1 font-medium">
+                              {tag.name}
+                            </span>
+                            {tag.usage_count !== undefined && (
+                              <span className="text-xs text-gray-400 font-mono">
+                                ({tag.usage_count})
+                              </span>
+                            )}
+                            {isSelected && (
+                              <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -620,6 +724,29 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     // Get tags from selected images
     const tagsFromSelectedImages = useMemo(() => getTagsFromSelectedImages(), []);
 
+    // Fetch categories with tags
+    const { data: allCategories = [] } = useQuery({
+      queryKey: ['tag-categories', projectId],
+      queryFn: () => tagCategoriesApi.list(Number(projectId), { include_tags: true }),
+      enabled: !!projectId && showRemoveTagModal,
+    });
+
+    // Filter categories to only show those with tags present on selected images
+    const categoriesWithRelevantTags = useMemo(() => {
+      const relevantTagIds = new Set(tagsFromSelectedImages.map((t) => t.id));
+      return allCategories
+        .map((cat) => ({
+          ...cat,
+          tags: cat.tags?.filter((t) => relevantTagIds.has(t.id)) || [],
+        }))
+        .filter((cat) => cat.tags && cat.tags.length > 0);
+    }, [tagsFromSelectedImages, allCategories]);
+
+    const uncategorizedRelevantTags = useMemo(
+      () => tagsFromSelectedImages.filter((t) => t.category_id === null),
+      [tagsFromSelectedImages]
+    );
+
     // Auto-focus search input
     useEffect(() => {
       if (searchInputRef.current) {
@@ -627,16 +754,35 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       }
     }, []);
 
-    // Filter tags based on search
-    const filteredTags = useMemo(() => {
-      if (!searchTag.trim()) return tagsFromSelectedImages;
+    // Filter categories and uncategorized tags based on search
+    const filteredCategories = useMemo(
+      () => filterCategoriesBySearch(categoriesWithRelevantTags, searchTag),
+      [searchTag, categoriesWithRelevantTags]
+    );
+
+    const filteredUncategorizedTags = useMemo(() => {
+      if (!searchTag.trim()) return uncategorizedRelevantTags;
       const searchLower = searchTag.toLowerCase();
-      return tagsFromSelectedImages.filter((tag) => tag.name.toLowerCase().includes(searchLower));
-    }, [searchTag, tagsFromSelectedImages]);
+      return uncategorizedRelevantTags.filter((t) => t.name.toLowerCase().includes(searchLower));
+    }, [searchTag, uncategorizedRelevantTags]);
 
     const handleToggleTag = (tagId: string) => {
       setSelectedTagIds((prev) =>
         prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+      );
+    };
+
+    const handleSelectAllInCategory = (categoryId: string) => {
+      const category = categoriesWithRelevantTags.find((c) => c.id === categoryId);
+      if (!category?.tags) return;
+
+      const categoryTagIds = category.tags.map((t) => t.id);
+      const allSelected = categoryTagIds.every((id) => selectedTagIds.includes(id));
+
+      setSelectedTagIds((prev) =>
+        allSelected
+          ? prev.filter((id) => !categoryTagIds.includes(id))
+          : [...new Set([...prev, ...categoryTagIds])]
       );
     };
 
@@ -689,7 +835,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
           {/* Tags List */}
           <div className="flex-1 overflow-y-auto px-2 py-2">
-            {filteredTags.length === 0 ? (
+            {filteredCategories.length === 0 && filteredUncategorizedTags.length === 0 ? (
               <div className="py-12 text-center">
                 {searchTag.trim() ? (
                   <>
@@ -715,33 +861,56 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 )}
               </div>
             ) : (
-              <div className="space-y-1">
-                {filteredTags.map((tag) => {
-                  const isSelected = selectedTagIds.includes(tag.id);
-                  return (
-                    <label
-                      key={tag.id}
-                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 rounded-lg cursor-pointer transition-colors group"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleToggleTag(tag.id)}
-                        className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
-                      />
-                      <span
-                        className="w-3 h-3 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: tag.color }}
-                      />
-                      <span className="text-sm text-gray-700 flex-1 font-medium">
-                        {tag.name}
-                      </span>
-                      {isSelected && (
-                        <Check className="w-4 h-4 text-red-600 flex-shrink-0" />
-                      )}
-                    </label>
-                  );
-                })}
+              <div className="space-y-2">
+                {/* Categorized Tags */}
+                {filteredCategories.map((category) => (
+                  <CategoryGroup
+                    key={category.id}
+                    category={category}
+                    selectedTagIds={selectedTagIds}
+                    onToggleTag={handleToggleTag}
+                    onSelectAll={handleSelectAllInCategory}
+                    showUsageCount={false}
+                    searchQuery={searchTag}
+                  />
+                ))}
+
+                {/* Uncategorized Tags Section */}
+                {filteredUncategorizedTags.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs text-gray-500 uppercase tracking-wide px-3 py-1.5 bg-gray-50 border-t border-gray-100 font-semibold rounded-t-lg">
+                      Uncategorized Tags
+                    </div>
+                    <div className="space-y-1 mt-1">
+                      {filteredUncategorizedTags.map((tag) => {
+                        const isSelected = selectedTagIds.includes(tag.id);
+                        return (
+                          <label
+                            key={tag.id}
+                            className="flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 rounded-lg cursor-pointer transition-colors group"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleTag(tag.id)}
+                              className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                            />
+                            <span
+                              className="w-3 h-3 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: tag.color }}
+                            />
+                            <span className="text-sm text-gray-700 flex-1 font-medium">
+                              {tag.name}
+                            </span>
+                            {isSelected && (
+                              <Check className="w-4 h-4 text-red-600 flex-shrink-0" />
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -851,9 +1020,9 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
           {allTags.map((tag) => (
             <button
               key={tag.id}
-              onClick={() => handleToggleTag(tag.id)}
+              onClick={() => toggleSidebarTag(tag.id)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1 ${
-                selectedTagIds.includes(tag.id)
+                sidebarFilters.selectedTagIds.includes(tag.id)
                   ? 'ring-2 ring-offset-1'
                   : 'opacity-70 hover:opacity-100'
               }`}
@@ -861,7 +1030,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 backgroundColor: `${tag.color}20`,
                 color: tag.color,
                 borderColor: tag.color,
-                ...(selectedTagIds.includes(tag.id) && { ringColor: tag.color }),
+                ...(sidebarFilters.selectedTagIds.includes(tag.id) && { ringColor: tag.color }),
               }}
             >
               {tag.name}
@@ -877,9 +1046,9 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             <Plus className="w-3 h-3" />
             New Tag
           </button>
-          {selectedTagIds.length > 0 && (
+          {sidebarFilters.selectedTagIds.length > 0 && (
             <button
-              onClick={() => setSelectedTagIds([])}
+              onClick={() => setSidebarTagIds([])}
               className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 rounded-full flex items-center gap-1"
             >
               <X className="w-3 h-3" />
@@ -925,7 +1094,22 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         </div>
       )}
 
-      {/* Main Content */}
+      {/* Main Content Area - with Sidebar in fullscreen */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* Sidebar - only visible in fullscreen mode */}
+        {isFullView && (
+          <>
+            {/* Unified Sidebar - filtering, visibility, and tag/category creation */}
+            <UnifiedExploreSidebar
+              projectId={projectId}
+              filters={sidebarFilters}
+              onToggleTag={toggleSidebarTag}
+              visibility={visibilityState}
+            />
+          </>
+        )}
+
+        {/* Main Content */}
       <div className="flex-1 glass-strong rounded-2xl shadow-lg overflow-hidden flex flex-col min-h-0 relative z-10">
         {/* Gallery Header */}
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
@@ -985,8 +1169,11 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             isFetchingNextPage={isFetchingNextPage}
             fetchNextPage={fetchNextPage}
             onRemoveTag={handleRemoveTag}
+            visibility={visibilityState.visibility}
+            categoryColorMap={categoryColorMap}
           />
         )}
+      </div>
       </div>
 
       {/* Create Tag Modal */}
@@ -1153,13 +1340,15 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                       <h4 className="text-sm font-medium text-gray-500">Tags</h4>
                       {/* Add tags button with dropdown */}
                       <TagSelectorDropdown
-                        tags={allTags}
+                        tags={allTags.filter((t) => t.category_id === null)}
+                        categories={tagCategories}
                         excludeTagIds={showImageModal.tags.map(t => t.id)}
                         onAddTags={(tagIds) => handleAddTagsToImage(showImageModal.id, tagIds)}
                         buttonText="Add Tags"
                         disabled={bulkTagMutation.isPending}
                         showUsageCount={true}
                         size="sm"
+                        showCategoryGrouping={true}
                       />
                     </div>
 

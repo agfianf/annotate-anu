@@ -14,11 +14,14 @@
 import { Check, Loader2, Plus, Search, Tag } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Tag as TagType } from '../lib/data-management-client';
+import type { Tag as TagType, TagCategory } from '../lib/data-management-client';
+import { filterCategoriesBySearch } from '../lib/tag-utils';
+import CategoryGroup from './CategoryGroup';
 
 export interface TagSelectorDropdownProps {
   // Core functionality
   tags: TagType[];
+  categories?: TagCategory[];
   excludeTagIds?: string[];
   onAddTags: (tagIds: string[]) => void;
 
@@ -31,6 +34,7 @@ export interface TagSelectorDropdownProps {
   // Optional features
   showUsageCount?: boolean;
   isSubmitting?: boolean;
+  showCategoryGrouping?: boolean;
 }
 
 interface DropdownPosition {
@@ -42,6 +46,7 @@ interface DropdownPosition {
 
 export default function TagSelectorDropdown({
   tags,
+  categories,
   excludeTagIds = [],
   onAddTags,
   buttonText = 'Add Tags',
@@ -50,6 +55,7 @@ export default function TagSelectorDropdown({
   size = 'sm',
   showUsageCount = false,
   isSubmitting = false,
+  showCategoryGrouping = true,
 }: TagSelectorDropdownProps) {
   // State
   const [isOpen, setIsOpen] = useState(false);
@@ -109,19 +115,45 @@ export default function TagSelectorDropdown({
     return { top, left, width: dropdownWidth, showAbove };
   };
 
-  // Filter and sort available tags
-  const availableTags = useMemo(() => {
-    // Exclude already-attached tags
-    let filtered = excludeTagIds.length > 0
-      ? tags.filter(tag => !excludeTagIds.includes(tag.id))
-      : tags;
+  // Filter categories if category grouping is enabled
+  const filteredCategories = useMemo(() => {
+    if (!categories || !showCategoryGrouping) return [];
+
+    return filterCategoriesBySearch(categories, search)
+      .map((cat) => ({
+        ...cat,
+        tags: cat.tags?.filter((t) => !excludeTagIds.includes(t.id)) || [],
+      }))
+      .filter((cat) => cat.tags && cat.tags.length > 0);
+  }, [categories, showCategoryGrouping, search, excludeTagIds]);
+
+  // Filter uncategorized tags
+  const uncategorizedAvailableTags = useMemo(() => {
+    const uncategorized = tags.filter(
+      (t) => t.category_id === null && !excludeTagIds.includes(t.id)
+    );
 
     // Apply search filter
     if (search.trim()) {
       const searchLower = search.toLowerCase();
-      filtered = filtered.filter(tag =>
-        tag.name.toLowerCase().includes(searchLower)
-      );
+      return uncategorized.filter((t) => t.name.toLowerCase().includes(searchLower));
+    }
+
+    return uncategorized;
+  }, [tags, excludeTagIds, search]);
+
+  // Legacy: Filter and sort available tags (when not using categories)
+  const availableTags = useMemo(() => {
+    if (categories && showCategoryGrouping) return [];
+
+    // Exclude already-attached tags
+    let filtered =
+      excludeTagIds.length > 0 ? tags.filter((tag) => !excludeTagIds.includes(tag.id)) : tags;
+
+    // Apply search filter
+    if (search.trim()) {
+      const searchLower = search.toLowerCase();
+      filtered = filtered.filter((tag) => tag.name.toLowerCase().includes(searchLower));
     }
 
     // Sort by usage_count (descending), then alphabetically
@@ -133,7 +165,7 @@ export default function TagSelectorDropdown({
       }
       return a.name.localeCompare(b.name);
     });
-  }, [tags, excludeTagIds, search]);
+  }, [tags, excludeTagIds, search, categories, showCategoryGrouping]);
 
   // Handlers
   const handleToggle = () => {
@@ -162,6 +194,20 @@ export default function TagSelectorDropdown({
       prev.includes(tagId)
         ? prev.filter(id => id !== tagId)
         : [...prev, tagId]
+    );
+  };
+
+  const handleSelectAllInCategory = (categoryId: string) => {
+    const category = filteredCategories.find((c) => c.id === categoryId);
+    if (!category?.tags) return;
+
+    const categoryTagIds = category.tags.map((t) => t.id);
+    const allSelected = categoryTagIds.every((id) => selectedTagIds.includes(id));
+
+    setSelectedTagIds((prev) =>
+      allSelected
+        ? prev.filter((id) => !categoryTagIds.includes(id))
+        : [...new Set([...prev, ...categoryTagIds])]
     );
   };
 
@@ -295,65 +341,152 @@ export default function TagSelectorDropdown({
 
             {/* Tags List */}
             <div className="max-h-64 overflow-y-auto">
-              {availableTags.length === 0 ? (
-                <div className="py-8 text-center">
-                  {search.trim() ? (
-                    <>
-                      <Search className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                      <p className="text-sm text-gray-500">No tags match &quot;{search}&quot;</p>
-                      <button
-                        onClick={() => setSearch('')}
-                        className="text-xs text-emerald-600 hover:text-emerald-700 mt-2"
-                      >
-                        Clear search
-                      </button>
-                    </>
-                  ) : excludeTagIds.length > 0 && tags.length > 0 ? (
-                    <>
-                      <Tag className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                      <p className="text-sm text-gray-500">All tags already added</p>
-                    </>
-                  ) : (
-                    <>
-                      <Tag className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                      <p className="text-sm text-gray-500">No tags available</p>
-                    </>
-                  )}
-                </div>
+              {/* Categorized view when categories provided */}
+              {categories && showCategoryGrouping ? (
+                filteredCategories.length === 0 && uncategorizedAvailableTags.length === 0 ? (
+                  <div className="py-8 text-center">
+                    {search.trim() ? (
+                      <>
+                        <Search className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No tags match &quot;{search}&quot;</p>
+                        <button
+                          onClick={() => setSearch('')}
+                          className="text-xs text-emerald-600 hover:text-emerald-700 mt-2"
+                        >
+                          Clear search
+                        </button>
+                      </>
+                    ) : excludeTagIds.length > 0 && tags.length > 0 ? (
+                      <>
+                        <Tag className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">All tags already added</p>
+                      </>
+                    ) : (
+                      <>
+                        <Tag className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No tags available</p>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-2 space-y-2">
+                    {/* Categorized Tags */}
+                    {filteredCategories.map((category) => (
+                      <CategoryGroup
+                        key={category.id}
+                        category={category}
+                        selectedTagIds={selectedTagIds}
+                        onToggleTag={handleToggleTag}
+                        onSelectAll={handleSelectAllInCategory}
+                        showUsageCount={showUsageCount}
+                        searchQuery={search}
+                      />
+                    ))}
+
+                    {/* Uncategorized Tags Section */}
+                    {uncategorizedAvailableTags.length > 0 && (
+                      <div className="mt-2">
+                        <div className="text-xs text-gray-400 px-2 py-1 font-medium">
+                          Uncategorized
+                        </div>
+                        <div className="space-y-0.5">
+                          {uncategorizedAvailableTags.map((tag) => {
+                            const isSelected = selectedTagIds.includes(tag.id);
+                            return (
+                              <label
+                                key={tag.id}
+                                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 rounded cursor-pointer transition-colors"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleToggleTag(tag.id)}
+                                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                                />
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: tag.color }}
+                                />
+                                <span
+                                  className="text-sm text-gray-700 flex-1 truncate"
+                                  title={tag.name}
+                                >
+                                  {tag.name}
+                                </span>
+                                {showUsageCount && tag.usage_count !== undefined && (
+                                  <span className="text-xs text-gray-400">({tag.usage_count})</span>
+                                )}
+                                {isSelected && (
+                                  <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
               ) : (
-                <div className="py-1">
-                  {availableTags.map((tag) => {
-                    const isSelected = selectedTagIds.includes(tag.id);
-                    return (
-                      <label
-                        key={tag.id}
-                        className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleTag(tag.id)}
-                          className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                        />
-                        <span
-                          className="w-3 h-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: tag.color }}
-                        />
-                        <span className="text-sm text-gray-700 flex-1 truncate" title={tag.name}>
-                          {tag.name}
-                        </span>
-                        {showUsageCount && tag.usage_count !== undefined && (
-                          <span className="text-xs text-gray-400">
-                            ({tag.usage_count})
+                /* Fallback flat list when no categories */
+                availableTags.length === 0 ? (
+                  <div className="py-8 text-center">
+                    {search.trim() ? (
+                      <>
+                        <Search className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No tags match &quot;{search}&quot;</p>
+                        <button
+                          onClick={() => setSearch('')}
+                          className="text-xs text-emerald-600 hover:text-emerald-700 mt-2"
+                        >
+                          Clear search
+                        </button>
+                      </>
+                    ) : excludeTagIds.length > 0 && tags.length > 0 ? (
+                      <>
+                        <Tag className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">All tags already added</p>
+                      </>
+                    ) : (
+                      <>
+                        <Tag className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">No tags available</p>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="py-1">
+                    {availableTags.map((tag) => {
+                      const isSelected = selectedTagIds.includes(tag.id);
+                      return (
+                        <label
+                          key={tag.id}
+                          className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleTag(tag.id)}
+                            className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                          />
+                          <span
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: tag.color }}
+                          />
+                          <span className="text-sm text-gray-700 flex-1 truncate" title={tag.name}>
+                            {tag.name}
                           </span>
-                        )}
-                        {isSelected && (
-                          <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                        )}
-                      </label>
-                    );
-                  })}
-                </div>
+                          {showUsageCount && tag.usage_count !== undefined && (
+                            <span className="text-xs text-gray-400">({tag.usage_count})</span>
+                          )}
+                          {isSelected && (
+                            <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )
               )}
             </div>
 

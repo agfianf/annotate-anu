@@ -11,9 +11,23 @@ import { getAccessToken } from './api-client';
 // Types
 // ============================================================================
 
+export interface TagCategory {
+  id: string | null;  // null for virtual "uncategorized" category
+  project_id: number;
+  name: string;
+  display_name: string | null;
+  color: string;
+  sidebar_order: number;
+  created_by: string | null;
+  created_at: string | null;  // null for virtual categories
+  tag_count?: number;
+  tags?: Tag[];
+}
+
 export interface Tag {
   id: string;
   project_id: number;
+  category_id: string | null;
   name: string;
   description: string | null;
   color: string;
@@ -136,11 +150,20 @@ export interface JobAssociation {
 }
 
 export interface ExploreFilters {
+  page?: number;
+  page_size?: number;
   search?: string;
   tag_ids?: string[];
   task_ids?: number[];
   job_id?: number;
   is_annotated?: boolean;
+  width_min?: number;
+  width_max?: number;
+  height_min?: number;
+  height_max?: number;
+  file_size_min?: number;
+  file_size_max?: number;
+  filepath_pattern?: string;
   include_annotations?: boolean;
 }
 
@@ -299,7 +322,7 @@ export const tagsApi = {
    */
   async create(
     projectId: number,
-    data: { name: string; description?: string; color?: string }
+    data: { name: string; description?: string; color?: string; category_id?: string }
   ): Promise<Tag> {
     const response: AxiosResponse<ApiResponse<Tag>> = await dataClient.post(
       `/api/v1/projects/${projectId}/tags`,
@@ -314,7 +337,7 @@ export const tagsApi = {
   async update(
     projectId: number,
     tagId: string,
-    data: { name?: string; description?: string; color?: string }
+    data: { name?: string; description?: string; color?: string; category_id?: string }
   ): Promise<Tag> {
     const response: AxiosResponse<ApiResponse<Tag>> = await dataClient.patch(
       `/api/v1/projects/${projectId}/tags/${tagId}`,
@@ -328,6 +351,114 @@ export const tagsApi = {
    */
   async delete(projectId: number, tagId: string): Promise<void> {
     await dataClient.delete(`/api/v1/projects/${projectId}/tags/${tagId}`);
+  },
+
+  /**
+   * List only uncategorized tags (tags with category_id = null)
+   */
+  async listUncategorized(projectId: number): Promise<Tag[]> {
+    const allTags = await this.list(projectId, { include_usage_count: true });
+    return allTags.filter((tag) => tag.category_id === null);
+  },
+};
+
+// ============================================================================
+// Tag Categories API (Project-Scoped Hierarchical Tags)
+// ============================================================================
+
+export const tagCategoriesApi = {
+  /**
+   * List all tag categories for a project
+   */
+  async list(
+    projectId: number,
+    params?: { include_tags?: boolean; include_tag_count?: boolean }
+  ): Promise<TagCategory[]> {
+    const queryParams = new URLSearchParams();
+    if (params?.include_tags) queryParams.append('include_tags', 'true');
+    if (params?.include_tag_count) queryParams.append('include_tag_count', 'true');
+
+    const response: AxiosResponse<ApiResponse<TagCategory[]>> = await dataClient.get(
+      `/api/v1/projects/${projectId}/tag-categories?${queryParams.toString()}`
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Get a single tag category by ID within a project
+   */
+  async get(projectId: number, categoryId: string): Promise<TagCategory> {
+    const response: AxiosResponse<ApiResponse<TagCategory>> = await dataClient.get(
+      `/api/v1/projects/${projectId}/tag-categories/${categoryId}`
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Create a new tag category in a project
+   */
+  async create(
+    projectId: number,
+    data: {
+      name: string;
+      display_name?: string;
+      color?: string;
+      sidebar_order?: number;
+    }
+  ): Promise<TagCategory> {
+    const response: AxiosResponse<ApiResponse<TagCategory>> = await dataClient.post(
+      `/api/v1/projects/${projectId}/tag-categories`,
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Update a tag category in a project
+   */
+  async update(
+    projectId: number,
+    categoryId: string,
+    data: {
+      name?: string;
+      display_name?: string;
+      color?: string;
+      sidebar_order?: number;
+    }
+  ): Promise<TagCategory> {
+    const response: AxiosResponse<ApiResponse<TagCategory>> = await dataClient.patch(
+      `/api/v1/projects/${projectId}/tag-categories/${categoryId}`,
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Delete a tag category from a project
+   */
+  async delete(projectId: number, categoryId: string): Promise<void> {
+    await dataClient.delete(`/api/v1/projects/${projectId}/tag-categories/${categoryId}`);
+  },
+
+  /**
+   * Reorder tag categories in sidebar
+   */
+  async reorder(
+    projectId: number,
+    categoryOrders: Array<{ id: string; sidebar_order: number }>
+  ): Promise<TagCategory[]> {
+    const response: AxiosResponse<ApiResponse<TagCategory[]>> = await dataClient.post(
+      `/api/v1/projects/${projectId}/tag-categories/reorder`,
+      { category_orders: categoryOrders }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * List categories with nested tags included
+   */
+  async listWithTags(projectId: number): Promise<TagCategory[]> {
+    return this.list(projectId, { include_tags: true });
   },
 };
 
@@ -471,6 +602,188 @@ export const projectImagesApi = {
       { data: { shared_image_ids: imageIds, tag_ids: tagIds } }
     );
     return response.data.data;
+  },
+
+  /**
+   * Get sidebar aggregations for FiftyOne-style filtering
+   */
+  async getSidebarAggregations(
+    projectId: string,
+    filters?: { tag_ids?: string[] }
+  ): Promise<SidebarAggregationResponse> {
+    const queryParams = new URLSearchParams();
+    if (filters?.tag_ids) {
+      filters.tag_ids.forEach((id) => queryParams.append('tag_ids', id));
+    }
+
+    const response: AxiosResponse<ApiResponse<SidebarAggregationResponse>> = await dataClient.get(
+      `/api/v1/projects/${projectId}/explore/sidebar?${queryParams.toString()}`
+    );
+    return response.data.data;
+  },
+};
+
+// ============================================================================
+// Sidebar Aggregation Types
+// ============================================================================
+
+export interface TagCount {
+  id: string;
+  name: string;
+  color: string;
+  count: number;
+}
+
+export interface CategoricalValueCount {
+  value: string;
+  count: number;
+}
+
+export interface CategoricalAggregation {
+  schema_id: string;
+  name: string;
+  display_name: string | null;
+  color: string;
+  values: CategoricalValueCount[];
+}
+
+export interface HistogramBucket {
+  bucket_start: number;
+  bucket_end: number;
+  count: number;
+}
+
+export interface NumericAggregation {
+  schema_id: string;
+  name: string;
+  display_name: string | null;
+  min_value: number;
+  max_value: number;
+  mean: number;
+  histogram: HistogramBucket[];
+}
+
+export interface SizeDistribution {
+  small: number;
+  medium: number;
+  large: number;
+}
+
+export interface ComputedFieldsAggregation {
+  size_distribution: SizeDistribution;
+  width_stats?: NumericAggregation;
+  height_stats?: NumericAggregation;
+  file_size_stats?: NumericAggregation;
+}
+
+export interface SidebarAggregationResponse {
+  total_images: number;
+  filtered_images: number;
+  tags: TagCount[];
+  categorical_attributes: CategoricalAggregation[];
+  numeric_attributes: NumericAggregation[];
+  computed: ComputedFieldsAggregation;
+}
+
+// ============================================================================
+// Attribute Schemas Types
+// ============================================================================
+
+export interface AttributeSchema {
+  id: string;
+  project_id: number;
+  name: string;
+  display_name: string | null;
+  field_type: 'categorical' | 'numeric' | 'boolean' | 'string';
+  allowed_values: string[] | null;
+  default_value: string | null;
+  min_value: number | null;
+  max_value: number | null;
+  unit: string | null;
+  color: string;
+  icon: string | null;
+  sidebar_order: number;
+  is_filterable: boolean;
+  is_visible: boolean;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface AttributeSchemaCreate {
+  name: string;
+  display_name?: string;
+  field_type: 'categorical' | 'numeric' | 'boolean' | 'string';
+  allowed_values?: string[];
+  default_value?: string;
+  min_value?: number;
+  max_value?: number;
+  unit?: string;
+  color?: string;
+  icon?: string;
+  sidebar_order?: number;
+  is_filterable?: boolean;
+  is_visible?: boolean;
+}
+
+// ============================================================================
+// Attribute Schemas API
+// ============================================================================
+
+export const attributeSchemasApi = {
+  /**
+   * List all attribute schemas for a project
+   */
+  async list(projectId: string | number): Promise<AttributeSchema[]> {
+    const response: AxiosResponse<ApiResponse<AttributeSchema[]>> = await dataClient.get(
+      `/api/v1/projects/${projectId}/attributes/schemas`
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Get a single attribute schema by ID
+   */
+  async get(projectId: string | number, schemaId: string): Promise<AttributeSchema> {
+    const response: AxiosResponse<ApiResponse<AttributeSchema>> = await dataClient.get(
+      `/api/v1/projects/${projectId}/attributes/schemas/${schemaId}`
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Create a new attribute schema
+   */
+  async create(
+    projectId: string | number,
+    data: AttributeSchemaCreate
+  ): Promise<AttributeSchema> {
+    const response: AxiosResponse<ApiResponse<AttributeSchema>> = await dataClient.post(
+      `/api/v1/projects/${projectId}/attributes/schemas`,
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Update an attribute schema
+   */
+  async update(
+    projectId: string | number,
+    schemaId: string,
+    data: Partial<AttributeSchemaCreate>
+  ): Promise<AttributeSchema> {
+    const response: AxiosResponse<ApiResponse<AttributeSchema>> = await dataClient.patch(
+      `/api/v1/projects/${projectId}/attributes/schemas/${schemaId}`,
+      data
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Delete an attribute schema
+   */
+  async delete(projectId: string | number, schemaId: string): Promise<void> {
+    await dataClient.delete(`/api/v1/projects/${projectId}/attributes/schemas/${schemaId}`);
   },
 };
 
