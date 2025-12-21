@@ -233,6 +233,61 @@ Table project_images {
 }
 
 // =============================================================================
+// ATTRIBUTE SCHEMAS - Define structured attributes per project (FiftyOne-style)
+// =============================================================================
+
+Table attribute_schemas {
+  id uuid [pk, default: `gen_random_uuid()`, note: 'UUID primary key']
+  project_id int [not null, ref: > projects.id, note: 'Parent project']
+  name varchar(100) [not null, note: 'Attribute name (unique per project)']
+  display_name varchar(255) [note: 'Human-readable display name']
+  field_type varchar(50) [not null, note: 'Type: categorical, numeric, boolean, string']
+  allowed_values jsonb [note: 'For categorical: allowed value list']
+  default_value varchar(255) [note: 'Default value for new images']
+  min_value float [note: 'For numeric: minimum value']
+  max_value float [note: 'For numeric: maximum value']
+  unit varchar(50) [note: 'For numeric: unit (e.g., score, percentage)']
+  color varchar(7) [default: '#6B7280', note: 'Hex color for UI']
+  icon varchar(50) [note: 'Icon name for UI']
+  sidebar_order int [default: 0, note: 'Order in sidebar']
+  is_filterable boolean [default: true, note: 'Show in sidebar filter']
+  is_visible boolean [default: true, note: 'Visible in UI']
+  created_by uuid [ref: > users.id, note: 'User who created this schema']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    project_id [name: 'ix_attribute_schemas_project']
+    (project_id, name) [unique, name: 'ix_attribute_schemas_unique']
+  }
+}
+
+Table image_attributes {
+  id uuid [pk, default: `gen_random_uuid()`, note: 'UUID primary key']
+  project_id int [not null, ref: > projects.id, note: 'Parent project']
+  shared_image_id uuid [not null, ref: > shared_images.id, note: 'Parent image']
+  attribute_schema_id uuid [not null, ref: > attribute_schemas.id, note: 'Attribute schema']
+  value_categorical varchar(255) [note: 'Value for categorical fields']
+  value_numeric float [note: 'Value for numeric fields']
+  value_boolean boolean [note: 'Value for boolean fields']
+  value_string text [note: 'Value for string fields']
+  value_json jsonb [note: 'Value for JSON fields']
+  confidence float [note: 'Confidence score for predictions']
+  source varchar(50) [default: 'manual', note: 'Source: manual, model:<id>, import']
+  created_by uuid [ref: > users.id, note: 'User who set this value']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    project_id [name: 'ix_image_attributes_project']
+    shared_image_id [name: 'ix_image_attributes_image']
+    attribute_schema_id [name: 'ix_image_attributes_schema']
+    (project_id, shared_image_id, attribute_schema_id) [unique, name: 'ix_image_attributes_unique']
+    value_categorical [name: 'ix_image_attributes_categorical']
+    value_numeric [name: 'ix_image_attributes_numeric']
+  }
+}
+
+// =============================================================================
 // IMAGES
 // =============================================================================
 
