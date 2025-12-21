@@ -198,7 +198,7 @@ npm run dev          # Or use: make frontend-dev (http://localhost:5173)
 make install  # Install both backend and frontend dependencies at once
 ```
 
-### Docker Development
+### Docker Development (RECOMENDED WE ARE USING THIS)
 
 **Development Mode** (hot-reload enabled):
 ```bash
@@ -219,18 +219,6 @@ make docker-rebuild     # Rebuild images, stop, and restart services (Recommende
 > - Run: `make docker-up`
 > - Stop: `make docker-down`
 > - Rebuild: `make docker-rebuild` (restarts everything)
-```
-
-**Solo Mode** (minimal, local-first):
-```bash
-make docker-up-solo     # Start solo mode services
-make docker-down-solo   # Stop solo mode services
-```
-
-**Team Mode** (full collaborative stack):
-```bash
-make docker-up-team     # Start team mode with all services
-make docker-down-team   # Stop team mode services
 ```
 
 ### Code Quality
