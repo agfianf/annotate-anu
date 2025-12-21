@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Eye, EyeOff, MoreVertical, Plus, Settings } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye, EyeOff, Minus, MoreVertical, Plus, Settings } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -16,8 +16,8 @@ interface UnifiedSidebarRowProps {
   color: string;
   /** Optional usage count */
   count?: number;
-  /** Whether filtered (checkbox state) */
-  isFiltered: boolean;
+  /** Filter mode (tri-state: idle, include, exclude) */
+  filterMode?: 'idle' | 'include' | 'exclude';
   /** Whether visible (eye state) */
   isVisible: boolean;
   /** Filter toggle callback (undefined = no filter checkbox) */
@@ -48,7 +48,7 @@ export function UnifiedSidebarRow({
   name,
   color,
   count,
-  isFiltered,
+  filterMode = 'idle',
   isVisible,
   onToggleFilter,
   onToggleVisibility,
@@ -150,18 +150,26 @@ export function UnifiedSidebarRow({
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
       >
-        {/* Filter Checkbox (only if onToggleFilter provided) */}
+        {/* Filter Checkbox (tri-state: idle, include, exclude) */}
         {onToggleFilter && (
           <button
             onClick={handleFilterClick}
             className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-              isFiltered
+              filterMode === 'include'
                 ? 'bg-orange-500 border-orange-500'
+                : filterMode === 'exclude'
+                ? 'bg-red-500 border-red-500'
                 : 'bg-white border-orange-200 hover:border-orange-400'
             }`}
-            title="Filter by this tag"
+            title={
+              filterMode === 'include'
+                ? 'Filter: show only with this tag'
+                : filterMode === 'exclude'
+                ? 'Filter: hide images with this tag'
+                : 'No filter'
+            }
           >
-            {isFiltered && (
+            {filterMode === 'include' && (
               <svg className="w-2 h-2 text-white" viewBox="0 0 12 12" fill="none">
                 <path
                   d="M2.5 6L5 8.5L9.5 3.5"
@@ -171,6 +179,9 @@ export function UnifiedSidebarRow({
                   strokeLinejoin="round"
                 />
               </svg>
+            )}
+            {filterMode === 'exclude' && (
+              <Minus className="w-2.5 h-2.5 text-white" strokeWidth={3} />
             )}
           </button>
         )}

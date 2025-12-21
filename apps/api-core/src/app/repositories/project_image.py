@@ -210,6 +210,9 @@ class ProjectImageRepository:
         page: int = 1,
         page_size: int = 50,
         tag_ids: list[UUID] | None = None,
+        excluded_tag_ids: list[UUID] | None = None,
+        include_match_mode: str = "OR",
+        exclude_match_mode: str = "OR",
         task_ids: list[int] | None = None,
         job_id: int | None = None,
         is_annotated: bool | None = None,
@@ -272,12 +275,44 @@ class ProjectImageRepository:
                 pass
             base_query = base_query.where(shared_images.c.file_path.ilike(sql_pattern))
 
-        if tag_ids:
-            for tag_id in tag_ids:
-                subquery = select(shared_image_tags.c.shared_image_id).where(
-                    shared_image_tags.c.tag_id == tag_id
+        # Apply exclude filter FIRST (fail-fast)
+        if excluded_tag_ids and len(excluded_tag_ids) > 0:
+            if exclude_match_mode == "OR":
+                # Hide images with ANY excluded tag
+                exclude_subquery = (
+                    select(shared_image_tags.c.shared_image_id)
+                    .where(shared_image_tags.c.tag_id.in_(excluded_tag_ids))
+                    .distinct()
                 )
-                base_query = base_query.where(shared_images.c.id.in_(subquery))
+                base_query = base_query.where(shared_images.c.id.notin_(exclude_subquery))
+            else:  # AND mode
+                # Hide images with ALL excluded tags
+                # Images with count(excluded_tags) == len(excluded_tag_ids) should be excluded
+                exclude_subquery = (
+                    select(shared_image_tags.c.shared_image_id)
+                    .where(shared_image_tags.c.tag_id.in_(excluded_tag_ids))
+                    .group_by(shared_image_tags.c.shared_image_id)
+                    .having(func.count(shared_image_tags.c.tag_id) == len(excluded_tag_ids))
+                )
+                base_query = base_query.where(shared_images.c.id.notin_(exclude_subquery))
+
+        # Then apply include filter
+        if tag_ids and len(tag_ids) > 0:
+            if include_match_mode == "OR":
+                # Show images with ANY included tag
+                include_subquery = (
+                    select(shared_image_tags.c.shared_image_id)
+                    .where(shared_image_tags.c.tag_id.in_(tag_ids))
+                    .distinct()
+                )
+                base_query = base_query.where(shared_images.c.id.in_(include_subquery))
+            else:  # AND mode
+                # Show images with ALL included tags (existing logic)
+                for tag_id in tag_ids:
+                    subquery = select(shared_image_tags.c.shared_image_id).where(
+                        shared_image_tags.c.tag_id == tag_id
+                    )
+                    base_query = base_query.where(shared_images.c.id.in_(subquery))
 
         # Filter by task/job hierarchy
         if job_id is not None:

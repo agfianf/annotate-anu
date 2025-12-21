@@ -94,6 +94,11 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const {
     filters: sidebarFilters,
     toggleTag: toggleSidebarTag,
+    removeTag: removeSidebarTag,
+    getIncludedTagIds,
+    getExcludedTagIds,
+    setIncludeMatchMode,
+    setExcludeMatchMode,
     toggleAttributeValue: toggleSidebarAttributeValue,
     setNumericRange: setSidebarNumericRange,
     toggleSizeFilter: toggleSidebarSizeFilter,
@@ -103,7 +108,6 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     setFilepathFilter: setSidebarFilepathFilter,
     clearFilters: clearSidebarFilters,
     hasActiveFilters: hasSidebarFilters,
-    setTagIds: setSidebarTagIds,
   } = useExploreFilters();
 
   // Visibility state for controlling tag display on thumbnails
@@ -137,22 +141,30 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
   // Build filters object
   const filters: ExploreFilters = useMemo(
-    () => ({
-      search: debouncedSearch || undefined,
-      tag_ids: sidebarFilters.selectedTagIds.length > 0 ? sidebarFilters.selectedTagIds : undefined,
-      task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
-      job_id: selectedJobId,
-      is_annotated: isAnnotatedFilter,
-      // Metadata filters from sidebar
-      width_min: sidebarFilters.widthRange?.min,
-      width_max: sidebarFilters.widthRange?.max,
-      height_min: sidebarFilters.heightRange?.min,
-      height_max: sidebarFilters.heightRange?.max,
-      file_size_min: sidebarFilters.sizeRange?.min,
-      file_size_max: sidebarFilters.sizeRange?.max,
-      filepath_pattern: sidebarFilters.filepathPattern,
-    }),
-    [debouncedSearch, sidebarFilters, selectedTaskIds, selectedJobId, isAnnotatedFilter]
+    () => {
+      const includedTagIds = getIncludedTagIds();
+      const excludedTagIds = getExcludedTagIds();
+
+      return {
+        search: debouncedSearch || undefined,
+        tag_ids: includedTagIds.length > 0 ? includedTagIds : undefined,
+        excluded_tag_ids: excludedTagIds.length > 0 ? excludedTagIds : undefined,
+        include_match_mode: sidebarFilters.includeMatchMode,
+        exclude_match_mode: sidebarFilters.excludeMatchMode,
+        task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
+        job_id: selectedJobId,
+        is_annotated: isAnnotatedFilter,
+        // Metadata filters from sidebar
+        width_min: sidebarFilters.widthRange?.min,
+        width_max: sidebarFilters.widthRange?.max,
+        height_min: sidebarFilters.heightRange?.min,
+        height_max: sidebarFilters.heightRange?.max,
+        file_size_min: sidebarFilters.sizeRange?.min,
+        file_size_max: sidebarFilters.sizeRange?.max,
+        filepath_pattern: sidebarFilters.filepathPattern,
+      };
+    },
+    [debouncedSearch, sidebarFilters, selectedTaskIds, selectedJobId, isAnnotatedFilter, getIncludedTagIds, getExcludedTagIds]
   );
 
   // Fetch images with infinite scroll
@@ -902,41 +914,170 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
           </button>
         </div>
 
-        {/* Tag Filters */}
+        {/* Active Filters Display */}
         <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
-          <span className="text-sm text-gray-500 flex items-center gap-1">
-            <Tag className="w-4 h-4" />
-            Tags:
+          <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+            Active Filters:
           </span>
-          {allTags.map((tag) => (
+
+          {/* No filters message */}
+          {!(hasSidebarFilters || debouncedSearch || selectedTaskIds.length > 0 || isAnnotatedFilter !== undefined) && (
+            <span className="text-xs text-gray-400 italic">
+              No filters applied
+            </span>
+          )}
+
+          {/* Search filter */}
+          {debouncedSearch && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs">
+              <Search className="w-3 h-3" />
+              <span className="font-medium">Search: &quot;{debouncedSearch}&quot;</span>
+            </div>
+          )}
+
+          {/* Task filters */}
+          {selectedTaskIds.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs">
+              <span className="font-medium">
+                Tasks: {selectedTaskIds.length} selected
+              </span>
+            </div>
+          )}
+
+          {/* Annotated status filter */}
+          {isAnnotatedFilter !== undefined && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs">
+              <span className="font-medium">
+                {isAnnotatedFilter ? 'Annotated Only' : 'Not Annotated Only'}
+              </span>
+            </div>
+          )}
+
+          {/* Include tags with match mode */}
+          {getIncludedTagIds().length > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs border border-emerald-200">
+              <span className="font-semibold">Include ({sidebarFilters.includeMatchMode}):</span>
+              <div className="flex items-center gap-1">
+                {getIncludedTagIds().map((tagId) => {
+                  const tag = allTags.find(t => t.id === tagId);
+                  if (!tag) return null;
+                  return (
+                    <span
+                      key={tagId}
+                      className="px-2 py-0.5 rounded-full font-medium flex items-center gap-1 group"
+                      style={{
+                        backgroundColor: `${tag.color}30`,
+                        color: tag.color,
+                      }}
+                    >
+                      <span>{tag.name}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeSidebarTag(tagId);
+                        }}
+                        className="hover:opacity-100 transition-opacity"
+                        title="Remove from filter"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Exclude tags with match mode */}
+          {getExcludedTagIds().length > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-700 rounded-full text-xs border border-red-200">
+              <span className="font-semibold">Exclude ({sidebarFilters.excludeMatchMode}):</span>
+              <div className="flex items-center gap-1">
+                {getExcludedTagIds().map((tagId) => {
+                  const tag = allTags.find(t => t.id === tagId);
+                  if (!tag) return null;
+                  return (
+                    <span
+                      key={tagId}
+                      className="px-2 py-0.5 rounded-full font-medium flex items-center gap-1 group"
+                      style={{
+                        backgroundColor: `${tag.color}30`,
+                        color: tag.color,
+                      }}
+                    >
+                      <span>{tag.name}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeSidebarTag(tagId);
+                        }}
+                        className="hover:opacity-100 transition-opacity"
+                        title="Remove from filter"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Dimension filters */}
+          {sidebarFilters.widthRange && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs">
+              <span className="font-medium">
+                Width: {sidebarFilters.widthRange.min} - {sidebarFilters.widthRange.max}px
+              </span>
+            </div>
+          )}
+
+          {sidebarFilters.heightRange && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs">
+              <span className="font-medium">
+                Height: {sidebarFilters.heightRange.min} - {sidebarFilters.heightRange.max}px
+              </span>
+            </div>
+          )}
+
+          {/* File size filter */}
+          {sidebarFilters.sizeRange && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs">
+              <span className="font-medium">
+                Size: {(sidebarFilters.sizeRange.min / (1024 * 1024)).toFixed(1)} - {(sidebarFilters.sizeRange.max / (1024 * 1024)).toFixed(1)} MB
+              </span>
+            </div>
+          )}
+
+          {/* Filepath pattern filter */}
+          {sidebarFilters.filepathPattern && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 text-teal-700 rounded-full text-xs">
+              <span className="font-medium">
+                Path: {sidebarFilters.filepathPattern}
+              </span>
+            </div>
+          )}
+
+          {/* Clear all filters button - Liquid Glass Red */}
+          {(hasSidebarFilters || debouncedSearch || selectedTaskIds.length > 0 || isAnnotatedFilter !== undefined) && (
             <button
-              key={tag.id}
-              onClick={() => toggleSidebarTag(tag.id)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all flex items-center gap-1 ${
-                sidebarFilters.selectedTagIds.includes(tag.id)
-                  ? 'ring-2 ring-offset-1'
-                  : 'opacity-70 hover:opacity-100'
-              }`}
+              onClick={() => {
+                clearSidebarFilters();
+                setSearchInput('');
+                setSelectedTaskIds([]);
+                setIsAnnotatedFilter(undefined);
+              }}
+              className="px-3 py-1 text-xs font-medium text-white rounded-full flex items-center gap-1 transition-all ml-auto shadow-lg hover:shadow-xl"
               style={{
-                backgroundColor: `${tag.color}20`,
-                color: tag.color,
-                borderColor: tag.color,
-                ...(sidebarFilters.selectedTagIds.includes(tag.id) && { ringColor: tag.color }),
+                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.85) 0%, rgba(220, 38, 38, 0.9) 100%)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid rgba(239, 68, 68, 0.5)',
+                boxShadow: '0 4px 16px rgba(239, 68, 68, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1) inset'
               }}
             >
-              {tag.name}
-              {tag.usage_count !== undefined && (
-                <span className="text-[10px] opacity-60">({tag.usage_count})</span>
-              )}
-            </button>
-          ))}
-          {sidebarFilters.selectedTagIds.length > 0 && (
-            <button
-              onClick={() => setSidebarTagIds([])}
-              className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700 rounded-full flex items-center gap-1"
-            >
               <X className="w-3 h-3" />
-              Clear
+              Clear All Filters
             </button>
           )}
         </div>
@@ -997,6 +1138,8 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               projectId={projectId}
               filters={sidebarFilters}
               onToggleTag={toggleSidebarTag}
+              setIncludeMatchMode={setIncludeMatchMode}
+              setExcludeMatchMode={setExcludeMatchMode}
               visibility={visibilityState}
             />
           </>

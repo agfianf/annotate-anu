@@ -9,11 +9,14 @@ import { UnifiedSidebarSection } from './UnifiedSidebarSection';
 import { TagCreationInline } from './TagCreationInline';
 import { CategoryCreationInline } from './CategoryCreationInline';
 import { CategoryConfigPanel } from './CategoryConfigPanel';
+import { FilterModeSelector } from './FilterModeSelector';
 
 interface UnifiedExploreSidebarProps {
   projectId: string;
   filters: ExploreFiltersState;
   onToggleTag: (tagId: string) => void;
+  setIncludeMatchMode: (mode: 'AND' | 'OR') => void;
+  setExcludeMatchMode: (mode: 'AND' | 'OR') => void;
   visibility: UseExploreVisibilityReturn;
 }
 
@@ -27,6 +30,8 @@ export function UnifiedExploreSidebar({
   projectId,
   filters,
   onToggleTag,
+  setIncludeMatchMode,
+  setExcludeMatchMode,
   visibility,
 }: UnifiedExploreSidebarProps) {
   const queryClient = useQueryClient();
@@ -233,23 +238,39 @@ export function UnifiedExploreSidebar({
     }
   };
 
-  // Check if all tags in a category are filtered
-  const areAllTagsFiltered = (tags: Array<{ id: string }> | undefined): boolean => {
-    if (!tags || tags.length === 0) return false;
-    return tags.every((tag) => filters.selectedTagIds.includes(tag.id));
+  // Get the filter mode for a category (based on all its tags)
+  const getTagFilterMode = (tags: Array<{ id: string }> | undefined): 'idle' | 'include' | 'exclude' | 'mixed' => {
+    if (!tags || tags.length === 0) return 'idle';
+
+    const modes = tags.map(tag => filters.tagFilters[tag.id] || 'idle');
+    const allInclude = modes.every(m => m === 'include');
+    const allExclude = modes.every(m => m === 'exclude');
+    const allIdle = modes.every(m => m === 'idle');
+
+    if (allInclude) return 'include';
+    if (allExclude) return 'exclude';
+    if (allIdle) return 'idle';
+    return 'mixed';
   };
 
-  // Toggle all tags in a category
+  // Toggle all tags in a category (tri-state cycle)
   const handleToggleCategoryFilter = (tags: Array<{ id: string }> | undefined) => {
     if (!tags || tags.length === 0) return;
 
-    const allFiltered = areAllTagsFiltered(tags);
+    const currentMode = getTagFilterMode(tags);
+
     tags.forEach((tag) => {
-      const isCurrentlyFiltered = filters.selectedTagIds.includes(tag.id);
-      if (allFiltered && isCurrentlyFiltered) {
+      const currentTagMode = filters.tagFilters[tag.id] || 'idle';
+
+      if (currentMode === 'idle' || currentMode === 'mixed') {
+        // Set all to include
+        if (currentTagMode !== 'include') onToggleTag(tag.id);
+      } else if (currentMode === 'include') {
+        // Set all to exclude
         onToggleTag(tag.id);
-      } else if (!allFiltered && !isCurrentlyFiltered) {
-        onToggleTag(tag.id);
+      } else {
+        // Set all to idle
+        if (currentTagMode === 'exclude') onToggleTag(tag.id);
       }
     });
   };
@@ -363,6 +384,16 @@ export function UnifiedExploreSidebar({
           </div>
         ) : (
           <div className="divide-y divide-orange-50">
+            {/* Match Mode Selector - shows only when tags are filtered */}
+            <FilterModeSelector
+              includeMode={filters.includeMatchMode}
+              excludeMode={filters.excludeMatchMode}
+              onIncludeModeChange={setIncludeMatchMode}
+              onExcludeModeChange={setExcludeMatchMode}
+              hasIncludedTags={Object.values(filters.tagFilters).some(m => m === 'include')}
+              hasExcludedTags={Object.values(filters.tagFilters).some(m => m === 'exclude')}
+            />
+
             {/* TAGS Section (Uncategorized) */}
             <UnifiedSidebarSection
               title="Tags"
@@ -380,7 +411,7 @@ export function UnifiedExploreSidebar({
                       name={tag.name}
                       color={tag.color}
                       count={tag.usage_count}
-                      isFiltered={filters.selectedTagIds.includes(tag.id)}
+                      filterMode={filters.tagFilters[tag.id] || 'idle'}
                       isVisible={visibility.isTagVisible(tag.id)}
                       onToggleFilter={() => onToggleTag(tag.id)}
                       onToggleVisibility={() => visibility.toggleTag(tag.id)}
@@ -432,7 +463,7 @@ export function UnifiedExploreSidebar({
                           name={category.display_name || category.name}
                           color={category.color}
                           count={category.tags?.length}
-                          isFiltered={areAllTagsFiltered(category.tags)}
+                          filterMode={getTagFilterMode(category.tags)}
                           isVisible={visibility.isCategoryVisible(categoryId)}
                           onToggleFilter={() => handleToggleCategoryFilter(category.tags)}
                           onToggleVisibility={() => visibility.toggleCategory(categoryId)}
@@ -473,7 +504,7 @@ export function UnifiedExploreSidebar({
                               name={tag.name}
                               color={tag.color || category.color}
                               count={tag.usage_count}
-                              isFiltered={filters.selectedTagIds.includes(tag.id)}
+                              filterMode={filters.tagFilters[tag.id] || 'idle'}
                               isVisible={visibility.isTagVisible(tag.id, categoryId)}
                               onToggleFilter={() => onToggleTag(tag.id)}
                               onToggleVisibility={() => visibility.toggleTag(tag.id)}

@@ -1,6 +1,7 @@
 """Pydantic schemas for Data Management (Shared Images, Tags, Project Images)."""
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -266,6 +267,9 @@ class ExploreFilter(BaseModel):
     """Filter options for exploring images."""
 
     tag_ids: list[UUID] | None = Field(None, description="Filter by tag IDs")
+    excluded_tag_ids: list[UUID] | None = Field(None, description="Exclude images with these tags")
+    include_match_mode: Literal["AND", "OR"] | None = Field(default="OR", description="Match mode for included tags")
+    exclude_match_mode: Literal["AND", "OR"] | None = Field(default="OR", description="Match mode for excluded tags")
     task_ids: list[int] | None = Field(None, description="Filter by task IDs (multi-select)")
     job_id: int | None = Field(None, description="Filter by job ID")
     is_annotated: bool | None = Field(None, description="Filter by annotation status")

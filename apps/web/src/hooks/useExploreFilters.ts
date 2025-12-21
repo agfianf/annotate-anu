@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
 export interface ExploreFiltersState {
-  selectedTagIds: string[];
+  tagFilters: Record<string, 'include' | 'exclude'>;
+  includeMatchMode: 'AND' | 'OR';
+  excludeMatchMode: 'AND' | 'OR';
   selectedAttributes: Record<string, string[]>; // schema_id -> selected values
   numericRanges: Record<string, { min: number; max: number }>; // schema_id -> range
   sizeFilter: ('small' | 'medium' | 'large')[];
@@ -14,18 +16,24 @@ export interface ExploreFiltersState {
 }
 
 const defaultFilters: ExploreFiltersState = {
-  selectedTagIds: [],
+  tagFilters: {},
+  includeMatchMode: 'OR',
+  excludeMatchMode: 'OR',
   selectedAttributes: {},
   numericRanges: {},
   sizeFilter: [],
 };
 
 export function useSidebarAggregations(projectId: string, filters: ExploreFiltersState) {
+  const includedTagIds = Object.entries(filters.tagFilters)
+    .filter(([_, mode]) => mode === 'include')
+    .map(([id]) => id);
+
   return useQuery({
-    queryKey: ['sidebar-aggregations', projectId, filters.selectedTagIds], // Dependency on tags only for now?
+    queryKey: ['sidebar-aggregations', projectId, Object.keys(filters.tagFilters)],
     queryFn: () =>
       projectImagesApi.getSidebarAggregations(projectId, {
-        tag_ids: filters.selectedTagIds.length > 0 ? filters.selectedTagIds : undefined,
+        tag_ids: includedTagIds.length > 0 ? includedTagIds : undefined,
       }),
     staleTime: 30000, // 30 seconds
     refetchOnWindowFocus: false,
@@ -39,19 +47,48 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
   });
 
   const toggleTag = useCallback((tagId: string) => {
-    setFilters((prev) => ({
-      ...prev,
-      selectedTagIds: prev.selectedTagIds.includes(tagId)
-        ? prev.selectedTagIds.filter((id) => id !== tagId)
-        : [...prev.selectedTagIds, tagId],
-    }));
+    setFilters((prev) => {
+      const currentState = prev.tagFilters[tagId];
+      const newFilters = { ...prev.tagFilters };
+
+      if (!currentState) {
+        newFilters[tagId] = 'include'; // Idle → Include
+      } else if (currentState === 'include') {
+        newFilters[tagId] = 'exclude'; // Include → Exclude
+      } else {
+        delete newFilters[tagId]; // Exclude → Idle
+      }
+
+      return { ...prev, tagFilters: newFilters };
+    });
   }, []);
 
-  const setTagIds = useCallback((tagIds: string[]) => {
-    setFilters((prev) => ({
-      ...prev,
-      selectedTagIds: tagIds,
-    }));
+  const removeTag = useCallback((tagId: string) => {
+    setFilters((prev) => {
+      const newFilters = { ...prev.tagFilters };
+      delete newFilters[tagId];
+      return { ...prev, tagFilters: newFilters };
+    });
+  }, []);
+
+  const getIncludedTagIds = useCallback(() => {
+    return Object.entries(filters.tagFilters)
+      .filter(([_, mode]) => mode === 'include')
+      .map(([id]) => id);
+  }, [filters.tagFilters]);
+
+  const getExcludedTagIds = useCallback(() => {
+    return Object.entries(filters.tagFilters)
+      .filter(([_, mode]) => mode === 'exclude')
+      .map(([id]) => id);
+  }, [filters.tagFilters]);
+
+  const setIncludeMatchMode = useCallback((mode: 'AND' | 'OR') => {
+    setFilters((prev) => ({ ...prev, includeMatchMode: mode }));
+  }, []);
+
+  const setExcludeMatchMode = useCallback((mode: 'AND' | 'OR') => {
+    setFilters((prev) => ({ ...prev, excludeMatchMode: mode }));
   }, []);
 
   const toggleAttributeValue = useCallback((schemaId: string, value: string) => {
@@ -111,7 +148,7 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
   }, []);
 
   const hasActiveFilters =
-    filters.selectedTagIds.length > 0 ||
+    Object.keys(filters.tagFilters).length > 0 ||
     Object.values(filters.selectedAttributes).some((arr) => arr.length > 0) ||
     Object.keys(filters.numericRanges).length > 0 ||
     filters.sizeFilter.length > 0;
@@ -120,11 +157,14 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     filters,
     setFilters,
     toggleTag,
-    setTagIds,
+    removeTag,
+    getIncludedTagIds,
+    getExcludedTagIds,
+    setIncludeMatchMode,
+    setExcludeMatchMode,
     toggleAttributeValue,
     setNumericRange,
     toggleSizeFilter,
-    clearFilters,
     clearFilters,
     hasActiveFilters,
     // New filters

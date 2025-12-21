@@ -1,6 +1,6 @@
 """Router for Project Images (project image pool)."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -189,6 +189,9 @@ async def explore_project_images(
     page_size: int = Query(default=50, ge=1, le=200),
     search: str | None = Query(default=None, max_length=255),
     tag_ids: list[UUID] | None = Query(default=None),
+    excluded_tag_ids: list[UUID] | None = Query(default=None),
+    include_match_mode: Literal["AND", "OR"] = Query(default="OR"),
+    exclude_match_mode: Literal["AND", "OR"] = Query(default="OR"),
     task_ids: list[int] | None = Query(default=None),
     job_id: int | None = Query(default=None),
     is_annotated: bool | None = Query(default=None),
@@ -216,6 +219,9 @@ async def explore_project_images(
         page=page,
         page_size=page_size,
         tag_ids=tag_ids,
+        excluded_tag_ids=excluded_tag_ids,
+        include_match_mode=include_match_mode,
+        exclude_match_mode=exclude_match_mode,
         task_ids=task_ids,
         job_id=job_id,
         is_annotated=is_annotated,
@@ -239,6 +245,11 @@ async def explore_project_images(
         filters_applied["search"] = search
     if tag_ids:
         filters_applied["tag_ids"] = [str(t) for t in tag_ids]
+    if excluded_tag_ids:
+        filters_applied["excluded_tag_ids"] = [str(t) for t in excluded_tag_ids]
+    if tag_ids or excluded_tag_ids:
+        filters_applied["include_match_mode"] = include_match_mode
+        filters_applied["exclude_match_mode"] = exclude_match_mode
     if task_ids is not None and len(task_ids) > 0:
         filters_applied["task_ids"] = task_ids
     if job_id is not None:

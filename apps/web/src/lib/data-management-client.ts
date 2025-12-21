@@ -154,6 +154,9 @@ export interface ExploreFilters {
   page_size?: number;
   search?: string;
   tag_ids?: string[];
+  excluded_tag_ids?: string[];
+  include_match_mode?: 'AND' | 'OR';
+  exclude_match_mode?: 'AND' | 'OR';
   task_ids?: number[];
   job_id?: number;
   is_annotated?: boolean;
@@ -546,6 +549,15 @@ export const projectImagesApi = {
     if (filters?.search) queryParams.append('search', filters.search);
     if (filters?.tag_ids) {
       filters.tag_ids.forEach((id) => queryParams.append('tag_ids', id));
+    }
+    if (filters?.excluded_tag_ids) {
+      filters.excluded_tag_ids.forEach((id) => queryParams.append('excluded_tag_ids', id));
+    }
+    if (filters?.include_match_mode) {
+      queryParams.append('include_match_mode', filters.include_match_mode);
+    }
+    if (filters?.exclude_match_mode) {
+      queryParams.append('exclude_match_mode', filters.exclude_match_mode);
     }
     if (filters?.task_ids && filters.task_ids.length > 0) {
       filters.task_ids.forEach((id) => queryParams.append('task_ids', id.toString()));
