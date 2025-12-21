@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Database, Eye, EyeOff, Layers, RefreshCw, Tag, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { UseExploreVisibilityReturn } from '@/hooks/useExploreVisibility';
 import type { ExploreFiltersState } from '@/hooks/useExploreFilters';
 import { tagsApi, tagCategoriesApi } from '@/lib/data-management-client';
@@ -19,6 +19,10 @@ interface UnifiedExploreSidebarProps {
 
 type ActiveForm = 'tag' | 'category' | `cat-${string}` | null;
 
+const MIN_SIDEBAR_WIDTH = 240; // 60 * 4 = 240px (w-60)
+const MAX_SIDEBAR_WIDTH = 480; // 120 * 4 = 480px (w-120)
+const DEFAULT_SIDEBAR_WIDTH = 288; // 72 * 4 = 288px (w-72)
+
 export function UnifiedExploreSidebar({
   projectId,
   filters,
@@ -33,6 +37,57 @@ export function UnifiedExploreSidebar({
     categoryName: string;
     tagCount: number;
   } | null>(null);
+
+  // Sidebar resize state
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('exploreSidebarWidth');
+    return saved ? parseInt(saved, 10) : DEFAULT_SIDEBAR_WIDTH;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+
+  // Save width to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('exploreSidebarWidth', sidebarWidth.toString());
+  }, [sidebarWidth]);
+
+  // Mouse handlers for resizing
+  const startResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  const stopResizing = useCallback(() => {
+    setIsResizing(false);
+  }, []);
+
+  const resize = useCallback(
+    (e: MouseEvent) => {
+      if (isResizing && sidebarRef.current) {
+        const newWidth = e.clientX - sidebarRef.current.getBoundingClientRect().left;
+        if (newWidth >= MIN_SIDEBAR_WIDTH && newWidth <= MAX_SIDEBAR_WIDTH) {
+          setSidebarWidth(newWidth);
+        }
+      }
+    },
+    [isResizing]
+  );
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResizing);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      return () => {
+        window.removeEventListener('mousemove', resize);
+        window.removeEventListener('mouseup', stopResizing);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [isResizing, resize, stopResizing]);
 
   // Fetch uncategorized tags
   const {
@@ -210,7 +265,11 @@ export function UnifiedExploreSidebar({
     (categories?.reduce((sum, cat) => sum + (cat.tags?.length || 0), 0) || 0);
 
   return (
-    <div className="h-full flex flex-col bg-white/80 backdrop-blur-xl border-r border-orange-100 w-72 shadow-2xl font-sans text-sm text-slate-700">
+    <div
+      ref={sidebarRef}
+      className="h-full flex flex-col bg-white/80 backdrop-blur-xl border-r border-orange-100 shadow-2xl font-sans text-sm text-slate-700 relative"
+      style={{ width: `${sidebarWidth}px`, minWidth: `${MIN_SIDEBAR_WIDTH}px`, maxWidth: `${MAX_SIDEBAR_WIDTH}px` }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-orange-100 bg-orange-50/30 backdrop-blur-xl">
         <div className="flex items-center gap-2">
@@ -305,7 +364,7 @@ export function UnifiedExploreSidebar({
               title="Labels"
               icon={<Layers className="h-3.5 w-3.5 text-orange-500" />}
               color="#F97316"
-              count={categories?.length}
+              count={categories?.filter(cat => cat.id !== null).length}
               showAddButton
               onAddClick={() => setActiveForm('category')}
             >
@@ -492,6 +551,17 @@ export function UnifiedExploreSidebar({
           </div>
         </div>
       )}
+
+      {/* Resize handle */}
+      <div
+        className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-orange-400 active:bg-orange-500 transition-colors group ${
+          isResizing ? 'bg-orange-500' : 'bg-transparent'
+        }`}
+        onMouseDown={startResizing}
+        title="Drag to resize"
+      >
+        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-12 bg-orange-300 opacity-0 group-hover:opacity-100 transition-opacity rounded-l" />
+      </div>
     </div>
   );
 }
