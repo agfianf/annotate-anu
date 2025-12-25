@@ -429,6 +429,66 @@ make clean                        # Clean all cache and build files
 
 ## Common Development Tasks
 
+### Using Color Picker Component
+
+**IMPORTANT**: Always use the existing `ColorPickerPopup` component for all color selection needs.
+
+**Location**: `apps/web/src/components/ui/ColorPickerPopup.tsx`
+
+**Features**:
+- Portal-based glass morphism design with backdrop blur
+- Positioned relative to anchor element
+- Predefined color palette
+- Auto-closes on outside click
+- Consistent UX across the application
+
+**Example Usage**:
+```typescript
+import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';
+
+function MyComponent() {
+  const [colorPickerAnchor, setColorPickerAnchor] = useState<HTMLElement | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedColor, setSelectedColor] = useState('#10B981');
+
+  const handleColorButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setColorPickerAnchor(e.currentTarget);
+    setIsOpen(true);
+  };
+
+  const handleColorChange = (color: string) => {
+    setSelectedColor(color);
+    // Your color change logic here
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setColorPickerAnchor(null);
+  };
+
+  return (
+    <>
+      <button onClick={handleColorButtonClick}>
+        <div
+          className="w-3 h-3 rounded-sm border border-emerald-300"
+          style={{ backgroundColor: selectedColor }}
+        />
+      </button>
+
+      <ColorPickerPopup
+        selectedColor={selectedColor}
+        onColorChange={handleColorChange}
+        isOpen={isOpen}
+        onClose={handleClose}
+        anchorEl={colorPickerAnchor}
+      />
+    </>
+  );
+}
+```
+
+**DO NOT** create new color picker dropdowns or inline color selection UI. Always use this centralized component for consistency.
+
 ### Adding New SAM3 Endpoint
 
 1. Add Pydantic schema in `apps/api-inference/src/app/schemas/sam3.py`
