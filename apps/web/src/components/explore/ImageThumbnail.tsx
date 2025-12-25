@@ -222,7 +222,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
                     fontSize: `${tagStyles.fontSize}px`,
                     padding: tagStyles.padding,
                     maxWidth: `${tagStyles.maxWidth}px`,
-                    border: categoryColor ? `2px solid ${categoryColor}` : undefined,
+                    ...(categoryColor && { border: `2px solid ${categoryColor}` }),
                   }}
                   title={tag.name}
                 >
@@ -281,7 +281,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
                     fontSize: `${tagStyles.fontSize}px`,
                     padding: tagStyles.padding,
                     gap: `${tagStyles.gap}px`,
-                    border: categoryColor ? `2px solid ${categoryColor}` : undefined,
+                    ...(categoryColor && { border: `2px solid ${categoryColor}` }),
                   }}
                 >
                   <span

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Database, Eye, EyeOff, Layers, RefreshCw, Tag, Trash2 } from 'lucide-react';
 import { useState, useRef, useCallback, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import type { UseExploreVisibilityReturn } from '@/hooks/useExploreVisibility';
 import type { ExploreFiltersState } from '@/hooks/useExploreFilters';
 import { tagsApi, tagCategoriesApi, type NumericAggregation } from '@/lib/data-management-client';
@@ -202,6 +203,11 @@ export function UnifiedExploreSidebar({
       queryClient.invalidateQueries({ queryKey: ['tag-categories', projectId] });
       setActiveForm(null);
     },
+    onError: (error: any) => {
+      // Show error message from API response
+      const message = error?.response?.data?.message || error?.message || 'Failed to create tag';
+      toast.error(message);
+    },
   });
 
   // Mutation for creating categories
@@ -283,6 +289,11 @@ export function UnifiedExploreSidebar({
         name: tag.name,
         color: tag.color,
         category_id: categoryId,
+      }).catch((error: any) => {
+        // Show error message for failed tag creation
+        const message = error?.response?.data?.message || error?.message || `Failed to create tag "${tag.name}"`;
+        toast.error(message);
+        return null;
       })
     );
 
@@ -517,8 +528,8 @@ export function UnifiedExploreSidebar({
               {categories && categories.length > 0 ? (
                 <div className="space-y-0.5 max-h-96 overflow-y-auto">
                   {categories.map((category) => {
-                    // Skip virtual uncategorized category (id is null)
-                    if (!category.id) return null;
+                    // Skip virtual uncategorized category (id is null) or system uncategorized category
+                    if (!category.id || category.name === 'uncategorized') return null;
 
                     // Store non-null category.id for type safety
                     const categoryId = category.id;

@@ -207,10 +207,11 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   });
 
   // Create category color map for thumbnail tag borders
+  // Exclude "uncategorized" category so those tags don't get borders
   const categoryColorMap = useMemo(() => {
     const map: Record<string, string> = {};
     tagCategories.forEach((category) => {
-      if (category.id) {
+      if (category.id && category.name !== 'uncategorized') {
         map[category.id] = category.color;
       }
     });

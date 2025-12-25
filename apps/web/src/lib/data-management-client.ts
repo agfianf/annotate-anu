@@ -442,11 +442,18 @@ export const tagsApi = {
   },
 
   /**
-   * List only uncategorized tags (tags with category_id = null)
+   * List only uncategorized tags (tags in the "Uncategorized" category)
    */
   async listUncategorized(projectId: number): Promise<Tag[]> {
     const allTags = await this.list(projectId, { include_usage_count: true });
-    return allTags.filter((tag) => tag.category_id === null);
+
+    // Get the uncategorized category
+    const categories = await tagCategoriesApi.listWithTags(projectId);
+    const uncategorizedCategory = categories.find((cat) => cat.name === 'uncategorized');
+
+    if (!uncategorizedCategory) return [];
+
+    return allTags.filter((tag) => tag.category_id === uncategorizedCategory.id);
   },
 };
 

@@ -72,10 +72,29 @@ async def create_project(
         
         # Auto-add creator as maintainer
         await ProjectMemberRepository.create(
-            connection, 
-            project["id"], 
+            connection,
+            project["id"],
             {"user_id": current_user.id, "role": "maintainer"}
         )
+
+        # Auto-create "Uncategorized" category for the new project
+        from uuid import uuid4
+        from datetime import datetime, timezone
+        from sqlalchemy import insert
+        from app.models.data_management import tag_categories
+
+        uncategorized_category = {
+            "id": uuid4(),
+            "project_id": project["id"],
+            "name": "uncategorized",
+            "display_name": "Uncategorized",
+            "color": "#9CA3AF",
+            "sidebar_order": -1,  # Show first
+            "created_at": datetime.now(timezone.utc),
+        }
+
+        stmt = insert(tag_categories).values(**uncategorized_category)
+        await connection.execute(stmt)
 
         return JsonResponse(
             data=ProjectResponse(**project),

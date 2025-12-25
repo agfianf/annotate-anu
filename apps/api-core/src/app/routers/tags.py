@@ -82,16 +82,29 @@ async def create_tag(
     """Create a new tag in a project."""
     project_id = project["id"]
 
-    # Check if name already exists in this project
-    existing = await TagRepository.get_by_name(connection, payload.name, project_id)
+    # If no category_id provided, use "Uncategorized" category
+    category_id = payload.category_id
+    if category_id is None:
+        uncategorized = await TagRepository.get_uncategorized_category(connection, project_id)
+        if not uncategorized:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Uncategorized category not found for this project",
+            )
+        category_id = uncategorized["id"]
+
+    # Check if name already exists in this category
+    existing = await TagRepository.get_by_name(connection, payload.name, project_id, category_id)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Tag with name '{payload.name}' already exists in this project",
+            detail=f"Tag with name '{payload.name}' already exists in this category",
         )
 
     tag_data = payload.model_dump()
     tag_data["created_by"] = current_user.id
+    # Ensure category_id is set (either from payload or "Uncategorized")
+    tag_data["category_id"] = category_id
 
     tag = await TagRepository.create(connection, project_id, tag_data)
     return JsonResponse(
@@ -120,11 +133,16 @@ async def update_tag(
 
     # Check name uniqueness if updating name
     if payload.name and payload.name != tag["name"]:
-        existing = await TagRepository.get_by_name(connection, payload.name, project_id)
-        if existing:
+        # Determine which category to check (new category or current category)
+        check_category_id = payload.category_id if payload.category_id else tag["category_id"]
+
+        existing = await TagRepository.get_by_name(
+            connection, payload.name, project_id, check_category_id
+        )
+        if existing and existing["id"] != tag_id:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Tag with name '{payload.name}' already exists in this project",
+                detail=f"Tag with name '{payload.name}' already exists in this category",
             )
 
     update_data = payload.model_dump(exclude_unset=True)

@@ -192,9 +192,9 @@ tags = Table(
     Column(
         "category_id",
         UUID(as_uuid=True),
-        ForeignKey("tag_categories.id", ondelete="SET NULL"),
-        nullable=True,
-        comment="Reference to tag category (optional)",
+        ForeignKey("tag_categories.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Reference to tag category (required - defaults to 'Uncategorized')",
     ),
     Column(
         "name",
@@ -232,7 +232,8 @@ tags = Table(
     Index("ix_tags_project_id", "project_id"),
     Index("ix_tags_category_id", "category_id"),
     Index("ix_tags_name", "name"),
-    Index("ix_tags_unique", "project_id", "name", unique=True),
+    # Unique per category (including "Uncategorized" category)
+    Index("ix_tags_unique_per_category", "project_id", "category_id", "name", unique=True),
 )
 
 

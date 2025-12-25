@@ -21,9 +21,34 @@ class TagRepository:
         return dict(row._mapping) if row else None
 
     @staticmethod
-    async def get_by_name(connection: AsyncConnection, name: str, project_id: int) -> dict | None:
-        """Get tag by name within a project."""
-        stmt = select(tags).where(tags.c.name == name, tags.c.project_id == project_id)
+    async def get_by_name(
+        connection: AsyncConnection,
+        name: str,
+        project_id: int,
+        category_id: UUID,
+    ) -> dict | None:
+        """Get tag by name within a project and category."""
+        stmt = select(tags).where(
+            tags.c.name == name,
+            tags.c.project_id == project_id,
+            tags.c.category_id == category_id,
+        )
+        result = await connection.execute(stmt)
+        row = result.fetchone()
+        return dict(row._mapping) if row else None
+
+    @staticmethod
+    async def get_uncategorized_category(
+        connection: AsyncConnection,
+        project_id: int,
+    ) -> dict | None:
+        """Get the 'Uncategorized' category for a project."""
+        from app.models.data_management import tag_categories
+
+        stmt = select(tag_categories).where(
+            tag_categories.c.project_id == project_id,
+            tag_categories.c.name == "uncategorized",
+        )
         result = await connection.execute(stmt)
         row = result.fetchone()
         return dict(row._mapping) if row else None
