@@ -5,7 +5,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Check, Search, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Search, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { projectImagesApi, getAbsoluteThumbnailUrl, type SharedImage } from '@/lib/data-management-client';
 
@@ -13,21 +13,53 @@ interface ImageUidSelectorProps {
   projectId: string;
   selectedImageIds: string[];
   onSelectionChange: (imageIds: string[]) => void;
+  // Visibility control props
+  isVisible?: boolean;
+  onToggleVisibility?: () => void;
+  displayColor?: string;
+  onColorPickerClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 export function ImageUidSelector({
   projectId,
   selectedImageIds,
   onSelectionChange,
+  isVisible = true,
+  onToggleVisibility,
+  displayColor = '#10B981',
+  onColorPickerClick,
 }: ImageUidSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const parentRef = useRef<HTMLDivElement>(null);
 
-  // Fetch all images for this project
+  // Fetch all images for this project (paginated - backend max is 200)
   const { data: imagesResponse, isLoading } = useQuery({
     queryKey: ['project-images-list', projectId],
-    queryFn: () => projectImagesApi.list(projectId, { page: 1, page_size: 10000 }),
+    queryFn: async () => {
+      // First request to get total count
+      const firstPage = await projectImagesApi.list(projectId, { page: 1, page_size: 200 });
+      const total = firstPage.total;
+
+      if (total <= 200) {
+        return firstPage;
+      }
+
+      // Fetch remaining pages in parallel
+      const totalPages = Math.ceil(total / 200);
+      const pagePromises = [];
+      for (let page = 2; page <= totalPages; page++) {
+        pagePromises.push(projectImagesApi.list(projectId, { page, page_size: 200 }));
+      }
+
+      const additionalPages = await Promise.all(pagePromises);
+      const allImages = [
+        ...firstPage.images,
+        ...additionalPages.flatMap((p) => p.images),
+      ];
+
+      return { ...firstPage, images: allImages };
+    },
     staleTime: 60000, // 1 minute
     enabled: isOpen, // Only fetch when dropdown is open
   });
@@ -74,13 +106,46 @@ export function ImageUidSelector({
       {/* Header */}
       <div className="flex items-center justify-between">
         <label className="text-[10px] text-emerald-900/70 font-mono uppercase tracking-wider">
-          Select Images
+          Image IDs (UUID)
         </label>
-        {selectedImageIds.length > 0 && (
-          <span className="text-[9px] text-emerald-600 font-mono">
-            {selectedImageIds.length} selected
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {selectedImageIds.length > 0 && (
+            <span className="text-[9px] text-emerald-600 font-mono">
+              {selectedImageIds.length} selected
+            </span>
+          )}
+          {/* Color Picker Toggle */}
+          {onColorPickerClick && (
+            <button
+              onClick={onColorPickerClick}
+              className="p-1 rounded hover:bg-emerald-100 transition-colors"
+              title="Change display color"
+            >
+              <div
+                className="w-3 h-3 rounded-sm border border-emerald-300"
+                style={{ backgroundColor: displayColor }}
+              />
+            </button>
+          )}
+          {/* Visibility Toggle */}
+          {onToggleVisibility && (
+            <button
+              onClick={onToggleVisibility}
+              className={`p-0.5 rounded transition-colors ${
+                isVisible
+                  ? 'text-emerald-600 hover:bg-emerald-100'
+                  : 'text-gray-400 hover:bg-gray-100'
+              }`}
+              title={isVisible ? 'Section visible' : 'Section hidden'}
+            >
+              {isVisible ? (
+                <Eye className="h-3 w-3" />
+              ) : (
+                <EyeOff className="h-3 w-3" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Dropdown Button */}
@@ -215,13 +280,13 @@ export function ImageUidSelector({
                           </div>
                         )}
 
-                        {/* Info */}
+                        {/* Info - UUID first, filename second */}
                         <div className="flex-1 min-w-0 text-left">
-                          <div className="text-[10px] text-emerald-900 font-mono truncate">
-                            {image.filename}
+                          <div className="text-[10px] text-emerald-700 font-mono font-semibold truncate">
+                            ID: {image.id.slice(0, 12)}...
                           </div>
-                          <div className="text-[8px] text-emerald-500 font-mono truncate">
-                            {image.id.slice(0, 8)}...
+                          <div className="text-[8px] text-emerald-500/70 font-mono truncate">
+                            {image.filename}
                           </div>
                         </div>
                       </button>

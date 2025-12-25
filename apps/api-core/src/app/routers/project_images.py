@@ -203,6 +203,8 @@ async def explore_project_images(
     file_size_min: int | None = Query(default=None, ge=0),
     file_size_max: int | None = Query(default=None, ge=0),
     filepath_pattern: str | None = Query(default=None, max_length=255),
+    filepath_paths: list[str] | None = Query(default=None),
+    image_uids: list[UUID] | None = Query(default=None),
 ):
     """
     Explore images with combined filtering.
@@ -233,6 +235,8 @@ async def explore_project_images(
         file_size_min=file_size_min,
         file_size_max=file_size_max,
         filepath_pattern=filepath_pattern,
+        filepath_paths=filepath_paths,
+        image_uids=image_uids,
     )
 
     enriched = []
@@ -256,6 +260,10 @@ async def explore_project_images(
         filters_applied["job_id"] = job_id
     if is_annotated is not None:
         filters_applied["is_annotated"] = is_annotated
+    if filepath_paths is not None and len(filepath_paths) > 0:
+        filters_applied["filepath_paths"] = filepath_paths
+    if image_uids is not None and len(image_uids) > 0:
+        filters_applied["image_uids"] = [str(uid) for uid in image_uids]
 
     return JsonResponse(
         data=ExploreResponse(

@@ -168,6 +168,7 @@ export interface ExploreFilters {
   file_size_min?: number;
   file_size_max?: number;
   filepath_pattern?: string;
+  filepath_paths?: string[]; // Filter by specific directory paths (checkbox-based)
   include_annotations?: boolean;
   image_uids?: string[]; // Filter by specific image UIDs
 }
@@ -666,6 +667,9 @@ export const projectImagesApi = {
     if (filters?.file_size_min !== undefined) queryParams.append('file_size_min', Math.round(filters.file_size_min).toString());
     if (filters?.file_size_max !== undefined) queryParams.append('file_size_max', Math.round(filters.file_size_max).toString());
     if (filters?.filepath_pattern) queryParams.append('filepath_pattern', filters.filepath_pattern);
+    if (filters?.filepath_paths && filters.filepath_paths.length > 0) {
+      filters.filepath_paths.forEach((path) => queryParams.append('filepath_paths', path));
+    }
     if (filters?.image_uids && filters.image_uids.length > 0) {
       filters.image_uids.forEach((id) => queryParams.append('image_uids', id));
     }

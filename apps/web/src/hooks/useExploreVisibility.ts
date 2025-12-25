@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 
 /**
+ * Metadata field visibility with color support
+ */
+export interface MetadataFieldState {
+  visible: boolean;
+  color: string;
+}
+
+/**
+ * All supported metadata field keys
+ */
+export type MetadataFieldKey = 'filename' | 'width' | 'height' | 'fileSize' | 'imageUids' | 'filepath';
+
+/**
  * Visibility state for controlling what tags/attributes are displayed on thumbnails
  * This is separate from filtering - it only controls visual display
  */
@@ -9,24 +22,28 @@ export interface VisibilityState {
   tags: Record<string, boolean>;
   // Category/schema visibility (controls all tags under a category)
   categories: Record<string, boolean>;
-  // Metadata field visibility
-  metadata: {
-    filename: boolean;
-    dimensions: boolean;
-    fileSize: boolean;
-  };
+  // Metadata field visibility with color
+  metadata: Record<MetadataFieldKey, MetadataFieldState>;
   // Label/annotation visibility by label name
   labels: Record<string, boolean>;
 }
 
+// Default color for metadata fields
+const DEFAULT_METADATA_COLOR = '#10B981'; // emerald-500
+
+const defaultMetadataState: Record<MetadataFieldKey, MetadataFieldState> = {
+  filename: { visible: true, color: DEFAULT_METADATA_COLOR },
+  width: { visible: false, color: DEFAULT_METADATA_COLOR },
+  height: { visible: false, color: DEFAULT_METADATA_COLOR },
+  fileSize: { visible: false, color: DEFAULT_METADATA_COLOR },
+  imageUids: { visible: false, color: DEFAULT_METADATA_COLOR },
+  filepath: { visible: false, color: DEFAULT_METADATA_COLOR },
+};
+
 const defaultVisibility: VisibilityState = {
   tags: {},
   categories: {},
-  metadata: {
-    filename: true,
-    dimensions: false,
-    fileSize: false,
-  },
+  metadata: { ...defaultMetadataState },
   labels: {},
 };
 
@@ -34,6 +51,38 @@ const STORAGE_KEY_PREFIX = 'explore-visibility-';
 
 function getStorageKey(projectId: string): string {
   return `${STORAGE_KEY_PREFIX}${projectId}`;
+}
+
+/**
+ * Migrate old boolean metadata format to new object format with colors
+ */
+function migrateMetadata(
+  oldMetadata: Record<string, boolean | MetadataFieldState> | undefined
+): Record<MetadataFieldKey, MetadataFieldState> {
+  if (!oldMetadata) {
+    return { ...defaultMetadataState };
+  }
+
+  const migrated: Record<MetadataFieldKey, MetadataFieldState> = { ...defaultMetadataState };
+
+  for (const key of Object.keys(oldMetadata) as MetadataFieldKey[]) {
+    const value = oldMetadata[key];
+    if (typeof value === 'boolean') {
+      // Old format: boolean - migrate to new format
+      migrated[key] = {
+        visible: value,
+        color: DEFAULT_METADATA_COLOR,
+      };
+    } else if (value && typeof value === 'object' && 'visible' in value) {
+      // New format: already an object
+      migrated[key] = {
+        visible: value.visible,
+        color: value.color || DEFAULT_METADATA_COLOR,
+      };
+    }
+  }
+
+  return migrated;
 }
 
 function loadVisibility(projectId: string): VisibilityState {
@@ -44,16 +93,13 @@ function loadVisibility(projectId: string): VisibilityState {
       return {
         ...defaultVisibility,
         ...parsed,
-        metadata: {
-          ...defaultVisibility.metadata,
-          ...parsed.metadata,
-        },
+        metadata: migrateMetadata(parsed.metadata),
       };
     }
   } catch (e) {
     console.warn('Failed to load visibility state from localStorage:', e);
   }
-  return defaultVisibility;
+  return { ...defaultVisibility, metadata: { ...defaultMetadataState } };
 }
 
 function saveVisibility(projectId: string, visibility: VisibilityState): void {
@@ -134,15 +180,44 @@ export function useExploreVisibility(projectId: string) {
   /**
    * Toggle visibility for a metadata field
    */
-  const toggleMetadata = useCallback((field: keyof VisibilityState['metadata']) => {
+  const toggleMetadata = useCallback((field: MetadataFieldKey) => {
     setVisibility((prev) => ({
       ...prev,
       metadata: {
         ...prev.metadata,
-        [field]: !prev.metadata[field],
+        [field]: {
+          ...prev.metadata[field],
+          visible: !prev.metadata[field].visible,
+        },
       },
     }));
   }, []);
+
+  /**
+   * Set color for a metadata field
+   */
+  const setMetadataColor = useCallback((field: MetadataFieldKey, color: string) => {
+    setVisibility((prev) => ({
+      ...prev,
+      metadata: {
+        ...prev.metadata,
+        [field]: {
+          ...prev.metadata[field],
+          color,
+        },
+      },
+    }));
+  }, []);
+
+  /**
+   * Get color for a metadata field
+   */
+  const getMetadataColor = useCallback(
+    (field: MetadataFieldKey): string => {
+      return visibility.metadata[field]?.color || DEFAULT_METADATA_COLOR;
+    },
+    [visibility]
+  );
 
   /**
    * Toggle visibility for a label
@@ -174,16 +249,19 @@ export function useExploreVisibility(projectId: string) {
    * Show all items (reset to default visible state)
    */
   const showAll = useCallback((_allTagIds?: string[], _allCategoryIds?: string[], _allLabelNames?: string[]) => {
-    setVisibility({
+    setVisibility((prev) => ({
       tags: {},
       categories: {},
       metadata: {
-        filename: true,
-        dimensions: true,
-        fileSize: true,
+        filename: { visible: true, color: prev.metadata.filename?.color || DEFAULT_METADATA_COLOR },
+        width: { visible: true, color: prev.metadata.width?.color || DEFAULT_METADATA_COLOR },
+        height: { visible: true, color: prev.metadata.height?.color || DEFAULT_METADATA_COLOR },
+        fileSize: { visible: true, color: prev.metadata.fileSize?.color || DEFAULT_METADATA_COLOR },
+        imageUids: { visible: true, color: prev.metadata.imageUids?.color || DEFAULT_METADATA_COLOR },
+        filepath: { visible: true, color: prev.metadata.filepath?.color || DEFAULT_METADATA_COLOR },
       },
       labels: {},
-    });
+    }));
   }, []);
 
   /**
@@ -215,9 +293,12 @@ export function useExploreVisibility(projectId: string) {
         tags: hiddenTags,
         categories: hiddenCategories,
         metadata: {
-          filename: false,
-          dimensions: false,
-          fileSize: false,
+          filename: { visible: false, color: prev.metadata.filename?.color || DEFAULT_METADATA_COLOR },
+          width: { visible: false, color: prev.metadata.width?.color || DEFAULT_METADATA_COLOR },
+          height: { visible: false, color: prev.metadata.height?.color || DEFAULT_METADATA_COLOR },
+          fileSize: { visible: false, color: prev.metadata.fileSize?.color || DEFAULT_METADATA_COLOR },
+          imageUids: { visible: false, color: prev.metadata.imageUids?.color || DEFAULT_METADATA_COLOR },
+          filepath: { visible: false, color: prev.metadata.filepath?.color || DEFAULT_METADATA_COLOR },
         },
         labels: hiddenLabels,
       };
@@ -264,8 +345,8 @@ export function useExploreVisibility(projectId: string) {
    * Check if metadata field is visible
    */
   const isMetadataVisible = useCallback(
-    (field: keyof VisibilityState['metadata']): boolean => {
-      return visibility.metadata[field];
+    (field: MetadataFieldKey): boolean => {
+      return visibility.metadata[field]?.visible ?? false;
     },
     [visibility]
   );
@@ -284,6 +365,8 @@ export function useExploreVisibility(projectId: string) {
     // Metadata operations
     toggleMetadata,
     isMetadataVisible,
+    setMetadataColor,
+    getMetadataColor,
     // Label operations
     toggleLabel,
     setLabelVisibility,

@@ -1,9 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { Database, Eye, EyeOff, RefreshCw, Tag } from 'lucide-react';
+import { useState } from 'react';
 import type { UseExploreVisibilityReturn } from '@/hooks/useExploreVisibility';
+import type { MetadataFieldKey } from '@/hooks/useExploreVisibility';
 import { tagCategoriesApi, attributeSchemasApi } from '@/lib/data-management-client';
 import { VisibilityItem } from './VisibilityItem';
 import { VisibilitySection } from './VisibilitySection';
+import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';
 
 interface VisibilitySidebarProps {
   projectId: string;
@@ -16,6 +19,10 @@ export function VisibilitySidebar({
   visibility,
   onAddCategory,
 }: VisibilitySidebarProps) {
+  // Color picker state
+  const [colorPickerField, setColorPickerField] = useState<MetadataFieldKey | null>(null);
+  const [colorPickerAnchor, setColorPickerAnchor] = useState<HTMLElement | null>(null);
+
   // Fetch tag categories with nested tags for the project
   const {
     data: tagCategories,
@@ -101,6 +108,23 @@ export function VisibilitySidebar({
     }
 
     visibility.hideAll(allTagIds, allCategoryIds);
+  };
+
+  // Color picker handlers
+  const handleMetadataColorClick = (field: MetadataFieldKey) => (e: React.MouseEvent<HTMLButtonElement>) => {
+    setColorPickerField(field);
+    setColorPickerAnchor(e.currentTarget);
+  };
+
+  const handleColorChange = (color: string) => {
+    if (colorPickerField) {
+      visibility.setMetadataColor(colorPickerField, color);
+    }
+  };
+
+  const handleColorPickerClose = () => {
+    setColorPickerField(null);
+    setColorPickerAnchor(null);
   };
 
   return (
@@ -200,20 +224,44 @@ export function VisibilitySidebar({
                 <VisibilityItem
                   name="filename"
                   checked={visibility.isMetadataVisible('filename')}
-                  color="#6B7280"
+                  color={visibility.getMetadataColor('filename')}
                   onToggle={() => visibility.toggleMetadata('filename')}
+                  onColorClick={handleMetadataColorClick('filename')}
                 />
                 <VisibilityItem
-                  name="dimensions"
-                  checked={visibility.isMetadataVisible('dimensions')}
-                  color="#6B7280"
-                  onToggle={() => visibility.toggleMetadata('dimensions')}
+                  name="filepath"
+                  checked={visibility.isMetadataVisible('filepath')}
+                  color={visibility.getMetadataColor('filepath')}
+                  onToggle={() => visibility.toggleMetadata('filepath')}
+                  onColorClick={handleMetadataColorClick('filepath')}
+                />
+                <VisibilityItem
+                  name="imageUids"
+                  checked={visibility.isMetadataVisible('imageUids')}
+                  color={visibility.getMetadataColor('imageUids')}
+                  onToggle={() => visibility.toggleMetadata('imageUids')}
+                  onColorClick={handleMetadataColorClick('imageUids')}
+                />
+                <VisibilityItem
+                  name="width"
+                  checked={visibility.isMetadataVisible('width')}
+                  color={visibility.getMetadataColor('width')}
+                  onToggle={() => visibility.toggleMetadata('width')}
+                  onColorClick={handleMetadataColorClick('width')}
+                />
+                <VisibilityItem
+                  name="height"
+                  checked={visibility.isMetadataVisible('height')}
+                  color={visibility.getMetadataColor('height')}
+                  onToggle={() => visibility.toggleMetadata('height')}
+                  onColorClick={handleMetadataColorClick('height')}
                 />
                 <VisibilityItem
                   name="fileSize"
                   checked={visibility.isMetadataVisible('fileSize')}
-                  color="#6B7280"
+                  color={visibility.getMetadataColor('fileSize')}
                   onToggle={() => visibility.toggleMetadata('fileSize')}
+                  onColorClick={handleMetadataColorClick('fileSize')}
                 />
               </div>
             </VisibilitySection>
@@ -266,6 +314,15 @@ export function VisibilitySidebar({
           Toggle visibility of tags on thumbnails
         </p>
       </div>
+
+      {/* Color Picker Popup */}
+      <ColorPickerPopup
+        selectedColor={colorPickerField ? visibility.getMetadataColor(colorPickerField) : '#10B981'}
+        onColorChange={handleColorChange}
+        isOpen={colorPickerField !== null}
+        onClose={handleColorPickerClose}
+        anchorEl={colorPickerAnchor}
+      />
     </div>
   );
 }

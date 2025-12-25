@@ -84,24 +84,55 @@ export const ImageThumbnail = memo(function ImageThumbnail({
   // Filter metadata based on visibility state
   const visibleMetadata = useMemo(() => {
     if (!visibility) return [];
-    const fields: Array<'filename' | 'dimensions' | 'fileSize'> = [];
-    if (visibility.metadata.filename) fields.push('filename');
-    if (visibility.metadata.dimensions) fields.push('dimensions');
-    if (visibility.metadata.fileSize) fields.push('fileSize');
+    const fields: Array<{ field: 'filename' | 'width' | 'height' | 'fileSize' | 'filepath' | 'imageUids'; color: string }> = [];
+
+    // Handle both old (boolean) and new (object) visibility formats
+    const getVisibility = (field: keyof typeof visibility.metadata) => {
+      const value = visibility.metadata[field];
+      if (typeof value === 'boolean') {
+        // Old format: boolean
+        return { visible: value, color: '#10B981' };
+      } else if (value && typeof value === 'object') {
+        // New format: { visible: boolean, color: string }
+        return { visible: value.visible, color: value.color || '#10B981' };
+      }
+      return { visible: false, color: '#10B981' };
+    };
+
+    const filename = getVisibility('filename');
+    const width = getVisibility('width');
+    const height = getVisibility('height');
+    const fileSize = getVisibility('fileSize');
+    const filepath = getVisibility('filepath');
+    const imageUids = getVisibility('imageUids');
+
+    if (filename.visible) fields.push({ field: 'filename', color: filename.color });
+    if (width.visible) fields.push({ field: 'width', color: width.color });
+    if (height.visible) fields.push({ field: 'height', color: height.color });
+    if (fileSize.visible) fields.push({ field: 'fileSize', color: fileSize.color });
+    if (filepath.visible) fields.push({ field: 'filepath', color: filepath.color });
+    if (imageUids.visible) fields.push({ field: 'imageUids', color: imageUids.color });
+
     return fields;
   }, [visibility]);
 
   // Format metadata values for display
-  const getMetadataValue = (image: SharedImage, field: 'filename' | 'dimensions' | 'fileSize'): string => {
+  const getMetadataValue = (image: SharedImage, field: 'filename' | 'width' | 'height' | 'fileSize' | 'filepath' | 'imageUids'): string => {
     switch (field) {
       case 'filename':
         return image.filename;
-      case 'dimensions':
-        return image.width && image.height ? `${image.width}×${image.height}` : 'N/A';
+      case 'width':
+        return image.width ? `${image.width}px` : 'N/A';
+      case 'height':
+        return image.height ? `${image.height}px` : 'N/A';
       case 'fileSize':
         return image.file_size_bytes
           ? `${(image.file_size_bytes / (1024 * 1024)).toFixed(1)} MB`
           : 'N/A';
+      case 'filepath':
+        return image.file_path || 'N/A';
+      case 'imageUids':
+        return image.id.slice(0, 8) + '...';
       default:
         return '';
     }
@@ -319,12 +350,13 @@ export const ImageThumbnail = memo(function ImageThumbnail({
           className="absolute top-1 left-1 flex flex-col items-start pointer-events-none"
           style={{ gap: `${Math.round(2 * scaleFactor)}px` }}
         >
-          {visibleMetadata.map((field) => (
+          {visibleMetadata.map(({ field, color }) => (
             <MetadataBadge
               key={field}
               field={field}
               value={getMetadataValue(image, field)}
               scaleFactor={scaleFactor}
+              color={color}
             />
           ))}
         </div>

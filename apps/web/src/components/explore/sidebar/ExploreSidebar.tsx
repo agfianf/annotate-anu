@@ -121,8 +121,18 @@ export function ExploreSidebar({
                  {/* Filepath Filter */}
                  <div className="pl-2 border-l border-emerald-100 ml-1">
                     <FilepathFilter
-                      currentValue={filters.filepathPattern ?? ''}
-                      onChange={onSetFilepathFilter}
+                      projectId={projectId}
+                      selectedPaths={filters.filepathPaths || []}
+                      onSelectionChange={(paths) => {
+                        // Legacy compatibility: convert paths to pattern
+                        // The new FilepathFilter uses paths array but this legacy component
+                        // might still expect pattern-based filtering
+                        if (paths.length > 0) {
+                          onSetFilepathFilter(paths[0]);
+                        } else {
+                          onSetFilepathFilter('');
+                        }
+                      }}
                     />
                  </div>
 

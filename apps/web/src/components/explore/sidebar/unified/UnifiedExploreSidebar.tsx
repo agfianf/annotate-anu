@@ -14,6 +14,7 @@ import { FilterModeSelector } from './FilterModeSelector';
 import { ImageUidSelector } from '../ImageUidSelector';
 import { NumericRangeFilter } from '../NumericRangeFilter';
 import { FilepathFilter } from '../FilepathFilter';
+import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';
 
 interface UnifiedExploreSidebarProps {
   projectId: string;
@@ -27,7 +28,7 @@ interface UnifiedExploreSidebarProps {
   onWidthRangeChange: (min: number, max: number) => void;
   onHeightRangeChange: (min: number, max: number) => void;
   onSizeRangeChange: (min: number, max: number) => void;
-  onFilepathChange: (pattern: string) => void;
+  onFilepathPathsChange: (paths: string[]) => void;
   // Metadata aggregations
   widthAggregation?: NumericAggregation;
   heightAggregation?: NumericAggregation;
@@ -96,7 +97,7 @@ export function UnifiedExploreSidebar({
   onWidthRangeChange,
   onHeightRangeChange,
   onSizeRangeChange,
-  onFilepathChange,
+  onFilepathPathsChange,
   widthAggregation,
   heightAggregation,
   sizeAggregation,
@@ -109,6 +110,11 @@ export function UnifiedExploreSidebar({
     categoryName: string;
     tagCount: number;
   } | null>(null);
+
+  // Color picker state for metadata fields
+  type MetadataFieldKey = 'filename' | 'width' | 'height' | 'fileSize' | 'imageUids' | 'filepath';
+  const [colorPickerField, setColorPickerField] = useState<MetadataFieldKey | null>(null);
+  const [colorPickerAnchor, setColorPickerAnchor] = useState<HTMLElement | null>(null);
 
   // Sidebar resize state
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -352,13 +358,6 @@ export function UnifiedExploreSidebar({
     });
   };
 
-  // Metadata fields (hardcoded)
-  const metadataFields = [
-    { name: 'filename', color: '#6B7280' },
-    { name: 'dimensions', color: '#6B7280' },
-    { name: 'fileSize', color: '#6B7280' },
-  ];
-
   const totalTags = (uncategorizedTags?.length || 0) +
     (categories?.reduce((sum, cat) => sum + (cat.tags?.length || 0), 0) || 0);
 
@@ -409,6 +408,23 @@ export function UnifiedExploreSidebar({
     }
 
     visibility.hideAll(allTagIds, allCategoryIds);
+  };
+
+  // Color picker handlers for metadata fields
+  const handleMetadataColorClick = (field: MetadataFieldKey, event: React.MouseEvent<HTMLButtonElement>) => {
+    setColorPickerField(field);
+    setColorPickerAnchor(event.currentTarget);
+  };
+
+  const handleMetadataColorChange = (color: string) => {
+    if (colorPickerField) {
+      visibility.setMetadataColor(colorPickerField, color);
+    }
+  };
+
+  const handleColorPickerClose = () => {
+    setColorPickerField(null);
+    setColorPickerAnchor(null);
   };
 
   return (
@@ -643,6 +659,10 @@ export function UnifiedExploreSidebar({
                   projectId={projectId}
                   selectedImageIds={filters.imageUids || []}
                   onSelectionChange={onImageUidsChange}
+                  isVisible={visibility.isMetadataVisible('imageUids')}
+                  onToggleVisibility={() => visibility.toggleMetadata('imageUids')}
+                  displayColor={visibility.getMetadataColor('imageUids')}
+                  onColorPickerClick={(e) => handleMetadataColorClick('imageUids', e)}
                 />
 
                 {/* Width Filter */}
@@ -652,6 +672,10 @@ export function UnifiedExploreSidebar({
                     currentRange={filters.widthRange ?? null}
                     onRangeChange={onWidthRangeChange}
                     unit="px"
+                    isVisible={visibility.isMetadataVisible('width')}
+                    onToggleVisibility={() => visibility.toggleMetadata('width')}
+                    displayColor={visibility.getMetadataColor('width')}
+                    onColorPickerClick={(e) => handleMetadataColorClick('width', e)}
                   />
                 ) : (
                   <div className="text-xs text-emerald-500/50 font-mono py-2">
@@ -666,6 +690,10 @@ export function UnifiedExploreSidebar({
                     currentRange={filters.heightRange ?? null}
                     onRangeChange={onHeightRangeChange}
                     unit="px"
+                    isVisible={visibility.isMetadataVisible('height')}
+                    onToggleVisibility={() => visibility.toggleMetadata('height')}
+                    displayColor={visibility.getMetadataColor('height')}
+                    onColorPickerClick={(e) => handleMetadataColorClick('height', e)}
                   />
                 ) : (
                   <div className="text-xs text-emerald-500/50 font-mono py-2">
@@ -695,6 +723,10 @@ export function UnifiedExploreSidebar({
                         onSizeRangeChange(reverseConverter(min), reverseConverter(max));
                       }}
                       unit={sizeUnit}
+                      isVisible={visibility.isMetadataVisible('fileSize')}
+                      onToggleVisibility={() => visibility.toggleMetadata('fileSize')}
+                      displayColor={visibility.getMetadataColor('fileSize')}
+                      onColorPickerClick={(e) => handleMetadataColorClick('fileSize', e)}
                     />
                   );
                 })() : (
@@ -703,33 +735,16 @@ export function UnifiedExploreSidebar({
                   </div>
                 )}
 
-                {/* Filepath Pattern Filter */}
+                {/* Filepath Filter */}
                 <FilepathFilter
-                  currentValue={filters.filepathPattern || ''}
-                  onChange={onFilepathChange}
+                  projectId={projectId}
+                  selectedPaths={filters.filepathPaths || []}
+                  onSelectionChange={onFilepathPathsChange}
+                  isVisible={visibility.isMetadataVisible('filepath')}
+                  onToggleVisibility={() => visibility.toggleMetadata('filepath')}
+                  displayColor={visibility.getMetadataColor('filepath')}
+                  onColorPickerClick={(e) => handleMetadataColorClick('filepath', e)}
                 />
-
-                {/* Metadata Visibility Controls - Separate section */}
-                <div className="border-t border-emerald-100 pt-3 mt-3">
-                  <label className="text-[9px] text-emerald-900/50 font-mono uppercase tracking-wider mb-2 block">
-                    Display on Thumbnails
-                  </label>
-                  <div className="space-y-1">
-                    {metadataFields.map((field) => (
-                      <UnifiedSidebarRow
-                        key={field.name}
-                        name={field.name}
-                        color={field.color}
-                        isVisible={visibility.isMetadataVisible(
-                          field.name as 'filename' | 'dimensions' | 'fileSize'
-                        )}
-                        onToggleVisibility={() =>
-                          visibility.toggleMetadata(field.name as 'filename' | 'dimensions' | 'fileSize')
-                        }
-                      />
-                    ))}
-                  </div>
-                </div>
               </div>
             </UnifiedSidebarSection>
           </div>
@@ -786,6 +801,15 @@ export function UnifiedExploreSidebar({
           </div>
         </div>
       )}
+
+      {/* Color Picker Popup for Metadata */}
+      <ColorPickerPopup
+        selectedColor={colorPickerField ? visibility.getMetadataColor(colorPickerField) : '#10B981'}
+        onColorChange={handleMetadataColorChange}
+        isOpen={colorPickerField !== null}
+        onClose={handleColorPickerClose}
+        anchorEl={colorPickerAnchor}
+      />
 
       {/* Resize handle */}
       <div

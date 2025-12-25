@@ -12,7 +12,8 @@ export interface ExploreFiltersState {
   widthRange?: { min: number; max: number };
   heightRange?: { min: number; max: number };
   sizeRange?: { min: number; max: number };
-  filepathPattern?: string;
+  filepathPattern?: string; // Deprecated - use filepathPaths
+  filepathPaths?: string[]; // Filter by specific directory paths
   imageUids?: string[]; // Filter by specific image UIDs
 }
 
@@ -162,6 +163,10 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     setFilters((prev) => ({ ...prev, filepathPattern: pattern }));
   }, []);
 
+  const setFilepathPaths = useCallback((paths: string[]) => {
+    setFilters((prev) => ({ ...prev, filepathPaths: paths }));
+  }, []);
+
   const setImageUids = useCallback((imageUids: string[]) => {
     setFilters((prev) => ({ ...prev, imageUids }));
   }, []);
@@ -174,7 +179,13 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     Object.keys(filters.tagFilters).length > 0 ||
     Object.values(filters.selectedAttributes).some((arr) => arr.length > 0) ||
     Object.keys(filters.numericRanges).length > 0 ||
-    filters.sizeFilter.length > 0;
+    filters.sizeFilter.length > 0 ||
+    filters.widthRange !== undefined ||
+    filters.heightRange !== undefined ||
+    filters.sizeRange !== undefined ||
+    filters.filepathPattern !== undefined ||
+    (filters.filepathPaths && filters.filepathPaths.length > 0) ||
+    (filters.imageUids && filters.imageUids.length > 0);
 
   return {
     filters,
@@ -195,11 +206,13 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     heightRange: filters.heightRange,
     sizeRange: filters.sizeRange,
     filepathPattern: filters.filepathPattern,
+    filepathPaths: filters.filepathPaths,
     imageUids: filters.imageUids,
     setWidthRange,
     setHeightRange,
     setSizeRange,
     setFilepathFilter,
+    setFilepathPaths,
     setImageUids,
   };
 }

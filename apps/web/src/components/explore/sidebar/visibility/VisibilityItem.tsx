@@ -18,6 +18,8 @@ interface VisibilityItemProps {
   children?: React.ReactNode;
   /** Indentation level (for nested items) */
   indent?: number;
+  /** Optional callback when color dot is clicked (enables color picker) */
+  onColorClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }
 
 export function VisibilityItem({
@@ -29,6 +31,7 @@ export function VisibilityItem({
   expandable = false,
   children,
   indent = 0,
+  onColorClick,
 }: VisibilityItemProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
@@ -82,13 +85,28 @@ export function VisibilityItem({
         </button>
 
         {/* Color dot indicator */}
-        <span
-          className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-opacity"
-          style={{
-            backgroundColor: color,
-            opacity: checked ? 1 : 0.4,
-          }}
-        />
+        {onColorClick ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onColorClick(e);
+            }}
+            className="w-3 h-3 rounded-sm flex-shrink-0 transition-all hover:ring-2 hover:ring-emerald-300 hover:ring-offset-1"
+            style={{
+              backgroundColor: color,
+              opacity: checked ? 1 : 0.4,
+            }}
+            title="Change color"
+          />
+        ) : (
+          <span
+            className="w-2.5 h-2.5 rounded-full flex-shrink-0 transition-opacity"
+            style={{
+              backgroundColor: color,
+              opacity: checked ? 1 : 0.4,
+            }}
+          />
+        )}
 
         {/* Name */}
         <span

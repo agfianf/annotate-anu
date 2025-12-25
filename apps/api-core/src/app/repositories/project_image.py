@@ -225,6 +225,8 @@ class ProjectImageRepository:
         file_size_min: int | None = None,
         file_size_max: int | None = None,
         filepath_pattern: str | None = None,
+        filepath_paths: list[str] | None = None,
+        image_uids: list[UUID] | None = None,
     ) -> tuple[list[dict], int]:
         """
         Explore images with combined filtering.
@@ -274,6 +276,18 @@ class ProjectImageRepository:
                 # If I type "*.jpg", I get "%".jpg".
                 pass
             base_query = base_query.where(shared_images.c.file_path.ilike(sql_pattern))
+
+        # Filter by directory paths (OR logic - match ANY path)
+        if filepath_paths and len(filepath_paths) > 0:
+            from sqlalchemy import or_
+            path_conditions = [
+                shared_images.c.file_path.like(f"{path}/%") for path in filepath_paths
+            ]
+            base_query = base_query.where(or_(*path_conditions))
+
+        # Filter by image UUIDs
+        if image_uids and len(image_uids) > 0:
+            base_query = base_query.where(shared_images.c.id.in_(image_uids))
 
         # Apply exclude filter FIRST (fail-fast)
         if excluded_tag_ids and len(excluded_tag_ids) > 0:

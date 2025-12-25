@@ -9,6 +9,7 @@ import {
     Check,
     ChevronDown,
     Delete,
+    FolderOpen,
     Grid3X3,
     Image as ImageIcon,
     Loader2,
@@ -106,6 +107,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     setHeightRange: setSidebarHeightRange,
     setSizeRange: setSidebarSizeRange,
     setFilepathFilter: setSidebarFilepathFilter,
+    setFilepathPaths: setSidebarFilepathPaths,
     setImageUids,
     clearFilters: clearSidebarFilters,
     hasActiveFilters: hasSidebarFilters,
@@ -170,6 +172,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         file_size_min: sidebarFilters.sizeRange?.min,
         file_size_max: sidebarFilters.sizeRange?.max,
         filepath_pattern: sidebarFilters.filepathPattern,
+        filepath_paths: sidebarFilters.filepathPaths && sidebarFilters.filepathPaths.length > 0 ? sidebarFilters.filepathPaths : undefined,
         image_uids: sidebarFilters.imageUids && sidebarFilters.imageUids.length > 0 ? sidebarFilters.imageUids : undefined,
       };
     },
@@ -1068,6 +1071,40 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             </div>
           )}
 
+          {/* Filepath paths filter (checkbox-based directories) */}
+          {sidebarFilters.filepathPaths && sidebarFilters.filepathPaths.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 text-teal-700 rounded-full text-xs border border-teal-200">
+              <FolderOpen className="w-3 h-3" />
+              <span className="font-medium">
+                Directories: {sidebarFilters.filepathPaths.length} selected
+              </span>
+              <button
+                onClick={() => setSidebarFilepathPaths([])}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear directory filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Image UIDs filter */}
+          {sidebarFilters.imageUids && sidebarFilters.imageUids.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-50 text-violet-700 rounded-full text-xs border border-violet-200">
+              <ImageIcon className="w-3 h-3" />
+              <span className="font-medium">
+                Images: {sidebarFilters.imageUids.length} selected
+              </span>
+              <button
+                onClick={() => setImageUids([])}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear image selection"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
           {/* Clear all filters button - Liquid Glass Red */}
           {(hasSidebarFilters || debouncedSearch || selectedTaskIds.length > 0 || isAnnotatedFilter !== undefined) && (
             <button
@@ -1156,7 +1193,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               onWidthRangeChange={setSidebarWidthRange}
               onHeightRangeChange={setSidebarHeightRange}
               onSizeRangeChange={setSidebarSizeRange}
-              onFilepathChange={setSidebarFilepathFilter}
+              onFilepathPathsChange={setSidebarFilepathPaths}
               // Metadata aggregations
               widthAggregation={widthAggregation}
               heightAggregation={heightAggregation}

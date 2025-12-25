@@ -5,18 +5,20 @@
 
 import { memo, useMemo } from 'react';
 
-export type MetadataField = 'filename' | 'dimensions' | 'fileSize' | 'imageId';
+export type MetadataField = 'filename' | 'width' | 'height' | 'fileSize' | 'imageId';
 
 interface MetadataBadgeProps {
   field: MetadataField;
   value: string | number;
   scaleFactor: number;
+  color?: string; // Custom background color (defaults to emerald-500)
 }
 
 export const MetadataBadge = memo(function MetadataBadge({
   field,
   value,
   scaleFactor,
+  color,
 }: MetadataBadgeProps) {
   // Calculate scaled styles
   const badgeStyles = useMemo(() => ({
@@ -38,10 +40,14 @@ export const MetadataBadge = memo(function MetadataBadge({
     return String(value);
   }, [value, field]);
 
+  // Use custom color or default to emerald-500
+  const backgroundColor = color || '#10B981';
+
   return (
     <div
-      className="bg-emerald-500/90 text-white font-mono rounded backdrop-blur-sm shadow-sm whitespace-nowrap overflow-hidden text-ellipsis"
+      className="text-white font-mono rounded backdrop-blur-sm shadow-sm whitespace-nowrap overflow-hidden text-ellipsis"
       style={{
+        backgroundColor: `${backgroundColor}E6`, // Add E6 for 90% opacity
         fontSize: `${badgeStyles.fontSize}px`,
         padding: `${badgeStyles.paddingY}px ${badgeStyles.paddingX}px`,
         maxWidth: `${badgeStyles.maxWidth}px`,
