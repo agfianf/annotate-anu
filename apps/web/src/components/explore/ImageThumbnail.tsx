@@ -10,6 +10,7 @@ import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
 import { AnnotationOverlay } from './AnnotationOverlay';
 import type { VisibilityState } from '../../hooks/useExploreVisibility';
 import { MetadataBadge } from './MetadataBadge';
+import { getTextColorForBackground } from '../../lib/colors';
 
 interface ImageThumbnailProps {
   image: SharedImage;
@@ -243,17 +244,24 @@ export const ImageThumbnail = memo(function ImageThumbnail({
             {/* First 2 tags with text */}
             {visibleTags.slice(0, 2).map((tag) => {
               const categoryColor = tag.category_id ? categoryColorMap[tag.category_id] : undefined;
+              const background = categoryColor && tag.color
+                ? `linear-gradient(to right, ${tag.color} 25%, ${categoryColor} 25%)`
+                : tag.color || categoryColor || '#10B981';
+              const textColor = categoryColor
+                ? getTextColorForBackground(categoryColor)
+                : getTextColorForBackground(tag.color || '#10B981');
+
               return (
                 <span
                   key={tag.id}
-                  className="rounded-md font-medium truncate"
+                  className="font-medium truncate"
                   style={{
-                    backgroundColor: tag.color,
-                    color: 'white',
+                    background,
+                    color: textColor,
                     fontSize: `${tagStyles.fontSize}px`,
                     padding: tagStyles.padding,
                     maxWidth: `${tagStyles.maxWidth}px`,
-                    ...(categoryColor && { border: `2px solid ${categoryColor}` }),
+                    borderRadius: '8px',
                   }}
                   title={tag.name}
                 >
@@ -302,17 +310,24 @@ export const ImageThumbnail = memo(function ImageThumbnail({
           >
             {visibleTags.map((tag) => {
               const categoryColor = tag.category_id ? categoryColorMap[tag.category_id] : undefined;
+              const background = categoryColor && tag.color
+                ? `linear-gradient(to right, ${tag.color} 25%, ${categoryColor} 25%)`
+                : tag.color || categoryColor || '#10B981';
+              const textColor = categoryColor
+                ? getTextColorForBackground(categoryColor)
+                : getTextColorForBackground(tag.color || '#10B981');
+
               return (
                 <div
                   key={tag.id}
-                  className="flex items-center rounded-md font-medium"
+                  className="flex items-center font-medium"
                   style={{
-                    backgroundColor: tag.color,
-                    color: 'white',
+                    background,
+                    color: textColor,
                     fontSize: `${tagStyles.fontSize}px`,
                     padding: tagStyles.padding,
                     gap: `${tagStyles.gap}px`,
-                    ...(categoryColor && { border: `2px solid ${categoryColor}` }),
+                    borderRadius: '8px',
                   }}
                 >
                   <span

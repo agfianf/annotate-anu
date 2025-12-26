@@ -48,6 +48,7 @@ import { UnifiedExploreSidebar } from './explore/sidebar/unified';
 import { ZoomControl } from './explore/ZoomControl';
 import CategoryGroup from './CategoryGroup';
 import TagSelectorDropdown from './TagSelectorDropdown';
+import { getTextColorForBackground } from '@/lib/colors';
 
 interface ProjectExploreTabProps {
   projectId: string;
@@ -437,6 +438,33 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     if (!showImageModal) return -1;
     return images.findIndex(img => img.id === showImageModal.id);
   }, [showImageModal, images]);
+
+  // Group modal tags by category for display
+  const modalTagsByCategory = useMemo(() => {
+    if (!showImageModal) return {};
+
+    const grouped: Record<string, { category: typeof tagCategories[0] | null; tags: typeof showImageModal.tags }> = {};
+
+    // Sort: categorized first, then uncategorized
+    const sortedTags = [...showImageModal.tags].sort((a, b) => {
+      if (a.category_id && !b.category_id) return -1;
+      if (!a.category_id && b.category_id) return 1;
+      return 0;
+    });
+
+    sortedTags.forEach(tag => {
+      const key = tag.category_id || 'uncategorized';
+      if (!grouped[key]) {
+        const category = tag.category_id
+          ? tagCategories.find(c => c.id === tag.category_id) || null
+          : null;
+        grouped[key] = { category, tags: [] };
+      }
+      grouped[key].tags.push(tag);
+    });
+
+    return grouped;
+  }, [showImageModal?.tags, tagCategories]);
 
   const handlePreviousImage = useCallback(() => {
     if (currentImageIndex > 0) {
@@ -1345,7 +1373,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       {/* Image Detail Modal */}
       {showImageModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[95vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-[80vw] h-[80vh] overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <h3 className="text-lg font-semibold text-gray-900 truncate">
@@ -1385,45 +1413,49 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-hidden p-6">
               <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
                 {/* Image Preview - takes 3 columns on large screens */}
-                <div className="lg:col-span-3 bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center min-h-[400px] lg:min-h-0">
+                <div className="lg:col-span-3 bg-gray-900 rounded-xl overflow-hidden flex items-center justify-center">
                   <FullscreenImage
                     src={getFullSizeThumbnailUrl(showImageModal.thumbnail_url)}
                     alt={showImageModal.filename}
-                    className="w-full h-full object-contain max-h-[70vh]"
+                    className="w-full h-full object-contain"
                   />
                 </div>
 
                 {/* Details - takes 1 column on large screens */}
-                <div className="lg:col-span-1 space-y-4 lg:overflow-y-auto">
+                <div className="lg:col-span-1 overflow-y-auto space-y-4 pr-1">
                   <div>
                     <h4 className="text-sm font-medium text-gray-500 mb-1">File Info</h4>
-                    <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Path</span>
-                        <span className="text-gray-900 font-mono text-xs truncate max-w-[60%]">
+                    <div className="bg-gray-50 rounded-lg p-3 space-y-3 text-sm">
+                      {/* Path - full width, wrapping */}
+                      <div>
+                        <span className="text-xs text-gray-500 uppercase tracking-wide">Path</span>
+                        <p className="text-gray-900 font-mono text-xs break-all mt-1">
                           {showImageModal.file_path}
-                        </span>
+                        </p>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Dimensions</span>
-                        <span className="text-gray-900">
-                          {showImageModal.width || '?'} x {showImageModal.height || '?'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Size</span>
-                        <span className="text-gray-900">
-                          {showImageModal.file_size_bytes
-                            ? `${(showImageModal.file_size_bytes / 1024 / 1024).toFixed(2)} MB`
-                            : 'Unknown'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Type</span>
-                        <span className="text-gray-900">{showImageModal.mime_type || 'Unknown'}</span>
+                      {/* Grid for other fields */}
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                        <div>
+                          <span className="text-xs text-gray-500 uppercase tracking-wide">Dimensions</span>
+                          <p className="text-gray-900 mt-0.5">
+                            {showImageModal.width || '?'} × {showImageModal.height || '?'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-xs text-gray-500 uppercase tracking-wide">Size</span>
+                          <p className="text-gray-900 mt-0.5">
+                            {showImageModal.file_size_bytes
+                              ? `${(showImageModal.file_size_bytes / 1024 / 1024).toFixed(2)} MB`
+                              : 'Unknown'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-xs text-gray-500 uppercase tracking-wide">Type</span>
+                          <p className="text-gray-900 mt-0.5">{showImageModal.mime_type || 'Unknown'}</p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1445,34 +1477,65 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                       />
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {showImageModal.tags.map((tag) => (
-                        <div
-                          key={tag.id}
-                          className="px-3 py-1 rounded-full text-xs font-medium flex items-center gap-2 group"
-                          style={{
-                            backgroundColor: `${tag.color}20`,
-                            color: tag.color,
-                          }}
-                        >
-                          <span>{tag.name}</span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveTag(showImageModal.id, tag.id);
-                            }}
-                            disabled={removeTagMutation.isPending}
-                            className="opacity-0 group-hover:opacity-100 hover:text-red-600 transition-opacity"
-                            title="Remove tag"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                      {showImageModal.tags.length === 0 && (
-                        <span className="text-sm text-gray-400">No tags assigned</span>
-                      )}
-                    </div>
+                    {showImageModal.tags.length === 0 ? (
+                      <span className="text-sm text-gray-400">No tags assigned</span>
+                    ) : (
+                      <div className="space-y-3">
+                        {Object.entries(modalTagsByCategory).map(([categoryId, { category, tags }]) => (
+                          <div key={categoryId}>
+                            {/* Category Header */}
+                            <div className="flex items-center gap-2 mb-1.5">
+                              {category ? (
+                                <>
+                                  <div
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: category.color }}
+                                  />
+                                  <span className="text-xs font-medium text-gray-600">{category.name}</span>
+                                </>
+                              ) : (
+                                <span className="text-xs font-medium text-gray-400 italic">Uncategorized</span>
+                              )}
+                            </div>
+
+                            {/* Tags in this category */}
+                            <div className="flex flex-wrap gap-2 pl-4">
+                              {tags.map((tag) => {
+                                // Match ImageThumbnail styling
+                                const background = category && tag.color
+                                  ? `linear-gradient(to right, ${tag.color} 25%, ${category.color} 25%)`
+                                  : tag.color || '#10B981';
+                                const textColor = category
+                                  ? getTextColorForBackground(category.color)
+                                  : getTextColorForBackground(tag.color || '#10B981');
+
+                                return (
+                                  <div
+                                    key={tag.id}
+                                    className="px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-2 group"
+                                    style={{ background, color: textColor }}
+                                  >
+                                    <span>{tag.name}</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveTag(showImageModal.id, tag.id);
+                                      }}
+                                      disabled={removeTagMutation.isPending}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                      style={{ color: textColor }}
+                                      title="Remove tag"
+                                    >
+                                      <X className="w-3 h-3 hover:scale-110" />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Jobs & Tasks */}
