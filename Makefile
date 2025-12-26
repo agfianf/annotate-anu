@@ -228,3 +228,8 @@ ifdef service
 else
 	@echo "Error: Please specify service (e.g., make docker-shell service=backend)"
 endif
+
+
+frontend-clear-cache:
+	rm -rf apps/web/node_modules/.vite
+	docker-compose -f docker/docker-compose.dev.yml restart frontend

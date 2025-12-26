@@ -1,6 +1,10 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "@/lib/utils"
+import * as React from "react";
+import { cva, type VariantProps } from "class-variance-authority";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+import { RippleEffect } from "./animate/RippleEffect";
+import { MagneticButton } from "./animate/MagneticButton";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
@@ -35,20 +39,76 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
-  asChild?: boolean
+  asChild?: boolean;
+  /**
+   * Enable ripple effect on click
+   * @default false
+   */
+  ripple?: boolean;
+  /**
+   * Enable magnetic effect on hover
+   * @default false
+   */
+  magnetic?: boolean;
+  /**
+   * Color for ripple effect
+   * @default 'rgba(16, 185, 129, 0.5)' for default variant
+   */
+  rippleColor?: string;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => {
-    return (
-      <button
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
-        {...props}
-      />
-    )
+  ({ className, variant, size, ripple = false, magnetic = false, rippleColor, ...props }, ref) => {
+    const prefersReducedMotion = useReducedMotion();
+    const baseClassName = cn(buttonVariants({ variant, size, className }));
+
+    // Determine ripple color based on variant
+    const defaultRippleColor =
+      variant === 'destructive'
+        ? 'rgba(239, 68, 68, 0.5)'
+        : variant === 'secondary'
+        ? 'rgba(154, 186, 18, 0.5)'
+        : 'rgba(16, 185, 129, 0.5)'; // emerald
+
+    const finalRippleColor = rippleColor || defaultRippleColor;
+
+    // If both ripple and magnetic are enabled
+    if (ripple && magnetic && !prefersReducedMotion) {
+      return (
+        <MagneticButton className={baseClassName} ref={ref} strength={0.25}>
+          <RippleEffect color={finalRippleColor} {...props} className="w-full h-full" />
+        </MagneticButton>
+      );
+    }
+
+    // If only ripple is enabled
+    if (ripple && !prefersReducedMotion) {
+      return <RippleEffect color={finalRippleColor} className={baseClassName} ref={ref} {...props} />;
+    }
+
+    // If only magnetic is enabled
+    if (magnetic && !prefersReducedMotion) {
+      return <MagneticButton className={baseClassName} ref={ref} {...props} />;
+    }
+
+    // Standard button with subtle hover/tap animations
+    if (!prefersReducedMotion) {
+      return (
+        <motion.button
+          className={baseClassName}
+          ref={ref}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+          {...props}
+        />
+      );
+    }
+
+    // Fallback for reduced motion
+    return <button className={baseClassName} ref={ref} {...props} />;
   }
-)
-Button.displayName = "Button"
+);
+Button.displayName = "Button";
 
 export { Button, buttonVariants }

@@ -267,17 +267,52 @@ export const AnnotationCanvasGL = memo(function AnnotationCanvasGL({
   );
 });
 
+// Cache WebGL availability check result at module level
+// This prevents creating new WebGL contexts on every hook call
+let webglAvailabilityCache: boolean | null = null;
+
 /**
- * Hook to determine if WebGL rendering should be used based on annotation count
+ * Check WebGL availability once and cache the result
+ * Properly cleans up the test context to prevent leaks
  */
-export function useShouldUseWebGL(annotationCount: number, threshold = 100): boolean {
+function checkWebGLAvailability(): boolean {
+  if (webglAvailabilityCache !== null) {
+    return webglAvailabilityCache;
+  }
+
   try {
     const canvas = document.createElement('canvas');
-    const hasWebGL = !!(canvas.getContext('webgl') || canvas.getContext('webgl2'));
-    return hasWebGL && annotationCount > threshold;
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+
+    if (gl) {
+      // Properly clean up the test context
+      const loseContext = gl.getExtension('WEBGL_lose_context');
+      if (loseContext) {
+        loseContext.loseContext();
+      }
+      webglAvailabilityCache = true;
+    } else {
+      webglAvailabilityCache = false;
+    }
+
+    // Remove canvas from memory
+    canvas.width = 0;
+    canvas.height = 0;
   } catch {
-    return false;
+    webglAvailabilityCache = false;
   }
+
+  return webglAvailabilityCache;
+}
+
+/**
+ * Hook to determine if WebGL rendering should be used based on annotation count
+ * Uses cached WebGL availability check to prevent context leaks
+ */
+export function useShouldUseWebGL(annotationCount: number, threshold = 100): boolean {
+  // Use cached check - no new contexts created
+  const hasWebGL = checkWebGLAvailability();
+  return hasWebGL && annotationCount > threshold;
 }
 
 /**

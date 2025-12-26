@@ -42,6 +42,7 @@ import TasksPage from './pages/TasksPage'
 // Existing pages
 import AnnotationApp from './pages/AnnotationApp'
 import ModelConfigPage from './pages/ModelConfigPage'
+import AnimationDemoPage from './pages/AnimationDemoPage'
 
 function App() {
   return (
@@ -50,6 +51,7 @@ function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/animations" element={<AnimationDemoPage />} />
 
       {/* Protected dashboard routes */}
       <Route
