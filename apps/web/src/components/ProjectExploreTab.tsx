@@ -506,16 +506,17 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   }, [isFullView, exitFullView, showTagManager, showAddTagModal, showImageModal, handlePreviousImage, handleNextImage]);
 
   const handleAnnotateClick = useCallback(() => {
-    if (!jobsData || jobsData.length === 0) return;
+    if (!jobsData || jobsData.length === 0 || !showImageModal) return;
 
     const targetJobId =
       jobsData.length === 1 ? jobsData[0].job_id : selectedJobIdForAnnotation;
 
     if (targetJobId) {
-      navigate(`/app?jobId=${targetJobId}`);
+      // Include imageId in URL for direct navigation to the specific image
+      navigate(`/app?jobId=${targetJobId}&imageId=${showImageModal.id}`);
       setShowImageModal(null);
     }
-  }, [jobsData, selectedJobIdForAnnotation, navigate]);
+  }, [jobsData, selectedJobIdForAnnotation, navigate, showImageModal]);
 
   const getJobStatusColor = (status: string): string => {
     const statusColors: Record<string, string> = {

@@ -52,6 +52,7 @@ class ImageResponse(BaseModel):
     metadata: dict | None
     sequence_number: int
     is_annotated: bool
+    shared_image_id: UUID | None = Field(None, description="Reference to shared image registry")
     created_at: datetime
     updated_at: datetime
 

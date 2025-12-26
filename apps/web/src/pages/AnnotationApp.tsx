@@ -142,8 +142,9 @@ const ImageThumbnail = ({
 
 function AnnotationApp() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const jobId = searchParams.get('jobId')
+  const imageIdParam = searchParams.get('imageId')
 
   const [selectedTool, setSelectedTool] = useState<Tool>('select')
   const [selectedAnnotations, setSelectedAnnotations] = useState<string[]>([])
@@ -240,6 +241,34 @@ function AnnotationApp() {
       setSelectedLabelId(labels[0].id)
     }
   }, [labels, selectedLabelId])
+
+  // Track if images have been loaded and initialized
+  const imagesInitializedRef = useRef(false)
+
+  // Navigate to specific image when imageId URL parameter is present (on initial load)
+  useEffect(() => {
+    if (images.length > 0 && isJobMode && !loading && !imagesInitializedRef.current) {
+      imagesInitializedRef.current = true
+      // If imageId param exists and image is found, navigate to it
+      if (imageIdParam) {
+        const targetImage = images.find(img => img.id === imageIdParam)
+        if (targetImage) {
+          setCurrentImageId(imageIdParam)
+        }
+      }
+    }
+  }, [imageIdParam, images, isJobMode, loading, setCurrentImageId])
+
+  // Sync URL when current image changes (for navigation)
+  useEffect(() => {
+    if (isJobMode && currentImageId && jobId && imagesInitializedRef.current) {
+      const currentParams = new URLSearchParams(searchParams)
+      if (currentParams.get('imageId') !== currentImageId) {
+        currentParams.set('imageId', currentImageId)
+        setSearchParams(currentParams, { replace: true })
+      }
+    }
+  }, [isJobMode, currentImageId, jobId, searchParams, setSearchParams])
 
   // Persist prompt mode to localStorage
   useEffect(() => {
@@ -997,13 +1026,16 @@ function AnnotationApp() {
             <RotateCcw className="w-4 h-4" />
             Reset
           </button>
-          <button
-            onClick={() => setShowLabelManager(true)}
-            className="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white text-sm rounded transition-colors"
-            title="Create, edit, and delete labels"
-          >
-            Manage Labels
-          </button>
+          {/* Hide Manage Labels in job mode - labels are managed at project level */}
+          {!isJobMode && (
+            <button
+              onClick={() => setShowLabelManager(true)}
+              className="px-3 py-1.5 bg-slate-600 hover:bg-slate-700 text-white text-sm rounded transition-colors"
+              title="Create, edit, and delete labels"
+            >
+              Manage Labels
+            </button>
+          )}
         </div>
       </header>
 
@@ -1703,102 +1735,140 @@ function AnnotationApp() {
             images: false,
           })
         }}
-        title="Reset Confirmation"
+        title={isJobMode ? "Reset Job Annotations" : "Reset Confirmation"}
         maxWidth="md"
       >
-        <div className="space-y-4">
-          <div className="bg-red-50/80 border border-red-200 rounded-lg p-4">
-            <p className="text-red-600 font-medium">⚠️ Warning: This action cannot be undone!</p>
+        {isJobMode ? (
+          /* Simplified reset modal for job mode - only reset annotations */
+          <div className="space-y-4">
+            <div className="bg-red-50/80 border border-red-200 rounded-lg p-4">
+              <p className="text-red-600 font-medium">⚠️ Warning: This action cannot be undone!</p>
+            </div>
+            <p className="text-gray-800">
+              This will clear all annotations for all images in this job. Labels and images are managed at the project level and will not be affected.
+            </p>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200/50">
+              <button
+                onClick={() => setShowResetModal(false)}
+                className="px-4 py-2 glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await resetAll({
+                    clearAnnotations: true,
+                    clearLabels: false,
+                    clearImages: false,
+                    clearToolConfig: false,
+                  })
+                  setShowResetModal(false)
+                  setSelectedAnnotations([])
+                  setSelectedTool('select')
+                }}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded transition-colors"
+              >
+                Reset Annotations
+              </button>
+            </div>
           </div>
-          <p className="text-gray-800">
-            Select what you want to reset:
-          </p>
+        ) : (
+          /* Full reset modal for solo mode with all options */
+          <div className="space-y-4">
+            <div className="bg-red-50/80 border border-red-200 rounded-lg p-4">
+              <p className="text-red-600 font-medium">⚠️ Warning: This action cannot be undone!</p>
+            </div>
+            <p className="text-gray-800">
+              Select what you want to reset:
+            </p>
 
-          {/* Checklist */}
-          <div className="space-y-2 bg-white/50 rounded-lg p-4">
-            <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
-              <input
-                type="checkbox"
-                checked={resetOptions.annotations}
-                onChange={(e) => setResetOptions(prev => ({ ...prev, annotations: e.target.checked }))}
-                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
-              />
-              <span>All annotations</span>
-            </label>
+            {/* Checklist */}
+            <div className="space-y-2 bg-white/50 rounded-lg p-4">
+              <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
+                <input
+                  type="checkbox"
+                  checked={resetOptions.annotations}
+                  onChange={(e) => setResetOptions(prev => ({ ...prev, annotations: e.target.checked }))}
+                  className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
+                />
+                <span>All annotations</span>
+              </label>
 
-            <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
-              <input
-                type="checkbox"
-                checked={resetOptions.labels}
-                onChange={(e) => setResetOptions(prev => ({ ...prev, labels: e.target.checked }))}
-                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
-              />
-              <span>All labels (will reset to defaults)</span>
-            </label>
+              <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
+                <input
+                  type="checkbox"
+                  checked={resetOptions.labels}
+                  onChange={(e) => setResetOptions(prev => ({ ...prev, labels: e.target.checked }))}
+                  className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
+                />
+                <span>All labels (will reset to defaults)</span>
+              </label>
 
-            <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
-              <input
-                type="checkbox"
-                checked={resetOptions.toolConfig}
-                onChange={(e) => setResetOptions(prev => ({ ...prev, toolConfig: e.target.checked }))}
-                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
-              />
-              <span>Tool configuration</span>
-            </label>
+              <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
+                <input
+                  type="checkbox"
+                  checked={resetOptions.toolConfig}
+                  onChange={(e) => setResetOptions(prev => ({ ...prev, toolConfig: e.target.checked }))}
+                  className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
+                />
+                <span>Tool configuration</span>
+              </label>
 
-            <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
-              <input
-                type="checkbox"
-                checked={resetOptions.images}
-                onChange={(e) => setResetOptions(prev => ({ ...prev, images: e.target.checked }))}
-                className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
-              />
-              <span className={resetOptions.images ? 'text-red-600 font-medium' : ''}>
-                Also clear loaded images
-              </span>
-            </label>
+              <label className="flex items-center gap-3 text-gray-800 cursor-pointer hover:bg-white/50 p-2 rounded transition-colors">
+                <input
+                  type="checkbox"
+                  checked={resetOptions.images}
+                  onChange={(e) => setResetOptions(prev => ({ ...prev, images: e.target.checked }))}
+                  className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white rounded"
+                />
+                <span className={resetOptions.images ? 'text-red-600 font-medium' : ''}>
+                  Also clear loaded images
+                </span>
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200/50">
+              <button
+                onClick={() => {
+                  setShowResetModal(false)
+                  setResetOptions({
+                    annotations: true,
+                    labels: false,
+                    toolConfig: true,
+                    images: false,
+                  })
+                }}
+                className="px-4 py-2 glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  await resetAll({
+                    clearAnnotations: resetOptions.annotations,
+                    clearLabels: resetOptions.labels,
+                    clearImages: resetOptions.images,
+                    clearToolConfig: resetOptions.toolConfig,
+                  })
+                  setShowResetModal(false)
+                  setResetOptions({
+                    annotations: true,
+                    labels: false,
+                    toolConfig: true,
+                    images: false,
+                  })
+                  setSelectedAnnotations([])
+                  setSelectedTool('select')
+                }}
+                disabled={!resetOptions.annotations && !resetOptions.labels && !resetOptions.toolConfig && !resetOptions.images}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded transition-colors"
+              >
+                Reset Selected
+              </button>
+            </div>
           </div>
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200/50">
-            <button
-              onClick={() => {
-                setShowResetModal(false)
-                setResetOptions({
-                  annotations: true,
-                  labels: false,
-                  toolConfig: true,
-                  images: false,
-                })
-              }}
-              className="px-4 py-2 glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={async () => {
-                await resetAll({
-                  clearAnnotations: resetOptions.annotations,
-                  clearLabels: resetOptions.labels,
-                  clearImages: resetOptions.images,
-                  clearToolConfig: resetOptions.toolConfig,
-                })
-                setShowResetModal(false)
-                setResetOptions({
-                  annotations: true,
-                  labels: false,
-                  toolConfig: true,
-                  images: false,
-                })
-                setSelectedAnnotations([])
-                setSelectedTool('select')
-              }}
-              disabled={!resetOptions.annotations && !resetOptions.labels && !resetOptions.toolConfig && !resetOptions.images}
-              className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded transition-colors"
-            >
-              Reset Selected
-            </button>
-          </div>
-        </div>
+        )}
       </Modal>
 
       {/* Keyboard Shortcuts Help Modal */}

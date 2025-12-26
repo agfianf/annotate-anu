@@ -748,6 +748,7 @@ export interface ImageResponse {
   metadata: Record<string, unknown> | null;
   sequence_number: number;
   is_annotated: boolean;
+  shared_image_id: string | null;
   created_at: string;
   updated_at: string;
 }

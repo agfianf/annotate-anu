@@ -89,10 +89,13 @@ function backendLabelToLabel(backendLabel: BackendLabel): Label {
 
 /**
  * Convert API ImageResponse to frontend ImageData format
+ * Uses shared_image_id as the primary ID to match with SharedImage from explore tab
  */
 function apiImageToImageData(apiImage: ImageResponse, jobId: string): ImageData {
+  // Use shared_image_id as the primary ID if available, fallback to job image id
+  const primaryId = apiImage.shared_image_id || apiImage.id
   return {
-    id: apiImage.id,
+    id: primaryId,
     name: apiImage.filename,
     displayName: apiImage.filename,
     width: apiImage.width,
@@ -103,7 +106,7 @@ function apiImageToImageData(apiImage: ImageResponse, jobId: string): ImageData 
     // Extended properties for job mode
     relativePath: undefined,
     s3Key: apiImage.s3_key,  // Store S3 key for URL construction
-    jobImageId: apiImage.id,  // Backend image ID for sync
+    jobImageId: apiImage.id,  // Backend job image ID for sync
     jobId: apiImage.job_id,  // Job ID for URL construction
   }
 }
@@ -165,6 +168,13 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
 
     console.log('[loadJobAnnotations] Starting load for', jobContext.images.length, 'images')
     const newSyncedMap = new Map<string, string>()
+
+    // Create mapping from job image ID to shared image ID (or fallback to job image ID)
+    const imageIdMapping = new Map<string, string>()
+    for (const img of jobContext.images) {
+      const primaryId = img.shared_image_id || img.id
+      imageIdMapping.set(img.id, primaryId)
+    }
 
     // Collect all raw responses first, then deduplicate
     type RawAnnotation = {
@@ -273,18 +283,27 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
       }
     }
 
+    // Remap annotation imageIds from job image ID to shared image ID
+    const remappedAnnotations = allAnnotations.map(ann => {
+      const mappedImageId = imageIdMapping.get(ann.imageId)
+      if (mappedImageId && mappedImageId !== ann.imageId) {
+        return { ...ann, imageId: mappedImageId }
+      }
+      return ann
+    })
+
     console.log('[loadJobAnnotations] syncedAnnotations Map:', Array.from(newSyncedMap.entries()))
-    console.log('[loadJobAnnotations] Final annotations (after dedup):', allAnnotations.map(a => ({
+    console.log('[loadJobAnnotations] Final annotations (after dedup and remap):', remappedAnnotations.map(a => ({
       id: a.id,
       backendId: a.backendId,
       type: a.type,
       imageId: a.imageId
     })))
-    console.log('[loadJobAnnotations] Dropped', allRawAnnotations.length - allAnnotations.length, 'duplicates')
+    console.log('[loadJobAnnotations] Dropped', allRawAnnotations.length - remappedAnnotations.length, 'duplicates')
 
     // Single state update for both
     setSyncedAnnotations(newSyncedMap)
-    setJobAnnotations(allAnnotations)
+    setJobAnnotations(remappedAnnotations)
   }, [jobContext.images])
 
   // Auto-save hook with callback to reload annotations after sync
@@ -339,11 +358,14 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
       // Also persist to IndexedDB for offline support
       await annotationStorage.add(annotation)
 
-      // Get current image for dimensions
-      const image = jobContext.images.find((img) => img.id === annotation.imageId)
+      // Get current image for dimensions (lookup by shared_image_id or job image id)
+      const image = jobContext.images.find((img) =>
+        (img.shared_image_id || img.id) === annotation.imageId
+      )
       if (image) {
-        // Mark for sync
-        autoSave.markCreate(annotation, image.width, image.height)
+        // Swap imageId back to job image ID for backend sync
+        const annotationForSync = { ...annotation, imageId: image.id }
+        autoSave.markCreate(annotationForSync, image.width, image.height)
       }
     },
     [jobContext.images, autoSave]
@@ -359,9 +381,13 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
 
       // Mark all for sync
       for (const annotation of annotations) {
-        const image = jobContext.images.find((img) => img.id === annotation.imageId)
+        const image = jobContext.images.find((img) =>
+          (img.shared_image_id || img.id) === annotation.imageId
+        )
         if (image) {
-          autoSave.markCreate(annotation, image.width, image.height)
+          // Swap imageId back to job image ID for backend sync
+          const annotationForSync = { ...annotation, imageId: image.id }
+          autoSave.markCreate(annotationForSync, image.width, image.height)
         }
       }
     },
@@ -387,8 +413,10 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
       // Persist to IndexedDB
       await annotationStorage.update(annotation)
 
-      // Get current image for dimensions
-      const image = jobContext.images.find((img) => img.id === annotation.imageId)
+      // Get current image for dimensions (lookup by shared_image_id or job image id)
+      const image = jobContext.images.find((img) =>
+        (img.shared_image_id || img.id) === annotation.imageId
+      )
       if (!image) return
 
       // Mark for sync
@@ -397,14 +425,17 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
       console.log('[jobUpdateAnnotation] Resolved backendId:', backendId)
       console.log('[jobUpdateAnnotation] Operation:', backendId ? 'UPDATE' : 'CREATE (POTENTIAL BUG!)')
 
+      // Swap imageId back to job image ID for backend sync
+      const annotationForSync = { ...annotation, imageId: image.id }
+
       if (backendId) {
         // Already synced - mark for update
-        autoSave.markUpdate(annotation, backendId, image.width, image.height)
+        autoSave.markUpdate(annotationForSync, backendId, image.width, image.height)
       } else {
         // Not synced yet - update the pending create operation
         // This handles drag/resize of newly created annotations
         console.warn('[jobUpdateAnnotation] WARNING: No backendId found, falling back to CREATE')
-        autoSave.markCreate(annotation, image.width, image.height)
+        autoSave.markCreate(annotationForSync, image.width, image.height)
       }
     },
     [jobContext.images, autoSave]
@@ -427,19 +458,25 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
 
       // Mark for sync
       for (const annotation of annotations) {
-        const image = jobContext.images.find((img) => img.id === annotation.imageId)
+        const image = jobContext.images.find((img) =>
+          (img.shared_image_id || img.id) === annotation.imageId
+        )
         if (!image) continue
 
         // Use backendId field first (after reload), fall back to syncedAnnotations Map (via ref for latest value)
         const backendId = annotation.backendId || syncedAnnotationsRef.current.get(annotation.id)
         console.log('[jobUpdateManyAnnotations] Annotation', annotation.id, '→ backendId:', backendId, ', operation:', backendId ? 'UPDATE' : 'CREATE')
+
+        // Swap imageId back to job image ID for backend sync
+        const annotationForSync = { ...annotation, imageId: image.id }
+
         if (backendId) {
           // Already synced - mark for update
-          autoSave.markUpdate(annotation, backendId, image.width, image.height)
+          autoSave.markUpdate(annotationForSync, backendId, image.width, image.height)
         } else {
           // Not synced yet - update the pending create operation
           console.warn('[jobUpdateManyAnnotations] WARNING: No backendId for', annotation.id)
-          autoSave.markCreate(annotation, image.width, image.height)
+          autoSave.markCreate(annotationForSync, image.width, image.height)
         }
       }
     },
@@ -463,13 +500,18 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
       const backendId = annotation?.backendId || syncedAnnotationsRef.current.get(id)
       console.log('[jobRemoveAnnotation] Resolved backendId:', backendId)
       if (backendId && annotation) {
+        // Find the job image ID for the annotation (map back from shared_image_id)
+        const image = jobContext.images.find((img) =>
+          (img.shared_image_id || img.id) === annotation.imageId
+        )
+        const jobImageId = image?.id || annotation.imageId
         console.log('[jobRemoveAnnotation] Marking for DELETE')
-        autoSave.markDelete(id, backendId, annotation.imageId)
+        autoSave.markDelete(id, backendId, jobImageId)
       } else {
         console.warn('[jobRemoveAnnotation] WARNING: No backendId, deletion will NOT be synced!')
       }
     },
-    [jobAnnotations, autoSave]
+    [jobAnnotations, jobContext.images, autoSave]
   )
 
   const jobRemoveManyAnnotations = useCallback(
@@ -488,11 +530,16 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
         // Use backendId field first (after reload), fall back to syncedAnnotations Map (via ref for latest value)
         const backendId = annotation.backendId || syncedAnnotationsRef.current.get(annotation.id)
         if (backendId) {
-          autoSave.markDelete(annotation.id, backendId, annotation.imageId)
+          // Find the job image ID for the annotation (map back from shared_image_id)
+          const image = jobContext.images.find((img) =>
+            (img.shared_image_id || img.id) === annotation.imageId
+          )
+          const jobImageId = image?.id || annotation.imageId
+          autoSave.markDelete(annotation.id, backendId, jobImageId)
         }
       }
     },
-    [jobAnnotations, autoSave]
+    [jobAnnotations, jobContext.images, autoSave]
   )
 
   const jobBulkToggleVisibility = useCallback(
