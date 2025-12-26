@@ -84,6 +84,7 @@ sam3-app/
 │       │   │   ├── ProjectDetailPage.tsx
 │       │   │   ├── TasksPage.tsx
 │       │   │   ├── JobsPage.tsx
+│       │   │   ├── AnimationDemoPage.tsx      # Animation system demo (/animations)
 │       │   │   ├── AnnotationApp.tsx          # Main annotation interface
 │       │   │   ├── ModelConfigPage.tsx
 │       │   │   └── ProfilePage.tsx
@@ -99,12 +100,15 @@ sam3-app/
 │       │   │   ├── CreateTaskWizard.tsx
 │       │   │   ├── ExportModal.tsx
 │       │   │   └── ui/                        # Reusable UI components
+│       │   │       └── animate/               # Framer Motion animation primitives
 │       │   ├── lib/                           # Utility libraries
 │       │   │   ├── api-client.ts              # Core API client
 │       │   │   ├── sam3-client.ts             # SAM3 API client
 │       │   │   ├── byom-client.ts             # BYOM client
 │       │   │   ├── inference-client.ts        # Generic inference
 │       │   │   ├── storage.ts                 # IndexedDB layer
+│       │   │   ├── motion-config.ts           # Animation presets + reduced-motion helpers
+│       │   │   ├── animation-utils.ts         # Animation helpers
 │       │   │   ├── coco-export.ts
 │       │   │   ├── yolo-export.ts
 │       │   │   └── utils.ts
@@ -112,7 +116,8 @@ sam3-app/
 │       │   │   ├── useStorage.ts              # IndexedDB state
 │       │   │   ├── useHistory.ts              # Undo/redo
 │       │   │   ├── useKeyboardShortcuts.ts
-│       │   │   └── useModelRegistry.ts
+│       │   │   ├── useModelRegistry.ts
+│       │   │   └── useReducedMotion.ts        # prefers-reduced-motion hook
 │       │   ├── contexts/                      # React contexts
 │       │   │   └── AuthContext.tsx
 │       │   ├── types/                         # TypeScript types
@@ -186,6 +191,9 @@ make docker-shell service=api-core  # Shell into Core API container
 
 # Build commands
 make docker-build                   # Rebuild all Docker images
+
+# Frontend troubleshooting
+make frontend-clear-cache           # Clear Vite cache + restart frontend container
 ```
 
 ### Detailed Docker Commands
@@ -513,6 +521,20 @@ function MyComponent() {
 3. Update navigation in `apps/web/src/components/DashboardLayout.tsx`
 4. Add API client methods in `apps/web/src/lib/api-client.ts` if needed
 5. Update types in `apps/web/src/types/` if needed
+
+### Animation System (Frontend)
+
+**Docs**:
+- `apps/web/ANIMATION_GUIDE.md`
+- `apps/web/ANIMATION_COMPLETE.md`
+- `apps/web/TOOLTIP_DEMO.md`
+
+**Demo page**: `GET /animations` (route in `apps/web/src/main.tsx`)
+
+**Implementation notes**:
+- Prefer importing primitives from `apps/web/src/components/ui/animate/index.ts`.
+- Respect accessibility: use `apps/web/src/hooks/useReducedMotion.ts` or reduced-motion helpers in `apps/web/src/lib/motion-config.ts`.
+- Keep colors/timings consistent via `apps/web/src/lib/motion-config.ts` (emerald theme).
 
 ## API Quick Reference
 
