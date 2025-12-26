@@ -16,6 +16,7 @@ from app.routers import admin as admin_router
 from app.routers import annotations as annotations_router
 from app.routers import attributes as attributes_router
 from app.routers import auth as auth_router
+from app.routers import exports as exports_router
 from app.routers import images as images_router
 from app.routers import jobs as jobs_router
 
@@ -166,6 +167,7 @@ app.include_router(tag_categories_router.router)
 app.include_router(tags_router.router)
 app.include_router(project_images_router.router)
 app.include_router(attributes_router.router)
+app.include_router(exports_router.router)
 
 
 # Root endpoint

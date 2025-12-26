@@ -11,7 +11,7 @@ interface ModalProps {
   children: ReactNode
   showCloseButton?: boolean
   blocking?: boolean
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl'
 }
 
 export function Modal({
@@ -31,6 +31,9 @@ export function Modal({
     lg: 'max-w-lg',
     xl: 'max-w-xl',
     '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl',
+    '4xl': 'max-w-4xl',
+    '5xl': 'max-w-5xl',
   };
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {

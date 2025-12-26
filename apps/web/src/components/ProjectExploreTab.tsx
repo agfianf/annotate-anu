@@ -9,6 +9,7 @@ import {
     Check,
     ChevronDown,
     Delete,
+    Download,
     FolderOpen,
     Grid3X3,
     Image as ImageIcon,
@@ -49,6 +50,8 @@ import { ZoomControl } from './explore/ZoomControl';
 import CategoryGroup from './CategoryGroup';
 import TagSelectorDropdown from './TagSelectorDropdown';
 import { getTextColorForBackground } from '@/lib/colors';
+import { ExportWizardModal } from './export';
+import type { FilterSnapshot } from '@/types/export';
 
 interface ProjectExploreTabProps {
   projectId: string;
@@ -146,6 +149,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const [showAddTagModal, setShowAddTagModal] = useState(false);
   const [showRemoveTagModal, setShowRemoveTagModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState<SharedImage | null>(null);
+  const [showExportWizard, setShowExportWizard] = useState(false);
 
   // Job association state for image modal
   const [selectedJobIdForAnnotation, setSelectedJobIdForAnnotation] = useState<number | null>(null);
@@ -182,6 +186,30 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     },
     [debouncedSearch, sidebarFilters, selectedTaskIds, selectedJobId, isAnnotatedFilter, getIncludedTagIds, getExcludedTagIds]
   );
+
+  // Convert current filters to FilterSnapshot format for export wizard
+  const currentFilterSnapshot: FilterSnapshot = useMemo(() => {
+    const includedTagIds = getIncludedTagIds();
+    const excludedTagIds = getExcludedTagIds();
+
+    return {
+      tag_ids: includedTagIds.length > 0 ? includedTagIds : undefined,
+      excluded_tag_ids: excludedTagIds.length > 0 ? excludedTagIds : undefined,
+      include_match_mode: sidebarFilters.includeMatchMode,
+      exclude_match_mode: sidebarFilters.excludeMatchMode,
+      task_ids: selectedTaskIds.length > 0 ? selectedTaskIds : undefined,
+      job_id: selectedJobId,
+      is_annotated: isAnnotatedFilter,
+      width_min: sidebarFilters.widthRange?.min,
+      width_max: sidebarFilters.widthRange?.max,
+      height_min: sidebarFilters.heightRange?.min,
+      height_max: sidebarFilters.heightRange?.max,
+      file_size_min: sidebarFilters.sizeRange?.min,
+      file_size_max: sidebarFilters.sizeRange?.max,
+      filepath_paths: sidebarFilters.filepathPaths && sidebarFilters.filepathPaths.length > 0 ? sidebarFilters.filepathPaths : undefined,
+      image_uids: sidebarFilters.imageUids && sidebarFilters.imageUids.length > 0 ? sidebarFilters.imageUids : undefined,
+    };
+  }, [sidebarFilters, selectedTaskIds, selectedJobId, isAnnotatedFilter, getIncludedTagIds, getExcludedTagIds]);
 
   // Fetch images with infinite scroll
   const {
@@ -960,6 +988,23 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             <RefreshCw className={`w-4 h-4 transition-transform ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
 
+          {/* Export Button with Filtered Count */}
+          <div className="flex items-center gap-2">
+            {(hasSidebarFilters || debouncedSearch || selectedTaskIds.length > 0 || isAnnotatedFilter !== undefined) && (
+              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                {images.length} images filtered
+              </span>
+            )}
+            <button
+              onClick={() => setShowExportWizard(true)}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg transition-all flex items-center gap-2 text-sm font-medium shadow-sm hover:shadow-md"
+              title="Export filtered dataset"
+            >
+              <span>Export</span>
+              <span className="text-base">🚀</span>
+            </button>
+          </div>
+
           {/* Zoom Control */}
           <ZoomControl currentZoom={zoomLevel} onZoomChange={setZoomLevel} />
 
@@ -1388,6 +1433,17 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
       {/* Remove Tags from Selection Modal */}
       {showRemoveTagModal && <BulkRemoveTagModal />}
+
+      {/* Export Wizard Modal */}
+      <ExportWizardModal
+        isOpen={showExportWizard}
+        onClose={() => setShowExportWizard(false)}
+        projectId={projectId}
+        currentFilters={currentFilterSnapshot}
+        onExportCreated={(exportId) => {
+          toast.success(`Export created: ${exportId.slice(0, 8)}...`);
+        }}
+      />
 
       {/* Image Detail Modal */}
       {showImageModal && (

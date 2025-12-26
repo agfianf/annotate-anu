@@ -40,11 +40,39 @@ services:
       - api-core-data:/app/data
       - share-data:/data/share
       - thumbnail-cache:/data/cache/thumbnails
+      - export-data:/data/exports
     env_file:
       - ../apps/api-core/.env
     environment:
       - SHARE_ROOT=/data/share
       - SHARE_THUMBNAIL_CACHE_DIR=/data/cache/thumbnails
+      - EXPORT_ROOT=/data/exports
+    restart: unless-stopped
+    networks:
+      - anu-network
+    depends_on:
+      - postgres
+      - redis
+
+  # API Core Worker - Celery Background Tasks
+  api-core-worker:
+    build:
+      context: ../apps/api-core
+      dockerfile: Dockerfile
+    container_name: anu-api-core-worker-dev
+    command: uv run celery -A app.tasks.main worker --loglevel=info
+    volumes:
+      - ../apps/api-core/src:/app/src
+      - api-core-data:/app/data
+      - share-data:/data/share
+      - export-data:/data/exports
+    env_file:
+      - ../apps/api-core/.env
+    environment:
+      - SHARE_ROOT=/data/share
+      - EXPORT_ROOT=/data/exports
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
     restart: unless-stopped
     networks:
       - anu-network
@@ -119,6 +147,8 @@ volumes:
   share-data:
     driver: local
   thumbnail-cache:
+    driver: local
+  export-data:
     driver: local
   redis-data:
     driver: local

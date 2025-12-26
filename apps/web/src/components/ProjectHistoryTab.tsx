@@ -6,7 +6,11 @@
 import {
     Boxes,
     Briefcase,
+    ChevronDown,
+    ChevronUp,
     Clock,
+    Download,
+    Filter,
     ListTodo,
     Loader2,
     Palette,
@@ -20,6 +24,8 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import type { ProjectActivity } from '../lib/api-client';
 import { projectsApi } from '../lib/api-client';
+import { ExportHistoryPanel } from './export/ExportHistoryPanel';
+import { SavedFiltersPanel } from './export/SavedFiltersPanel';
 
 interface ProjectHistoryTabProps {
   projectId: string;
@@ -54,6 +60,10 @@ const getEntityIcon = (entityType: string) => {
       return User;
     case 'project':
       return Boxes;
+    case 'export':
+      return Download;
+    case 'filter':
+      return Filter;
     default:
       return Clock;
   }
@@ -71,6 +81,10 @@ const getEntityColor = (entityType: string): string => {
       return '#8B5CF6'; // violet
     case 'project':
       return '#EC4899'; // pink
+    case 'export':
+      return '#059669'; // emerald-600
+    case 'filter':
+      return '#6366F1'; // indigo
     default:
       return '#6B7280'; // gray
   }
@@ -88,6 +102,10 @@ const getActionLabel = (action: string): string => {
       return 'changed status';
     case 'assigned':
       return 'assigned';
+    case 'completed':
+      return 'completed';
+    case 'failed':
+      return 'failed';
     default:
       return action;
   }
@@ -112,6 +130,8 @@ export default function ProjectHistoryTab({ projectId }: ProjectHistoryTabProps)
   const [activities, setActivities] = useState<ProjectActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [total, setTotal] = useState(0);
+  const [showFilters, setShowFilters] = useState(true);
+  const [showExports, setShowExports] = useState(true);
 
   useEffect(() => {
     loadActivities();
@@ -139,8 +159,10 @@ export default function ProjectHistoryTab({ projectId }: ProjectHistoryTabProps)
     );
   }
 
-  if (activities.length === 0) {
-    return (
+  return (
+    <div className="space-y-6">
+    {/* Activity Timeline Section */}
+    {activities.length === 0 ? (
       <div className="glass-strong rounded-2xl shadow-lg p-12 text-center">
         <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
         <h3 className="text-lg font-semibold text-gray-700 mb-2">No activity yet</h3>
@@ -148,10 +170,7 @@ export default function ProjectHistoryTab({ projectId }: ProjectHistoryTabProps)
           Activity will appear here when tasks and jobs are created or updated.
         </p>
       </div>
-    );
-  }
-
-  return (
+    ) : (
     <div className="glass-strong rounded-2xl shadow-lg overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
         <div className="flex items-center gap-2">
@@ -256,6 +275,54 @@ export default function ProjectHistoryTab({ projectId }: ProjectHistoryTabProps)
           </div>
         )}
       </div>
+    </div>
+    )}
+
+    {/* Saved Filters Section */}
+    <div className="glass-strong rounded-2xl shadow-lg overflow-hidden">
+      <button
+        onClick={() => setShowFilters(!showFilters)}
+        className="w-full px-6 py-4 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 transition-all"
+      >
+        <div className="flex items-center gap-2">
+          <Filter className="w-5 h-5 text-indigo-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Saved Filters</h2>
+        </div>
+        {showFilters ? (
+          <ChevronUp className="w-5 h-5 text-gray-400" />
+        ) : (
+          <ChevronDown className="w-5 h-5 text-gray-400" />
+        )}
+      </button>
+      {showFilters && (
+        <div className="p-6 border-t border-gray-100">
+          <SavedFiltersPanel projectId={projectId} />
+        </div>
+      )}
+    </div>
+
+    {/* Export History Section */}
+    <div className="glass-strong rounded-2xl shadow-lg overflow-hidden">
+      <button
+        onClick={() => setShowExports(!showExports)}
+        className="w-full px-6 py-4 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 transition-all"
+      >
+        <div className="flex items-center gap-2">
+          <Download className="w-5 h-5 text-emerald-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Export History</h2>
+        </div>
+        {showExports ? (
+          <ChevronUp className="w-5 h-5 text-gray-400" />
+        ) : (
+          <ChevronDown className="w-5 h-5 text-gray-400" />
+        )}
+      </button>
+      {showExports && (
+        <div className="p-6 border-t border-gray-100">
+          <ExportHistoryPanel projectId={projectId} />
+        </div>
+      )}
+    </div>
     </div>
   );
 }

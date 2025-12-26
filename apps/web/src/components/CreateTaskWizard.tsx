@@ -16,6 +16,7 @@ import {
   Loader2,
   Settings,
   Shuffle,
+  SplitSquareVertical,
   Trash2,
   Upload,
   X,
@@ -54,6 +55,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
+  const [split, setSplit] = useState<'train' | 'val' | 'test' | null>(null);
 
   // Step 2: Images - Mode selection
   const [imageSourceMode, setImageSourceMode] = useState<ImageSourceMode>('select');
@@ -226,6 +228,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
           name,
           description: description || undefined,
           assignee_id: assigneeId || undefined,
+          split: split || undefined,
           chunk_size: chunkSize,
           distribution_order: distributionOrder,
           file_paths: selectedFilePaths,
@@ -240,6 +243,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
           name,
           description: description || undefined,
           assignee_id: assigneeId || undefined,
+          split: split || undefined,
           chunk_size: chunkSize,
           distribution_order: distributionOrder,
           images: uploadedImages,
@@ -355,6 +359,63 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   All jobs created will be assigned to this person
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <span className="flex items-center gap-2">
+                    <SplitSquareVertical className="w-4 h-4" />
+                    Dataset Split
+                  </span>
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSplit(null)}
+                    className={`px-4 py-2.5 rounded-xl border-2 transition-all text-sm font-medium ${
+                      split === null
+                        ? 'border-gray-500 bg-gray-100 text-gray-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-500'
+                    }`}
+                  >
+                    None
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSplit('train')}
+                    className={`px-4 py-2.5 rounded-xl border-2 transition-all text-sm font-medium ${
+                      split === 'train'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 hover:border-blue-200 text-gray-600'
+                    }`}
+                  >
+                    Train
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSplit('val')}
+                    className={`px-4 py-2.5 rounded-xl border-2 transition-all text-sm font-medium ${
+                      split === 'val'
+                        ? 'border-amber-500 bg-amber-50 text-amber-700'
+                        : 'border-gray-200 hover:border-amber-200 text-gray-600'
+                    }`}
+                  >
+                    Validation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSplit('test')}
+                    className={`px-4 py-2.5 rounded-xl border-2 transition-all text-sm font-medium ${
+                      split === 'test'
+                        ? 'border-purple-500 bg-purple-50 text-purple-700'
+                        : 'border-gray-200 hover:border-purple-200 text-gray-600'
+                    }`}
+                  >
+                    Test
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1.5">
+                  Assign images to train, validation, or test split for export
                 </p>
               </div>
             </div>
@@ -636,6 +697,19 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
                     <span className="text-gray-700 text-right max-w-xs truncate">{description}</span>
                   </div>
                 )}
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Dataset Split</span>
+                  <span className={`font-medium px-2 py-0.5 rounded-md text-sm ${
+                    split === 'train' ? 'bg-blue-100 text-blue-700' :
+                    split === 'val' ? 'bg-amber-100 text-amber-700' :
+                    split === 'test' ? 'bg-purple-100 text-purple-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {split === 'train' ? 'Train' :
+                     split === 'val' ? 'Validation' :
+                     split === 'test' ? 'Test' : 'None'}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Image Source</span>
                   <span className="font-medium text-gray-900">

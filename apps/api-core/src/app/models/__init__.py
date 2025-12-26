@@ -16,6 +16,7 @@ from app.models.data_management import (
     tag_categories,
     tags,
 )
+from app.models.export import exports, saved_filters
 from app.models.history import annotation_events, version_snapshots
 from app.models.image import images
 from app.models.job import jobs
@@ -56,4 +57,7 @@ __all__ = [
     # Attributes
     "attribute_schemas",
     "image_attributes",
+    # Exports
+    "saved_filters",
+    "exports",
 ]

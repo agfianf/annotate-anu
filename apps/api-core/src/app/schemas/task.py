@@ -1,11 +1,21 @@
 """Pydantic schemas for Tasks."""
 
 from datetime import datetime
+from enum import Enum
+from typing import Literal
 from uuid import UUID
 
 from app.schemas.job import JobAssigneeInfo
 
 from pydantic import BaseModel, Field
+
+
+class TaskSplit(str, Enum):
+    """Dataset split for task."""
+
+    TRAIN = "train"
+    VAL = "val"
+    TEST = "test"
 
 
 class TaskCreate(BaseModel):
@@ -14,6 +24,9 @@ class TaskCreate(BaseModel):
     name: str = Field(..., max_length=255, description="Task name")
     description: str | None = Field(None, description="Task description")
     assignee_id: UUID | None = Field(None, description="Assigned user")
+    split: Literal["train", "val", "test"] | None = Field(
+        None, description="Dataset split: train, val, test, or null (none)"
+    )
 
 
 class TaskUpdate(BaseModel):
@@ -23,6 +36,9 @@ class TaskUpdate(BaseModel):
     description: str | None = None
     assignee_id: UUID | None = None
     status: str | None = Field(None, description="Status: pending, in_progress, completed, review, approved")
+    split: Literal["train", "val", "test"] | None = Field(
+        None, description="Dataset split: train, val, test, or null (none)"
+    )
 
 
 class TaskResponse(BaseModel):
@@ -40,6 +56,7 @@ class TaskResponse(BaseModel):
     approved_by: UUID | None
     approved_at: datetime | None
     version: int
+    split: Literal["train", "val", "test"] | None
     total_images: int
     annotated_images: int
     created_at: datetime
@@ -58,6 +75,9 @@ class TaskCreateWithImages(BaseModel):
     name: str = Field(..., max_length=255, description="Task name")
     description: str | None = Field(None, description="Task description")
     assignee_id: UUID | None = Field(None, description="Default assignee for jobs")
+    split: Literal["train", "val", "test"] | None = Field(
+        None, description="Dataset split: train, val, test, or null (none)"
+    )
     chunk_size: int = Field(default=25, ge=1, le=500, description="Images per job (1-500)")
     distribution_order: str = Field(
         default="sequential",

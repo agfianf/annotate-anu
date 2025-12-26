@@ -75,6 +75,7 @@ export interface Task {
   assignee_id: string | null;
   assignee?: MemberUserInfo | null;
   project_id: number;
+  split: 'train' | 'val' | 'test' | null;
   created_at: string;
   updated_at: string;
 }
@@ -117,6 +118,7 @@ export interface TaskCreateWithImages {
   name: string;
   description?: string;
   assignee_id?: string;
+  split?: 'train' | 'val' | 'test' | null;
   chunk_size: number;
   distribution_order: 'sequential' | 'random';
   images: MockImage[];
@@ -262,7 +264,7 @@ export const refreshTokenIfNeeded = async (): Promise<boolean> => {
 const API_BASE_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001';
 
 // Create axios instance
-const apiClient: AxiosInstance = axios.create({
+export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
@@ -610,6 +612,11 @@ export const tasksApi = {
 
   async delete(taskId: number): Promise<void> {
     await apiClient.delete(`/api/v1/tasks/${taskId}`);
+  },
+
+  async update(taskId: number, data: Partial<{ name: string; description: string; split: 'train' | 'val' | 'test' | null }>): Promise<Task> {
+    const response = await apiClient.patch<ApiResponse<Task>>(`/api/v1/tasks/${taskId}`, data);
+    return response.data.data;
   },
 
   async preview(projectId: number, data: TaskCreateWithImages): Promise<TaskCreationPreview> {

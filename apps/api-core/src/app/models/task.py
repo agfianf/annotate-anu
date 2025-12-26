@@ -97,6 +97,12 @@ tasks = Table(
         comment="Auto-incrementing version on annotation changes",
     ),
     Column(
+        "split",
+        String(10),
+        nullable=True,
+        comment="Dataset split: train, val, test, or null (none)",
+    ),
+    Column(
         "total_images",
         Integer,
         nullable=False,

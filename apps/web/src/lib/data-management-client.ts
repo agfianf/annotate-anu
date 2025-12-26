@@ -196,6 +196,7 @@ export interface TaskCreateWithFilePaths {
   name: string;
   description?: string;
   assignee_id?: string;
+  split?: 'train' | 'val' | 'test' | null;
   chunk_size: number;
   distribution_order: 'sequential' | 'random';
   file_paths: string[];

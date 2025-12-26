@@ -111,5 +111,24 @@ class Settings(BaseSettings):
         default=85, description="JPEG quality for thumbnails (1-100)"
     )
 
+    # Export Settings
+    EXPORT_ROOT: Path = Field(
+        default=Path("/data/exports"),
+        description="Root directory for export artifacts",
+    )
+    EXPORT_MAX_IMAGES: int = Field(
+        default=100000, description="Maximum images per export"
+    )
+
+    # Celery Settings
+    CELERY_BROKER_URL: str = Field(
+        default="redis://localhost:6379/1",
+        description="Celery broker URL (Redis)",
+    )
+    CELERY_RESULT_BACKEND: str = Field(
+        default="redis://localhost:6379/1",
+        description="Celery result backend URL",
+    )
+
 
 settings = Settings()

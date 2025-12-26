@@ -362,6 +362,9 @@ class TaskCreateWithFilePaths(BaseModel):
     name: str = Field(..., max_length=255, description="Task name")
     description: str | None = Field(None, description="Task description")
     assignee_id: UUID | None = Field(None, description="Default assignee for jobs")
+    split: Literal["train", "val", "test"] | None = Field(
+        None, description="Dataset split: train, val, test, or null (none)"
+    )
     chunk_size: int = Field(default=25, ge=1, le=500, description="Images per job (1-500)")
     distribution_order: str = Field(
         default="sequential",

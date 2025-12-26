@@ -146,16 +146,32 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
   const handleAssigneeChange = async (taskId: number, assigneeId: string | null) => {
     try {
       await tasksApi.assign(taskId, assigneeId);
-      
+
       // Update local state
-      setTasks(prev => prev.map(t => 
+      setTasks(prev => prev.map(t =>
         t.id === taskId ? { ...t, assignee_id: assigneeId } : t
       ));
-      
+
       toast.success(assigneeId ? 'Task assigned' : 'Task unassigned');
     } catch (err) {
       console.error('Failed to update task:', err);
       toast.error('Failed to update task assignment');
+    }
+  };
+
+  const handleSplitChange = async (taskId: number, split: 'train' | 'val' | 'test' | null) => {
+    try {
+      await tasksApi.update(taskId, { split });
+
+      // Update local state
+      setTasks(prev => prev.map(t =>
+        t.id === taskId ? { ...t, split } : t
+      ));
+
+      toast.success(split ? `Split set to ${split}` : 'Split removed');
+    } catch (err) {
+      console.error('Failed to update task split:', err);
+      toast.error('Failed to update task split');
     }
   };
 
@@ -259,7 +275,7 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
                     </div>
                   </div>
                   
-                  {/* Status and Assignee */}
+                  {/* Status, Split, and Assignee */}
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="w-44" onClick={(e) => e.stopPropagation()}>
                       <AssigneeDropdown
@@ -271,6 +287,32 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
                         assignedUser={task.assignee}
                       />
                     </div>
+
+                    {/* Split Dropdown */}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={task.split || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          handleSplitChange(task.id, value ? value as 'train' | 'val' | 'test' : null);
+                        }}
+                        className={`px-2 py-1 text-xs font-medium rounded-lg border transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${
+                          task.split
+                            ? task.split === 'train'
+                              ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                              : task.split === 'val'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                              : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                            : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+                        }`}
+                      >
+                        <option value="">None</option>
+                        <option value="train">Train</option>
+                        <option value="val">Val</option>
+                        <option value="test">Test</option>
+                      </select>
+                    </div>
+
                     <span
                       className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize whitespace-nowrap ${getStatusColor(
                         task.status
