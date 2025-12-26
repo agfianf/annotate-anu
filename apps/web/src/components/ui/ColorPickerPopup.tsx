@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { PRESET_COLORS } from '@/lib/colors'
@@ -9,6 +9,8 @@ interface ColorPickerPopupProps {
   isOpen: boolean
   onClose: () => void
   anchorEl: HTMLElement | null
+  /** Optional title to display in the popup header */
+  title?: string
 }
 
 export function ColorPickerPopup({
@@ -16,7 +18,8 @@ export function ColorPickerPopup({
   onColorChange,
   isOpen,
   onClose,
-  anchorEl
+  anchorEl,
+  title = 'Pick Color'
 }: ColorPickerPopupProps) {
   const [position, setPosition] = useState({ top: 0, left: 0 })
 
@@ -68,7 +71,7 @@ export function ColorPickerPopup({
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
-        <h4 className="text-xs font-medium text-gray-700">Pick Color</h4>
+        <h4 className="text-xs font-medium text-gray-700">{title}</h4>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close">
           <X className="w-3 h-3" />
         </button>

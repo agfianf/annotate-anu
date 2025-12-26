@@ -1,6 +1,7 @@
 import type { NumericAggregation } from '@/lib/data-management-client';
 import { ChevronDown, ChevronRight, Eye, EyeOff, SlidersHorizontal } from 'lucide-react';
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
+import { ColorBorderWrapper } from '@/components/ui/ColorBorderWrapper';
 
 interface NumericRangeFilterProps {
   aggregation: NumericAggregation;
@@ -11,7 +12,7 @@ interface NumericRangeFilterProps {
   isVisible?: boolean;
   onToggleVisibility?: () => void;
   displayColor?: string;
-  onColorPickerClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onColorChange?: (color: string) => void;
 }
 
 export function NumericRangeFilter({
@@ -22,7 +23,7 @@ export function NumericRangeFilter({
   isVisible = true,
   onToggleVisibility,
   displayColor = '#10B981',
-  onColorPickerClick,
+  onColorChange,
 }: NumericRangeFilterProps) {
   const { min_value, max_value, mean, histogram } = aggregation;
 
@@ -212,11 +213,13 @@ export function NumericRangeFilter({
   const totalCount = histogram.reduce((sum, b) => sum + b.count, 0);
 
   return (
-    <div
-      className="border-b border-emerald-100 group border-l-[3px] transition-colors"
-      style={{ borderLeftColor: displayColor }}
+    <ColorBorderWrapper
+      color={displayColor}
+      onColorChange={onColorChange || (() => {})}
+      title={title}
+      className="border-b border-emerald-100 group"
     >
-      {/* Header with visibility toggle and color picker */}
+      {/* Header with visibility toggle */}
       <div className="flex w-full items-center justify-between px-3 py-2">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
@@ -230,20 +233,6 @@ export function NumericRangeFilter({
         </button>
 
         <div className="flex items-center gap-1">
-          {/* Color Picker Toggle */}
-          {onColorPickerClick && (
-            <button
-              onClick={onColorPickerClick}
-              className="p-1 rounded hover:bg-emerald-100 transition-colors"
-              title="Change display color"
-            >
-              <div
-                className="w-3 h-3 rounded-sm border border-emerald-300"
-                style={{ backgroundColor: displayColor }}
-              />
-            </button>
-          )}
-
           {/* Visibility Toggle */}
           {onToggleVisibility && (
             <button
@@ -463,6 +452,6 @@ export function NumericRangeFilter({
           </div>
         </div>
       )}
-    </div>
+    </ColorBorderWrapper>
   );
 }

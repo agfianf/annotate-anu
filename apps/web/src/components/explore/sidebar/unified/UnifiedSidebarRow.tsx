@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronRight, Eye, EyeOff, Minus, MoreVertical, Plus, Settings } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';
 
 export interface RowAction {
   label: string;
@@ -14,6 +15,8 @@ interface UnifiedSidebarRowProps {
   name: string;
   /** Color for indicator */
   color: string;
+  /** Callback when color changes via picker */
+  onColorChange?: (color: string) => void;
   /** Optional usage count */
   count?: number;
   /** Filter mode (tri-state: idle, include, exclude) */
@@ -47,6 +50,7 @@ interface UnifiedSidebarRowProps {
 export function UnifiedSidebarRow({
   name,
   color,
+  onColorChange,
   count,
   filterMode = 'idle',
   isVisible,
@@ -67,6 +71,9 @@ export function UnifiedSidebarRow({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
+  const [isBorderHovered, setIsBorderHovered] = useState(false);
+  const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
+  const borderRef = useRef<HTMLDivElement>(null);
 
   const handleFilterClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -141,11 +148,37 @@ export function UnifiedSidebarRow({
     }
   };
 
+  const handleBorderClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onColorChange) {
+      setIsColorPickerOpen(true);
+    }
+  };
+
   return (
-    <div>
+    <div className="relative">
+      {/* Clickable color border */}
+      {onColorChange && (
+        <div
+          ref={borderRef}
+          className="absolute left-0 top-0 bottom-0 cursor-pointer transition-all duration-150 rounded-l-sm z-10"
+          style={{
+            width: isBorderHovered || isColorPickerOpen ? '8px' : '3px',
+            backgroundColor: color,
+            marginLeft: `${indent * 16}px`,
+          }}
+          onMouseEnter={() => setIsBorderHovered(true)}
+          onMouseLeave={() => setIsBorderHovered(false)}
+          onClick={handleBorderClick}
+          title={`Click to change "${name}" color`}
+        />
+      )}
       <div
-        className="flex items-center gap-2 cursor-pointer hover:bg-orange-50/40 py-1.5 pr-2 rounded-r transition-colors group relative"
-        style={{ paddingLeft: `${8 + indent * 16}px` }}
+        className={`flex items-center gap-2 cursor-pointer hover:bg-orange-50/40 py-1.5 pr-2 rounded-r transition-colors group relative ${!onColorChange ? 'border-l-[3px]' : ''}`}
+        style={{
+          paddingLeft: `${(onColorChange ? (isBorderHovered || isColorPickerOpen ? 12 : 7) : 8) + indent * 16}px`,
+          ...(!onColorChange ? { borderLeftColor: color } : {}),
+        }}
         onClick={expandable ? handleExpandClick : undefined}
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => setShowActions(false)}
@@ -333,6 +366,18 @@ export function UnifiedSidebarRow({
           {configPanelContent && <div className="mb-1">{configPanelContent}</div>}
           {children}
         </div>
+      )}
+
+      {/* Color Picker Popup */}
+      {onColorChange && (
+        <ColorPickerPopup
+          selectedColor={color}
+          onColorChange={onColorChange}
+          isOpen={isColorPickerOpen}
+          onClose={() => setIsColorPickerOpen(false)}
+          anchorEl={borderRef.current}
+          title={name}
+        />
       )}
     </div>
   );

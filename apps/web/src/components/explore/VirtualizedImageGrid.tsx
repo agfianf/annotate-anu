@@ -6,9 +6,9 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { VisibilityState } from '../../hooks/useExploreVisibility';
 import { useJustifiedRows } from '../../hooks/useJustifiedRows';
 import type { SharedImage } from '../../lib/data-management-client';
-import type { VisibilityState } from '../../hooks/useExploreVisibility';
 import { JustifiedRow } from './JustifiedRow';
 
 interface VirtualizedImageGridProps {
@@ -36,7 +36,7 @@ export function VirtualizedImageGrid({
   onImageDoubleClick,
   targetRowHeight,
   thumbnailSize,
-  spacing = 12,
+  spacing = 4,
   hasNextPage,
   isFetchingNextPage,
   fetchNextPage,

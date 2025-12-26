@@ -8,6 +8,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { Check, Eye, EyeOff, Search, X } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { projectImagesApi, getAbsoluteThumbnailUrl, type SharedImage } from '@/lib/data-management-client';
+import { ColorBorderWrapper } from '@/components/ui/ColorBorderWrapper';
 
 interface ImageUidSelectorProps {
   projectId: string;
@@ -17,7 +18,7 @@ interface ImageUidSelectorProps {
   isVisible?: boolean;
   onToggleVisibility?: () => void;
   displayColor?: string;
-  onColorPickerClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onColorChange?: (color: string) => void;
 }
 
 export function ImageUidSelector({
@@ -27,7 +28,7 @@ export function ImageUidSelector({
   isVisible = true,
   onToggleVisibility,
   displayColor = '#10B981',
-  onColorPickerClick,
+  onColorChange,
 }: ImageUidSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -102,7 +103,12 @@ export function ImageUidSelector({
   };
 
   return (
-    <div className="space-y-2">
+    <ColorBorderWrapper
+      color={displayColor}
+      onColorChange={onColorChange || (() => {})}
+      title="Image IDs"
+      className="space-y-2"
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <label className="text-[10px] text-emerald-900/70 font-mono uppercase tracking-wider">
@@ -113,19 +119,6 @@ export function ImageUidSelector({
             <span className="text-[9px] text-emerald-600 font-mono">
               {selectedImageIds.length} selected
             </span>
-          )}
-          {/* Color Picker Toggle */}
-          {onColorPickerClick && (
-            <button
-              onClick={onColorPickerClick}
-              className="p-1 rounded hover:bg-emerald-100 transition-colors"
-              title="Change display color"
-            >
-              <div
-                className="w-3 h-3 rounded-sm border border-emerald-300"
-                style={{ backgroundColor: displayColor }}
-              />
-            </button>
           )}
           {/* Visibility Toggle */}
           {onToggleVisibility && (
@@ -298,6 +291,6 @@ export function ImageUidSelector({
           </div>
         </div>
       )}
-    </div>
+    </ColorBorderWrapper>
   );
 }

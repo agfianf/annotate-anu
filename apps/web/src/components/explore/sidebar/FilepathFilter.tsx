@@ -8,6 +8,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { Check, Eye, EyeOff, FolderOpen, Search, X } from 'lucide-react';
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { projectImagesApi, type SharedImage } from '@/lib/data-management-client';
+import { ColorBorderWrapper } from '@/components/ui/ColorBorderWrapper';
 
 interface FilepathFilterProps {
   projectId: string;
@@ -17,7 +18,7 @@ interface FilepathFilterProps {
   isVisible?: boolean;
   onToggleVisibility?: () => void;
   displayColor?: string;
-  onColorPickerClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  onColorChange?: (color: string) => void;
 }
 
 /**
@@ -56,7 +57,7 @@ export function FilepathFilter({
   isVisible = true,
   onToggleVisibility,
   displayColor = '#10B981',
-  onColorPickerClick,
+  onColorChange,
 }: FilepathFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,7 +150,12 @@ export function FilepathFilter({
   }, [isOpen]);
 
   return (
-    <div className="space-y-2 filepath-dropdown-container">
+    <ColorBorderWrapper
+      color={displayColor}
+      onColorChange={onColorChange || (() => {})}
+      title="File Paths"
+      className="space-y-2 filepath-dropdown-container"
+    >
       {/* Header */}
       <div className="flex items-center justify-between">
         <label className="text-[10px] text-emerald-900/70 font-mono uppercase tracking-wider flex items-center gap-1">
@@ -161,19 +167,6 @@ export function FilepathFilter({
             <span className="text-[9px] text-emerald-600 font-mono">
               {selectedPaths.length} selected
             </span>
-          )}
-          {/* Color Picker Toggle */}
-          {onColorPickerClick && (
-            <button
-              onClick={onColorPickerClick}
-              className="p-1 rounded hover:bg-emerald-100 transition-colors"
-              title="Change display color"
-            >
-              <div
-                className="w-3 h-3 rounded-sm border border-emerald-300"
-                style={{ backgroundColor: displayColor }}
-              />
-            </button>
           )}
           {/* Visibility Toggle */}
           {onToggleVisibility && (
@@ -333,6 +326,6 @@ export function FilepathFilter({
           </div>
         </div>
       )}
-    </div>
+    </ColorBorderWrapper>
   );
 }
