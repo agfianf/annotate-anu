@@ -136,6 +136,9 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   // Selection
   const [selectedImages, setSelectedImages] = useState<Set<string>>(new Set());
 
+  // Refresh state
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   // Modals
   const [showTagManager, setShowTagManager] = useState(false);
   const [newTagName, setNewTagName] = useState('');
@@ -369,6 +372,20 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   }, []);
 
 
+
+  // Refresh handler with animation and toast
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await refetchImages();
+      toast.success('Gallery refreshed');
+    } catch {
+      toast.error('Failed to refresh');
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, refetchImages]);
 
   const handleCreateTag = () => {
     if (!newTagName.trim()) return;
@@ -935,11 +952,12 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
           {/* Refresh */}
           <button
-            onClick={() => refetchImages()}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="Refresh"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 transition-transform ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
 
           {/* Zoom Control */}

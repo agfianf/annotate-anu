@@ -7,6 +7,7 @@ Welcome to the AnnotateANU documentation directory.
 ```
 docs/
 ├── getting-started.md         # 🆕 Complete guide to running AnnotateANU
+├── explore-sidebar-image-gallery.md # Explore sidebar + image gallery guide
 ├── architecture/              # System architecture documents
 ├── api-specs/                 # API specifications and contracts
 ├── byom-integration-guide/    # Bring Your Own Model integration guide
@@ -27,6 +28,16 @@ Covers:
 - Troubleshooting and best practices
 
 **👉 [Read the Getting Started Guide](./getting-started.md)**
+
+---
+
+### Feature Guides
+
+**Explore Sidebar + Image Gallery**
+
+Documentation for the unified sidebar and the virtualized explore image gallery, including filters, visibility, and the fullscreen image modal.
+
+**👉 [Explore Sidebar + Image Gallery](./explore-sidebar-image-gallery.md)**
 
 ---
 
