@@ -1285,7 +1285,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             onImageDoubleClick={setShowImageModal}
             targetRowHeight={zoomConfig.targetRowHeight}
             thumbnailSize={zoomConfig.thumbnailSize}
-            spacing={12}
+            spacing={2}
             hasNextPage={hasNextPage}
             isFetchingNextPage={isFetchingNextPage}
             fetchNextPage={fetchNextPage}
@@ -1501,13 +1501,9 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                             {/* Tags in this category */}
                             <div className="flex flex-wrap gap-2 pl-4">
                               {tags.map((tag) => {
-                                // Match ImageThumbnail styling
-                                const background = category && tag.color
-                                  ? `linear-gradient(to right, ${tag.color} 25%, ${category.color} 25%)`
-                                  : tag.color || '#10B981';
-                                const textColor = category
-                                  ? getTextColorForBackground(category.color)
-                                  : getTextColorForBackground(tag.color || '#10B981');
+                                // Use tag color only (category already shown in header)
+                                const background = tag.color || '#10B981';
+                                const textColor = getTextColorForBackground(tag.color || '#10B981');
 
                                 return (
                                   <div

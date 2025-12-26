@@ -261,7 +261,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
                     fontSize: `${tagStyles.fontSize}px`,
                     padding: tagStyles.padding,
                     maxWidth: `${tagStyles.maxWidth}px`,
-                    borderRadius: '8px',
+                    borderRadius: '2px',
                   }}
                   title={tag.name}
                 >
@@ -327,7 +327,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
                     fontSize: `${tagStyles.fontSize}px`,
                     padding: tagStyles.padding,
                     gap: `${tagStyles.gap}px`,
-                    borderRadius: '8px',
+                    borderRadius: '2px',
                   }}
                 >
                   <span
