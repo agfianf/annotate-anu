@@ -125,7 +125,7 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
 
     setIsSubmitting(true);
     try {
-      await labelsApi.update(labelId, {
+      await labelsApi.update(project.id, labelId, {
         name: editLabelName.trim(),
         color: editLabelColor,
       });
@@ -146,7 +146,7 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
     }
 
     try {
-      await labelsApi.delete(label.id);
+      await labelsApi.delete(project.id, label.id);
       toast.success(`Label "${label.name}" deleted`);
       onUpdate?.();
     } catch (err) {

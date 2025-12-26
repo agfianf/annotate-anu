@@ -39,7 +39,7 @@ export interface ApiResponse<T> {
 }
 
 export interface Project {
-  id: string;
+  id: number;
   name: string;
   description: string | null;
   readme: string | null;
@@ -61,7 +61,7 @@ export interface Label {
   id: string;
   name: string;
   color: string;
-  project_id: string;
+  project_id: number;
   created_at?: string;
 }
 
@@ -146,7 +146,7 @@ export interface TaskWithJobsResponse {
 export interface ProjectMember {
   id: string;
   user_id: string;
-  project_id: string;
+  project_id: number;
   role: string;
   allowed_task_ids: number[] | null;
   allowed_job_ids: number[] | null;
@@ -163,7 +163,7 @@ export interface MemberUserInfo {
 
 export interface ProjectActivity {
   id: string;
-  project_id: string;
+  project_id: number;
   entity_type: 'task' | 'job' | 'label' | 'member' | 'project';
   entity_id: string;
   assignee_id: string | null;
@@ -473,7 +473,7 @@ export const projectsApi = {
     return response.data.data;
   },
 
-  async get(projectId: string): Promise<ProjectDetail> {
+  async get(projectId: number): Promise<ProjectDetail> {
     const response = await apiClient.get<ApiResponse<ProjectDetail>>(`/api/v1/projects/${projectId}`);
     return response.data.data;
   },
@@ -485,7 +485,7 @@ export const projectsApi = {
       .trim()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
-    
+
     const response = await apiClient.post<ApiResponse<Project>>('/api/v1/projects', {
       ...data,
       slug,
@@ -493,26 +493,26 @@ export const projectsApi = {
     return response.data.data;
   },
 
-  async update(projectId: string, data: { name?: string; description?: string; readme?: string }): Promise<Project> {
+  async update(projectId: number, data: { name?: string; description?: string; readme?: string }): Promise<Project> {
     const response = await apiClient.patch<ApiResponse<Project>>(`/api/v1/projects/${projectId}`, data);
     return response.data.data;
   },
 
-  async archive(projectId: string): Promise<Project> {
+  async archive(projectId: number): Promise<Project> {
     const response = await apiClient.post<ApiResponse<Project>>(`/api/v1/projects/${projectId}/archive`);
     return response.data.data;
   },
 
-  async unarchive(projectId: string): Promise<Project> {
+  async unarchive(projectId: number): Promise<Project> {
     const response = await apiClient.post<ApiResponse<Project>>(`/api/v1/projects/${projectId}/unarchive`);
     return response.data.data;
   },
 
-  async delete(projectId: string): Promise<void> {
+  async delete(projectId: number): Promise<void> {
     await apiClient.delete(`/api/v1/projects/${projectId}`);
   },
 
-  async getActivity(projectId: string, limit = 100, offset = 0): Promise<{
+  async getActivity(projectId: number, limit = 100, offset = 0): Promise<{
     data: ProjectActivity[];
     total: number;
   }> {
@@ -526,7 +526,7 @@ export const projectsApi = {
     };
   },
 
-  async logActivity(projectId: string, data: {
+  async logActivity(projectId: number, data: {
     entity_type: 'task' | 'job' | 'label' | 'member' | 'project';
     entity_id: string;
     entity_name?: string;
@@ -547,7 +547,7 @@ export const projectsApi = {
 // ============================================================================
 
 export const labelsApi = {
-  async create(projectId: string, data: { name: string; color: string }): Promise<Label> {
+  async create(projectId: number, data: { name: string; color: string }): Promise<Label> {
     const response = await apiClient.post<ApiResponse<Label>>(
       `/api/v1/projects/${projectId}/labels`,
       data
@@ -555,16 +555,16 @@ export const labelsApi = {
     return response.data.data;
   },
 
-  async update(labelId: string, data: { name?: string; color?: string }): Promise<Label> {
+  async update(projectId: number, labelId: string, data: { name?: string; color?: string }): Promise<Label> {
     const response = await apiClient.patch<ApiResponse<Label>>(
-      `/api/v1/projects/labels/${labelId}`,
+      `/api/v1/projects/${projectId}/labels/${labelId}`,
       data
     );
     return response.data.data;
   },
 
-  async delete(labelId: string): Promise<void> {
-    await apiClient.delete(`/api/v1/projects/labels/${labelId}`);
+  async delete(projectId: number, labelId: string): Promise<void> {
+    await apiClient.delete(`/api/v1/projects/${projectId}/labels/${labelId}`);
   },
 };
 
@@ -573,11 +573,11 @@ export const labelsApi = {
 // ============================================================================
 
 export const tasksApi = {
-  async list(projectId: string, status?: string, includeArchived = false): Promise<Task[]> {
+  async list(projectId: number, status?: string, includeArchived = false): Promise<Task[]> {
     const response = await apiClient.get<ApiResponse<Task[]>>(`/api/v1/projects/${projectId}/tasks`, {
-      params: { 
+      params: {
         task_status: status || undefined,
-        include_archived: includeArchived 
+        include_archived: includeArchived
       },
     });
     return response.data.data;
@@ -588,7 +588,7 @@ export const tasksApi = {
     return response.data.data;
   },
 
-  async create(projectId: string, data: { name: string; description?: string }): Promise<Task> {
+  async create(projectId: number, data: { name: string; description?: string }): Promise<Task> {
     const response = await apiClient.post<ApiResponse<Task>>(`/api/v1/projects/${projectId}/tasks`, data);
     return response.data.data;
   },
@@ -612,7 +612,7 @@ export const tasksApi = {
     await apiClient.delete(`/api/v1/tasks/${taskId}`);
   },
 
-  async preview(projectId: string, data: TaskCreateWithImages): Promise<TaskCreationPreview> {
+  async preview(projectId: number, data: TaskCreateWithImages): Promise<TaskCreationPreview> {
     const response = await apiClient.post<ApiResponse<TaskCreationPreview>>(
       `/api/v1/projects/${projectId}/tasks/preview`,
       data
@@ -620,7 +620,7 @@ export const tasksApi = {
     return response.data.data;
   },
 
-  async createWithImages(projectId: string, data: TaskCreateWithImages): Promise<TaskWithJobsResponse> {
+  async createWithImages(projectId: number, data: TaskCreateWithImages): Promise<TaskWithJobsResponse> {
     const response = await apiClient.post<ApiResponse<TaskWithJobsResponse>>(
       `/api/v1/projects/${projectId}/tasks/create-with-images`,
       data
@@ -709,22 +709,22 @@ export interface AvailableUser {
 }
 
 export const membersApi = {
-  async list(projectId: string): Promise<ProjectMember[]> {
+  async list(projectId: number): Promise<ProjectMember[]> {
     const response = await apiClient.get<ApiResponse<ProjectMember[]>>(`/api/v1/projects/${projectId}/members`);
     return response.data.data;
   },
 
-  async listAvailable(projectId: string): Promise<AvailableUser[]> {
+  async listAvailable(projectId: number): Promise<AvailableUser[]> {
     const response = await apiClient.get<ApiResponse<AvailableUser[]>>(`/api/v1/projects/${projectId}/available-users`);
     return response.data.data;
   },
 
-  async add(projectId: string, data: { user_id: string; role: string }): Promise<ProjectMember> {
+  async add(projectId: number, data: { user_id: string; role: string }): Promise<ProjectMember> {
     const response = await apiClient.post<ApiResponse<ProjectMember>>(`/api/v1/projects/${projectId}/members`, data);
     return response.data.data;
   },
 
-  async remove(projectId: string, memberId: string): Promise<void> {
+  async remove(projectId: number, memberId: string): Promise<void> {
     await apiClient.delete(`/api/v1/projects/${projectId}/members/${memberId}`);
   },
 };
