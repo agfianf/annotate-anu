@@ -3,6 +3,10 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import toast from 'react-hot-toast'
 import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva'
 import type { Annotation, Label, PolygonAnnotation, RectangleAnnotation, Tool } from '../types/annotations'
+import { WebGLBackgroundLayer, useKonvaAnnotations, useHybridCanvasStats } from './canvas'
+
+// Threshold for switching to hybrid WebGL+Konva mode
+const WEBGL_ANNOTATION_THRESHOLD = 100
 
 interface CanvasProps {
   image: string | null
@@ -1458,6 +1462,32 @@ const Canvas = React.memo(function Canvas({
     return visible
   }, [annotations, isAnnotationVisible])
 
+  // Hybrid rendering: Use WebGL for bulk rendering when annotation count is high
+  // In hybrid mode, Konva only renders selected annotations for interactivity
+  const konvaAnnotations = useKonvaAnnotations(
+    visibleAnnotations,
+    selectedAnnotations,
+    WEBGL_ANNOTATION_THRESHOLD
+  )
+
+  // Get stats for debugging
+  const hybridStats = useHybridCanvasStats(
+    visibleAnnotations,
+    selectedAnnotations,
+    WEBGL_ANNOTATION_THRESHOLD
+  )
+
+  // Log hybrid mode status (remove in production)
+  useEffect(() => {
+    if (hybridStats.isHybridMode) {
+      console.log('[HYBRID MODE] Active:', {
+        total: hybridStats.totalAnnotations,
+        webgl: hybridStats.webglAnnotations,
+        konva: hybridStats.konvaAnnotations,
+      })
+    }
+  }, [hybridStats])
+
   if (!image) {
     return (
       <div className="w-full h-full flex items-center justify-center text-gray-400">
@@ -1489,6 +1519,35 @@ const Canvas = React.memo(function Canvas({
       className="w-full h-full flex items-center justify-center bg-gray-950 relative"
       style={{ cursor: getCursorStyle() }}
     >
+      {/* WebGL layer for bulk rendering unselected annotations (hybrid mode) */}
+      {hybridStats.isHybridMode && (
+        <div
+          style={{
+            position: 'absolute',
+            width: dimensions.width,
+            height: dimensions.height,
+            zIndex: 1,
+            pointerEvents: 'none', // Let clicks pass through to Konva
+          }}
+        >
+          <WebGLBackgroundLayer
+            annotations={visibleAnnotations}
+            selectedAnnotations={selectedAnnotations}
+            labels={labels}
+            scale={scale}
+            dimensions={dimensions}
+            zoomLevel={zoomLevel}
+            stagePosition={stagePosition}
+            onAnnotationClick={(id) => {
+              // Handle annotation selection from WebGL layer
+              if (selectedTool === 'select') {
+                handleAnnotationClick(id)
+              }
+            }}
+          />
+        </div>
+      )}
+
       <Stage
         ref={stageRef}
         width={dimensions.width}
@@ -1529,8 +1588,8 @@ const Canvas = React.memo(function Canvas({
             />
           )}
 
-          {/* Existing annotations */}
-          {visibleAnnotations.map((annotation) => {
+          {/* Existing annotations - in hybrid mode, only renders selected annotations */}
+          {konvaAnnotations.map((annotation) => {
             const label = getLabel(annotation.labelId)
             const color = label?.color || '#f97316'
             const labelName = label?.name || 'Unknown'

@@ -47,11 +47,12 @@ export function useInfiniteExploreImages({
   const query = useInfiniteQuery({
     queryKey: ['project-explore-infinite', projectId, filters],
     queryFn: async ({ pageParam }): Promise<ExploreResponse> => {
-      return projectImagesApi.explore(projectId, {
+      const response = await projectImagesApi.explore(projectId, {
         ...filters,
         page: pageParam,
         page_size: pageSize,
       });
+      return response;
     },
     getNextPageParam: (lastPage) => {
       const { page, page_size, total } = lastPage;

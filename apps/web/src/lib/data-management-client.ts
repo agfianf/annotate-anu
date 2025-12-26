@@ -129,12 +129,20 @@ export interface BboxPreview {
   x_max: number;
   y_max: number;
   label_color: string;
+  label_name: string | null;
+}
+
+export interface PolygonPreview {
+  points: [number, number][];
+  label_color: string;
+  label_name: string | null;
 }
 
 export interface AnnotationSummary {
   detection_count: number;
   segmentation_count: number;
   bboxes?: BboxPreview[];
+  polygons?: PolygonPreview[];
 }
 
 export interface JobAssociation {

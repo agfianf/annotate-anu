@@ -287,6 +287,17 @@ class BboxPreview(BaseModel):
     x_max: float = Field(..., ge=0, le=1, description="Normalized x_max (0-1)")
     y_max: float = Field(..., ge=0, le=1, description="Normalized y_max (0-1)")
     label_color: str = Field(default="#10B981", description="Label color for rendering")
+    label_name: str | None = Field(None, description="Label name for display")
+
+
+class PolygonPreview(BaseModel):
+    """Polygon preview for thumbnail overlay."""
+
+    points: list[list[float]] = Field(
+        ..., description="List of [x, y] normalized coordinates (0-1)"
+    )
+    label_color: str = Field(default="#10B981", description="Label color for rendering")
+    label_name: str | None = Field(None, description="Label name for display")
 
 
 class AnnotationSummary(BaseModel):
@@ -295,6 +306,7 @@ class AnnotationSummary(BaseModel):
     detection_count: int = Field(default=0, description="Number of detection annotations")
     segmentation_count: int = Field(default=0, description="Number of segmentation annotations")
     bboxes: list[BboxPreview] | None = Field(None, description="Simplified bboxes for overlay")
+    polygons: list[PolygonPreview] | None = Field(None, description="Polygon data for segmentations")
 
 
 # ============================================================================
@@ -334,7 +346,7 @@ class SharedImageWithAnnotations(SharedImageBase):
 class ExploreResponse(BaseModel):
     """Response for explore endpoint."""
 
-    images: list[SharedImageResponse]
+    images: list[SharedImageWithAnnotations]
     total: int
     page: int
     page_size: int

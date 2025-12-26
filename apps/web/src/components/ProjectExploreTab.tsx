@@ -1373,7 +1373,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       {/* Image Detail Modal */}
       {showImageModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-[80vw] h-[80vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl w-[90vw] h-[90vh] overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-3 flex-1 min-w-0">
                 <h3 className="text-lg font-semibold text-gray-900 truncate">
@@ -1421,6 +1421,9 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                     src={getFullSizeThumbnailUrl(showImageModal.thumbnail_url)}
                     alt={showImageModal.filename}
                     className="w-full h-full object-contain"
+                    bboxes={showImageModal.annotation_summary?.bboxes}
+                    polygons={showImageModal.annotation_summary?.polygons}
+                    displayOptions={visibilityState.visibility.annotationDisplay}
                   />
                 </div>
 

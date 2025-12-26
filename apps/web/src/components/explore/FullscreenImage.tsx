@@ -1,15 +1,32 @@
-
 import { ImageOff, Loader2 } from 'lucide-react';
 import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
+import { AnnotationOverlay } from './AnnotationOverlay';
+import type { BboxPreview, PolygonPreview } from '../../lib/data-management-client';
+import type { AnnotationDisplayState } from '../../hooks/useExploreVisibility';
 
 interface FullscreenImageProps {
   src: string | null;
   alt: string;
   className?: string;
+  /** Bounding boxes to overlay */
+  bboxes?: BboxPreview[];
+  /** Polygons to overlay */
+  polygons?: PolygonPreview[];
+  /** Display options for annotations */
+  displayOptions?: AnnotationDisplayState;
 }
 
-export function FullscreenImage({ src, alt, className = '' }: FullscreenImageProps) {
+export function FullscreenImage({
+  src,
+  alt,
+  className = '',
+  bboxes,
+  polygons,
+  displayOptions,
+}: FullscreenImageProps) {
   const { blobUrl, isLoading, error } = useAuthenticatedImage(src);
+
+  const hasAnnotations = (bboxes && bboxes.length > 0) || (polygons && polygons.length > 0);
 
   if (isLoading) {
     return (
@@ -29,10 +46,20 @@ export function FullscreenImage({ src, alt, className = '' }: FullscreenImagePro
   }
 
   return (
-    <img
-      src={blobUrl}
-      alt={alt}
-      className={className}
-    />
+    <div className={`relative ${className}`}>
+      <img
+        src={blobUrl}
+        alt={alt}
+        className="w-full h-full object-contain"
+      />
+      {hasAnnotations && (
+        <AnnotationOverlay
+          bboxes={bboxes}
+          polygons={polygons}
+          displayOptions={displayOptions}
+          showOnHover={false}
+        />
+      )}
+    </div>
   );
 }

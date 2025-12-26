@@ -139,10 +139,16 @@ export const ImageThumbnail = memo(function ImageThumbnail({
     }
   };
 
-  // Combine detection and segmentation bboxes for overlay
+  // Extract bboxes for overlay
   const overlayBboxes = useMemo(() => {
     if (!image.annotation_summary) return undefined;
     return image.annotation_summary.bboxes;
+  }, [image.annotation_summary]);
+
+  // Extract polygons for overlay
+  const overlayPolygons = useMemo(() => {
+    if (!image.annotation_summary) return undefined;
+    return image.annotation_summary.polygons;
   }, [image.annotation_summary]);
 
   const hasAnnotations =
@@ -210,9 +216,14 @@ export const ImageThumbnail = memo(function ImageThumbnail({
         </div>
       </div>
 
-      {/* Annotation overlay (shows on hover) */}
-      {overlayBboxes && overlayBboxes.length > 0 && (
-        <AnnotationOverlay bboxes={overlayBboxes} showOnHover />
+      {/* Annotation overlay (always visible) */}
+      {(overlayBboxes?.length || overlayPolygons?.length) && (
+        <AnnotationOverlay
+          bboxes={overlayBboxes}
+          polygons={overlayPolygons}
+          displayOptions={visibility?.annotationDisplay}
+          showOnHover={false}
+        />
       )}
 
       {/* Selection checkbox */}

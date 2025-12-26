@@ -14,6 +14,27 @@ export interface MetadataFieldState {
 export type MetadataFieldKey = 'filename' | 'width' | 'height' | 'fileSize' | 'imageUids' | 'filepath';
 
 /**
+ * Stroke width levels for annotation overlay
+ */
+export type StrokeWidthLevel = 'thin' | 'normal' | 'medium' | 'thick' | 'extra-thick';
+
+/**
+ * Fill opacity levels for annotation overlay
+ */
+export type FillOpacityLevel = 'none' | 'light' | 'medium' | 'strong' | 'solid';
+
+/**
+ * Annotation display options for thumbnails
+ */
+export interface AnnotationDisplayState {
+  strokeWidth: StrokeWidthLevel;
+  showLabels: boolean;
+  showBboxes: boolean;
+  showPolygons: boolean;
+  fillOpacity: FillOpacityLevel;
+}
+
+/**
  * Visibility state for controlling what tags/attributes are displayed on thumbnails
  * This is separate from filtering - it only controls visual display
  */
@@ -26,6 +47,8 @@ export interface VisibilityState {
   metadata: Record<MetadataFieldKey, MetadataFieldState>;
   // Label/annotation visibility by label name
   labels: Record<string, boolean>;
+  // Annotation display options (stroke width, labels, fill)
+  annotationDisplay: AnnotationDisplayState;
 }
 
 // Default color for metadata fields
@@ -40,11 +63,20 @@ const defaultMetadataState: Record<MetadataFieldKey, MetadataFieldState> = {
   filepath: { visible: false, color: DEFAULT_METADATA_COLOR },
 };
 
+const defaultAnnotationDisplay: AnnotationDisplayState = {
+  strokeWidth: 'normal',
+  showLabels: false,
+  showBboxes: true,
+  showPolygons: true,
+  fillOpacity: 'none',
+};
+
 const defaultVisibility: VisibilityState = {
   tags: {},
   categories: {},
   metadata: { ...defaultMetadataState },
   labels: {},
+  annotationDisplay: { ...defaultAnnotationDisplay },
 };
 
 const STORAGE_KEY_PREFIX = 'explore-visibility-';
@@ -94,12 +126,20 @@ function loadVisibility(projectId: string): VisibilityState {
         ...defaultVisibility,
         ...parsed,
         metadata: migrateMetadata(parsed.metadata),
+        annotationDisplay: {
+          ...defaultAnnotationDisplay,
+          ...(parsed.annotationDisplay || {}),
+        },
       };
     }
   } catch (e) {
     console.warn('Failed to load visibility state from localStorage:', e);
   }
-  return { ...defaultVisibility, metadata: { ...defaultMetadataState } };
+  return {
+    ...defaultVisibility,
+    metadata: { ...defaultMetadataState },
+    annotationDisplay: { ...defaultAnnotationDisplay },
+  };
 }
 
 function saveVisibility(projectId: string, visibility: VisibilityState): void {
@@ -261,6 +301,7 @@ export function useExploreVisibility(projectId: string) {
         filepath: { visible: true, color: prev.metadata.filepath?.color || DEFAULT_METADATA_COLOR },
       },
       labels: {},
+      annotationDisplay: prev.annotationDisplay,
     }));
   }, []);
 
@@ -301,6 +342,7 @@ export function useExploreVisibility(projectId: string) {
           filepath: { visible: false, color: prev.metadata.filepath?.color || DEFAULT_METADATA_COLOR },
         },
         labels: hiddenLabels,
+        annotationDisplay: prev.annotationDisplay,
       };
     });
   }, []);
@@ -351,6 +393,71 @@ export function useExploreVisibility(projectId: string) {
     [visibility]
   );
 
+  /**
+   * Set stroke width for annotation overlay
+   */
+  const setStrokeWidth = useCallback((level: StrokeWidthLevel) => {
+    setVisibility((prev) => ({
+      ...prev,
+      annotationDisplay: {
+        ...prev.annotationDisplay,
+        strokeWidth: level,
+      },
+    }));
+  }, []);
+
+  /**
+   * Toggle show labels on annotations
+   */
+  const toggleShowLabels = useCallback(() => {
+    setVisibility((prev) => ({
+      ...prev,
+      annotationDisplay: {
+        ...prev.annotationDisplay,
+        showLabels: !prev.annotationDisplay.showLabels,
+      },
+    }));
+  }, []);
+
+  /**
+   * Toggle show bboxes
+   */
+  const toggleShowBboxes = useCallback(() => {
+    setVisibility((prev) => ({
+      ...prev,
+      annotationDisplay: {
+        ...prev.annotationDisplay,
+        showBboxes: !prev.annotationDisplay.showBboxes,
+      },
+    }));
+  }, []);
+
+  /**
+   * Toggle show polygons
+   */
+  const toggleShowPolygons = useCallback(() => {
+    setVisibility((prev) => ({
+      ...prev,
+      annotationDisplay: {
+        ...prev.annotationDisplay,
+        showPolygons: !prev.annotationDisplay.showPolygons,
+      },
+    }));
+  }, []);
+
+  /**
+   * Set fill opacity level
+   */
+  const setFillOpacity = useCallback((level: FillOpacityLevel) => {
+    setVisibility((prev) => ({
+      ...prev,
+      annotationDisplay: {
+        ...prev.annotationDisplay,
+        fillOpacity: level,
+      },
+    }));
+  }, []);
+
   return {
     visibility,
     setVisibility,
@@ -374,6 +481,12 @@ export function useExploreVisibility(projectId: string) {
     // Bulk operations
     showAll,
     hideAll,
+    // Annotation display operations
+    setStrokeWidth,
+    toggleShowLabels,
+    toggleShowBboxes,
+    toggleShowPolygons,
+    setFillOpacity,
   };
 }
 

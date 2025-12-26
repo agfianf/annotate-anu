@@ -10,6 +10,7 @@ from app.dependencies.auth import get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import ProjectPermission
 from app.helpers.response_api import JsonResponse
+from app.repositories.annotation import AnnotationSummaryRepository
 from app.repositories.project_image import ProjectImageRepository
 from app.repositories.shared_image import SharedImageRepository
 from app.repositories.shared_image_tag import SharedImageTagRepository
@@ -17,15 +18,19 @@ from app.repositories.tag import TagRepository
 from app.schemas.auth import UserBase
 from app.schemas.data_management import (
     AddTagsRequest,
+    AnnotationSummary,
+    BboxPreview,
     BulkTagRequest,
     BulkTagResponse,
     ExploreFilter,
     ExploreResponse,
+    PolygonPreview,
     ProjectImageAdd,
     ProjectImageRemove,
     ProjectPoolListResponse,
     ProjectPoolResponse,
     SharedImageResponse,
+    SharedImageWithAnnotations,
     TagResponse,
 )
 
@@ -41,13 +46,32 @@ async def _enrich_image(
     connection: AsyncConnection,
     image: dict,
     project_id: int,
-) -> SharedImageResponse:
-    """Enrich image with tags and thumbnail URL."""
+    annotation_summary: dict | None = None,
+) -> SharedImageWithAnnotations:
+    """Enrich image with tags, thumbnail URL, and optional annotation summary."""
     tags = await SharedImageRepository.get_tags(connection, image["id"], project_id)
-    return SharedImageResponse(
+
+    # Build annotation summary if provided
+    ann_summary = None
+    if annotation_summary:
+        bboxes = None
+        if annotation_summary.get("bboxes"):
+            bboxes = [BboxPreview(**bbox) for bbox in annotation_summary["bboxes"]]
+        polygons = None
+        if annotation_summary.get("polygons"):
+            polygons = [PolygonPreview(**poly) for poly in annotation_summary["polygons"]]
+        ann_summary = AnnotationSummary(
+            detection_count=annotation_summary.get("detection_count", 0),
+            segmentation_count=annotation_summary.get("segmentation_count", 0),
+            bboxes=bboxes,
+            polygons=polygons,
+        )
+
+    return SharedImageWithAnnotations(
         **{k: v for k, v in image.items() if k not in ("added_to_pool_at",)},
         thumbnail_url=_build_thumbnail_url(image["file_path"]),
         tags=[TagResponse(**t) for t in tags],
+        annotation_summary=ann_summary,
     )
 
 
@@ -205,6 +229,11 @@ async def explore_project_images(
     filepath_pattern: str | None = Query(default=None, max_length=255),
     filepath_paths: list[str] | None = Query(default=None),
     image_uids: list[UUID] | None = Query(default=None),
+    # Annotation overlay options
+    include_bboxes: bool = Query(default=True, description="Include bboxes in annotation_summary"),
+    include_polygons: bool = Query(default=True, description="Include polygon data for segmentations"),
+    max_bboxes_per_image: int = Query(default=100, ge=1, le=500, description="Max bboxes per image"),
+    max_polygons_per_image: int = Query(default=50, ge=1, le=200, description="Max polygons per image"),
 ):
     """
     Explore images with combined filtering.
@@ -212,6 +241,8 @@ async def explore_project_images(
 
     Args:
         task_ids: Filter by multiple task IDs (OR logic - images in ANY of the selected tasks)
+        include_bboxes: Include bbox previews for annotation overlay in gallery
+        max_bboxes_per_image: Maximum number of bboxes to return per image
     """
     project_id = project["id"]
 
@@ -239,9 +270,31 @@ async def explore_project_images(
         image_uids=image_uids,
     )
 
+    # Fetch annotation summaries for all images in batch
+    image_ids = [img["id"] for img in images]
+    annotation_summaries = await AnnotationSummaryRepository.get_summary_for_images(
+        connection,
+        image_ids,
+        include_bboxes=include_bboxes,
+        include_polygons=include_polygons,
+        max_bboxes_per_image=max_bboxes_per_image,
+        max_polygons_per_image=max_polygons_per_image,
+    )
+
+    # DEBUG: Log annotation summary results (using print for visibility)
+    total_det = sum(s.get("detection_count", 0) for s in annotation_summaries.values())
+    total_seg = sum(s.get("segmentation_count", 0) for s in annotation_summaries.values())
+    total_bboxes = sum(len(s.get("bboxes", [])) for s in annotation_summaries.values())
+    total_polygons = sum(len(s.get("polygons", [])) for s in annotation_summaries.values())
+    print(f"[DEBUG] Annotation summaries: {len(annotation_summaries)} images, {total_det} detections, {total_seg} segmentations, {total_bboxes} bboxes, {total_polygons} polygons", flush=True)
+    if annotation_summaries:
+        first_key = list(annotation_summaries.keys())[0]
+        print(f"[DEBUG] First annotation summary (key={first_key}): {annotation_summaries[first_key]}", flush=True)
+
     enriched = []
     for img in images:
-        enriched.append(await _enrich_image(connection, img, project_id))
+        ann_summary = annotation_summaries.get(img["id"])
+        enriched.append(await _enrich_image(connection, img, project_id, ann_summary))
 
     # Build filters applied dict
     filters_applied = {}

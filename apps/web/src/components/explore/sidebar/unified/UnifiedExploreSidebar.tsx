@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Database, Eye, EyeOff, Layers, RefreshCw, Tag, Trash2 } from 'lucide-react';
+import { Database, Droplet, Eye, EyeOff, Hexagon, Layers, Paintbrush, RefreshCw, Square, Tag, Trash2, Type } from 'lucide-react';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import type { UseExploreVisibilityReturn } from '@/hooks/useExploreVisibility';
@@ -736,6 +736,140 @@ export function UnifiedExploreSidebar({
                   displayColor={visibility.getMetadataColor('filepath')}
                   onColorChange={(color) => visibility.setMetadataColor('filepath', color)}
                 />
+              </div>
+            </UnifiedSidebarSection>
+
+            {/* DISPLAY Section - Annotation overlay options */}
+            <UnifiedSidebarSection
+              title="Display"
+              icon={<Paintbrush className="h-3.5 w-3.5 text-purple-500" />}
+              color="#A855F7"
+              defaultExpanded={true}
+            >
+              <div className="space-y-4 px-2 py-2">
+                {/* Show Bboxes Toggle */}
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                    <Square className="h-3 w-3 text-purple-500" />
+                    Show Bboxes
+                  </label>
+                  <button
+                    onClick={() => visibility.toggleShowBboxes()}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      visibility.visibility.annotationDisplay.showBboxes
+                        ? 'bg-purple-500'
+                        : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${
+                        visibility.visibility.annotationDisplay.showBboxes
+                          ? 'translate-x-5'
+                          : ''
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Show Polygons Toggle */}
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                    <Hexagon className="h-3 w-3 text-purple-500" />
+                    Show Polygons
+                  </label>
+                  <button
+                    onClick={() => visibility.toggleShowPolygons()}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      visibility.visibility.annotationDisplay.showPolygons
+                        ? 'bg-purple-500'
+                        : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${
+                        visibility.visibility.annotationDisplay.showPolygons
+                          ? 'translate-x-5'
+                          : ''
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Stroke Width Slider */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                    <Paintbrush className="h-3 w-3 text-purple-500" />
+                    Stroke Width
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={0}
+                      max={4}
+                      value={['thin', 'normal', 'medium', 'thick', 'extra-thick'].indexOf(
+                        visibility.visibility.annotationDisplay.strokeWidth
+                      )}
+                      onChange={(e) => {
+                        const levels = ['thin', 'normal', 'medium', 'thick', 'extra-thick'] as const;
+                        visibility.setStrokeWidth(levels[parseInt(e.target.value)]);
+                      }}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    />
+                    <span className="text-xs text-gray-500 w-16 text-right capitalize">
+                      {visibility.visibility.annotationDisplay.strokeWidth}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Fill Opacity Slider */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                    <Droplet className="h-3 w-3 text-purple-500" />
+                    Fill Opacity
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={0}
+                      max={4}
+                      value={['none', 'light', 'medium', 'strong', 'solid'].indexOf(
+                        visibility.visibility.annotationDisplay.fillOpacity
+                      )}
+                      onChange={(e) => {
+                        const levels = ['none', 'light', 'medium', 'strong', 'solid'] as const;
+                        visibility.setFillOpacity(levels[parseInt(e.target.value)]);
+                      }}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    />
+                    <span className="text-xs text-gray-500 w-16 text-right capitalize">
+                      {visibility.visibility.annotationDisplay.fillOpacity}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Show Labels Toggle */}
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                    <Type className="h-3 w-3 text-purple-500" />
+                    Show Labels
+                  </label>
+                  <button
+                    onClick={() => visibility.toggleShowLabels()}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      visibility.visibility.annotationDisplay.showLabels
+                        ? 'bg-purple-500'
+                        : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${
+                        visibility.visibility.annotationDisplay.showLabels
+                          ? 'translate-x-5'
+                          : ''
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             </UnifiedSidebarSection>
           </div>
