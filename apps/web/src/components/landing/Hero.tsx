@@ -142,7 +142,7 @@ function Hero() {
 
   const handleSoloMode = () => {
     markAsVisited()
-    navigate('/app')
+    navigate('/annotate')
   }
 
   return (

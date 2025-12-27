@@ -559,7 +559,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
     if (targetJobId) {
       // Include imageId in URL for direct navigation to the specific image
-      navigate(`/app?jobId=${targetJobId}&imageId=${showImageModal.id}`);
+      navigate(`/annotate?jobId=${targetJobId}&imageId=${showImageModal.id}`);
       setShowImageModal(null);
     }
   }, [jobsData, selectedJobIdForAnnotation, navigate, showImageModal]);

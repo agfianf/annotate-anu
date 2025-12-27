@@ -16,7 +16,7 @@ function Footer() {
             Ready to speed up your CV pipeline?
           </h3>
           <Link
-            to="/app"
+            to="/annotate"
             onClick={handleGetStarted}
             className="inline-block px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white text-lg font-semibold rounded-lg transition-colors shadow-lg hover:shadow-xl"
           >

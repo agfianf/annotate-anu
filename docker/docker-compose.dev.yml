@@ -47,6 +47,8 @@ services:
       - SHARE_ROOT=/data/share
       - SHARE_THUMBNAIL_CACHE_DIR=/data/cache/thumbnails
       - EXPORT_ROOT=/data/exports
+      - API_CORE_DEBUG=true
+      - CORS_ORIGINS=["http://10.8.0.106:5173","http://10.8.0.106:8001","http://10.8.0.106:3000","http://localhost:5173","http://localhost:3000","http://10.8.0.106:80"]
     restart: unless-stopped
     networks:
       - anu-network

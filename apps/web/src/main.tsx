@@ -82,7 +82,7 @@ function App() {
       </Route>
 
       {/* Existing routes */}
-      <Route path="/app" element={<AnnotationApp />} />
+      <Route path="/annotate" element={<AnnotationApp />} />
     </Routes>
   )
 }

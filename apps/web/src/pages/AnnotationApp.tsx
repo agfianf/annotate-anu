@@ -1005,11 +1005,12 @@ function AnnotationApp() {
           )}
 
           {/* Model Selector */}
+          {/* Hide Manage Models in job mode - models are managed at project level */}
           <ModelSelector
             selectedModel={selectedModel}
             allModels={allModels}
             onSelectModel={selectModel}
-            onOpenSettings={() => navigate('/models')}
+            onOpenSettings={isJobMode ? undefined : () => navigate('/models')}
             onRefresh={refreshModels}
           />
 
