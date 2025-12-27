@@ -214,6 +214,13 @@ exports = Table(
         nullable=True,
         comment="Summary: image_count, annotation_count, class_counts, split_counts",
     ),
+    # Resolved metadata (human-readable names for versioning/diff)
+    Column(
+        "resolved_metadata",
+        JSONB,
+        nullable=True,
+        comment="Resolved metadata: tags/labels with names, user info, project info for versioning",
+    ),
     # Metadata
     Column(
         "created_by",

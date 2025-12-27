@@ -23,10 +23,12 @@ from app.schemas.export import (
     ExportListResponse,
     ExportPreview,
     ExportResponse,
+    ExportSortBy,
     ExportSummary,
     SavedFilterCreate,
     SavedFilterResponse,
     SavedFilterUpdate,
+    SortOrder,
 )
 from app.services.export import ExportService
 from sqlalchemy import select
@@ -296,20 +298,24 @@ async def list_exports(
     page_size: int = Query(default=20, ge=1, le=100),
     status_filter: str | None = Query(default=None, alias="status"),
     export_mode: str | None = Query(default=None),
+    sort_by: ExportSortBy = Query(default=ExportSortBy.CREATED_AT),
+    sort_order: SortOrder = Query(default=SortOrder.DESC),
 ):
-    """List export history for a project."""
-    exports, total = await ExportRepository.list_for_project(
+    """List export history for a project with optional filtering and sorting."""
+    exports_list, total = await ExportRepository.list_for_project(
         connection,
         project["id"],
         page=page,
         page_size=page_size,
         status=status_filter,
         export_mode=export_mode,
+        sort_by=sort_by.value,
+        sort_order=sort_order.value,
     )
 
     return JsonResponse(
         data=ExportListResponse(
-            exports=[ExportResponse(**e) for e in exports],
+            exports=[ExportResponse(**e) for e in exports_list],
             total=total,
             page=page,
             page_size=page_size,

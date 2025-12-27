@@ -25,8 +25,9 @@ from app.models.data_management import (
 )
 from app.models.image import images
 from app.models.job import jobs
-from app.models.project import labels
+from app.models.project import labels, projects
 from app.models.task import tasks
+from app.models.user import users
 from app.repositories.activity import ProjectActivityRepository
 from app.repositories.export import ExportRepository
 from app.schemas.export import (
@@ -40,6 +41,108 @@ from app.schemas.export import (
 
 
 logger = logging.getLogger(__name__)
+
+
+async def resolve_export_metadata(
+    connection: AsyncConnection,
+    project_id: int,
+    filter_snapshot: dict,
+    mode_options: dict | None,
+    user_id: UUID | None,
+) -> dict:
+    """
+    Resolve all IDs in filter/config to human-readable metadata.
+    This captures point-in-time state for versioning and self-documenting exports.
+    """
+    resolved = {
+        "tags": [],
+        "excluded_tags": [],
+        "labels": [],
+        "created_by": None,
+        "project": None,
+        "filter_summary": {
+            "tag_count": 0,
+            "excluded_tag_count": 0,
+            "label_count": 0,
+            "include_match_mode": filter_snapshot.get("include_match_mode", "OR"),
+            "exclude_match_mode": filter_snapshot.get("exclude_match_mode", "OR"),
+        },
+    }
+
+    # 1. Resolve included tags
+    tag_ids = filter_snapshot.get("tag_ids", [])
+    if tag_ids:
+        tag_query = select(
+            tags.c.id, tags.c.name, tags.c.color
+        ).where(tags.c.id.in_(tag_ids))
+        result = await connection.execute(tag_query)
+        for row in result.mappings():
+            resolved["tags"].append({
+                "id": str(row["id"]),
+                "name": row["name"],
+                "color": row["color"],
+            })
+        resolved["filter_summary"]["tag_count"] = len(resolved["tags"])
+
+    # 2. Resolve excluded tags
+    excluded_tag_ids = filter_snapshot.get("excluded_tag_ids", [])
+    if excluded_tag_ids:
+        tag_query = select(
+            tags.c.id, tags.c.name, tags.c.color
+        ).where(tags.c.id.in_(excluded_tag_ids))
+        result = await connection.execute(tag_query)
+        for row in result.mappings():
+            resolved["excluded_tags"].append({
+                "id": str(row["id"]),
+                "name": row["name"],
+                "color": row["color"],
+            })
+        resolved["filter_summary"]["excluded_tag_count"] = len(resolved["excluded_tags"])
+
+    # 3. Resolve labels from mode_options.label_filter
+    label_ids = []
+    if mode_options and mode_options.get("label_filter"):
+        label_ids = mode_options["label_filter"]
+    if label_ids:
+        label_query = select(
+            labels.c.id, labels.c.name, labels.c.color
+        ).where(labels.c.id.in_(label_ids))
+        result = await connection.execute(label_query)
+        for row in result.mappings():
+            resolved["labels"].append({
+                "id": str(row["id"]),
+                "name": row["name"],
+                "color": row["color"],
+            })
+        resolved["filter_summary"]["label_count"] = len(resolved["labels"])
+
+    # 4. Resolve user info
+    if user_id:
+        user_query = select(
+            users.c.id, users.c.email, users.c.full_name
+        ).where(users.c.id == user_id)
+        result = await connection.execute(user_query)
+        user_row = result.mappings().first()
+        if user_row:
+            resolved["created_by"] = {
+                "id": str(user_row["id"]),
+                "email": user_row["email"],
+                "full_name": user_row["full_name"],
+            }
+
+    # 5. Resolve project info
+    project_query = select(
+        projects.c.id, projects.c.name
+    ).where(projects.c.id == project_id)
+    result = await connection.execute(project_query)
+    project_row = result.mappings().first()
+    if project_row:
+        resolved["project"] = {
+            "id": project_row["id"],
+            "name": project_row["name"],
+        }
+
+    return resolved
 
 
 class ExportService:
@@ -159,6 +262,21 @@ class ExportService:
             mode_label = export_config.export_mode.value.title()
             name = f"{mode_label} Export v{version_number}"
 
+        # Resolve metadata (human-readable names for versioning)
+        filter_snapshot_dict = export_config.filter_snapshot.model_dump(mode='json')
+        mode_options_dict = (
+            export_config.mode_options.model_dump(mode='json')
+            if export_config.mode_options
+            else None
+        )
+        resolved_metadata = await resolve_export_metadata(
+            connection,
+            project_id,
+            filter_snapshot_dict,
+            mode_options_dict,
+            user_id,
+        )
+
         # Create export record
         # Note: Use mode='json' to serialize UUIDs to strings for JSONB columns
         export_data = await ExportRepository.create(
@@ -166,7 +284,7 @@ class ExportService:
             project_id=project_id,
             export_mode=export_config.export_mode.value,
             output_format=export_config.output_format.value,
-            filter_snapshot=export_config.filter_snapshot.model_dump(mode='json'),
+            filter_snapshot=filter_snapshot_dict,
             name=name,
             version_number=version_number,
             include_images=export_config.include_images,
@@ -176,14 +294,11 @@ class ExportService:
                 if export_config.classification_config
                 else None
             ),
-            mode_options=(
-                export_config.mode_options.model_dump(mode='json')
-                if export_config.mode_options
-                else None
-            ),
+            mode_options=mode_options_dict,
             version_mode=export_config.version_mode.value,
             version_value=export_config.version_value,
             message=export_config.message,
+            resolved_metadata=resolved_metadata,
             user_id=user_id,
         )
 
@@ -592,8 +707,9 @@ def build_coco_json(
     export_mode: str,
     include_bbox_from_seg: bool = False,
     include_bbox_alongside_seg: bool = False,
+    export_metadata: dict | None = None,
 ) -> dict:
-    """Build COCO JSON format."""
+    """Build COCO JSON format with embedded export configuration."""
     # Build categories
     categories = []
     label_id_to_idx = {}
@@ -700,13 +816,45 @@ def build_coco_json(
                 coco_annotations.append(coco_ann)
                 ann_idx += 1
 
+    # Build info section with export configuration
+    info = {
+        "description": "Exported from Annotate ANU",
+        "version": "1.0",
+        "year": datetime.now().year,
+        "date_created": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # Add contributor if available
+    if export_metadata and export_metadata.get("created_by"):
+        user = export_metadata["created_by"]
+        info["contributor"] = f"{user.get('full_name', '')} <{user.get('email', '')}>"
+
+    # Add export_config with all metadata for self-documenting exports
+    if export_metadata:
+        info["export_config"] = {
+            "export_id": export_metadata.get("export_id"),
+            "version_number": export_metadata.get("version_number"),
+            "export_mode": export_metadata.get("export_mode"),
+            "output_format": export_metadata.get("output_format"),
+            "include_images": export_metadata.get("include_images"),
+            "project": export_metadata.get("project"),
+            "filter": {
+                "tags": export_metadata.get("tags", []),
+                "excluded_tags": export_metadata.get("excluded_tags", []),
+                "include_match_mode": export_metadata.get("filter_summary", {}).get(
+                    "include_match_mode", "OR"
+                ),
+                "exclude_match_mode": export_metadata.get("filter_summary", {}).get(
+                    "exclude_match_mode", "OR"
+                ),
+            },
+            "labels": export_metadata.get("labels", []),
+            "splits": export_metadata.get("splits"),
+            "statistics": export_metadata.get("statistics"),
+        }
+
     return {
-        "info": {
-            "description": "Exported from Annotate ANU",
-            "version": "1.0",
-            "year": datetime.now().year,
-            "date_created": datetime.now(timezone.utc).isoformat(),
-        },
+        "info": info,
         "licenses": [],
         "images": coco_images,
         "annotations": coco_annotations,

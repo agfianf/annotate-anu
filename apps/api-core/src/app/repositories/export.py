@@ -3,10 +3,11 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import delete, func, insert, select, update, outerjoin
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.models.export import exports, saved_filters
+from app.models.user import users
 
 
 class SavedFilterRepository:
@@ -122,6 +123,7 @@ class ExportRepository:
         version_mode: str = "latest",
         version_value: str | None = None,
         message: str | None = None,
+        resolved_metadata: dict | None = None,
         user_id: UUID | None = None,
     ) -> dict:
         """Create a new export record."""
@@ -139,6 +141,7 @@ class ExportRepository:
             "version_mode": version_mode,
             "version_value": version_value,
             "message": message,
+            "resolved_metadata": resolved_metadata,
             "created_by": user_id,
             "status": "pending",
         }
@@ -152,11 +155,40 @@ class ExportRepository:
         connection: AsyncConnection,
         export_id: UUID,
     ) -> dict | None:
-        """Get an export by ID."""
-        stmt = select(exports).where(exports.c.id == export_id)
+        """Get an export by ID with user info."""
+        stmt = (
+            select(
+                exports,
+                users.c.id.label("user_id"),
+                users.c.email.label("user_email"),
+                users.c.full_name.label("user_full_name"),
+            )
+            .select_from(
+                outerjoin(exports, users, exports.c.created_by == users.c.id)
+            )
+            .where(exports.c.id == export_id)
+        )
         result = await connection.execute(stmt)
         row = result.fetchone()
-        return dict(row._mapping) if row else None
+        if not row:
+            return None
+
+        row_dict = dict(row._mapping)
+        # Extract user info into created_by_user
+        user_id = row_dict.pop("user_id", None)
+        user_email = row_dict.pop("user_email", None)
+        user_full_name = row_dict.pop("user_full_name", None)
+
+        if user_id and user_email and user_full_name:
+            row_dict["created_by_user"] = {
+                "id": user_id,
+                "email": user_email,
+                "full_name": user_full_name,
+            }
+        else:
+            row_dict["created_by_user"] = None
+
+        return row_dict
 
     @staticmethod
     async def list_for_project(
@@ -166,29 +198,66 @@ class ExportRepository:
         page_size: int = 20,
         status: str | None = None,
         export_mode: str | None = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
     ) -> tuple[list[dict], int]:
-        """List exports for a project with pagination and optional filters."""
-        # Base query
-        base_query = select(exports).where(exports.c.project_id == project_id)
-
-        # Apply filters
+        """List exports for a project with pagination, filters, sorting, and user info."""
+        # Base filter conditions
+        conditions = [exports.c.project_id == project_id]
         if status:
-            base_query = base_query.where(exports.c.status == status)
+            conditions.append(exports.c.status == status)
         if export_mode:
-            base_query = base_query.where(exports.c.export_mode == export_mode)
+            conditions.append(exports.c.export_mode == export_mode)
 
-        # Count total
-        count_stmt = select(func.count()).select_from(base_query.subquery())
+        # Count total (from exports table only)
+        count_base = select(exports).where(*conditions)
+        count_stmt = select(func.count()).select_from(count_base.subquery())
         total = (await connection.execute(count_stmt)).scalar() or 0
 
-        # Get page
+        # Select exports with user info via LEFT JOIN
+        # Select all export columns and user columns for created_by_user
         stmt = (
-            base_query.order_by(exports.c.created_at.desc())
-            .offset((page - 1) * page_size)
-            .limit(page_size)
+            select(
+                exports,
+                users.c.id.label("user_id"),
+                users.c.email.label("user_email"),
+                users.c.full_name.label("user_full_name"),
+            )
+            .select_from(
+                outerjoin(exports, users, exports.c.created_by == users.c.id)
+            )
+            .where(*conditions)
         )
+
+        # Apply sorting
+        sort_column = exports.c.version_number if sort_by == "version_number" else exports.c.created_at
+        if sort_order == "asc":
+            stmt = stmt.order_by(sort_column.asc())
+        else:
+            stmt = stmt.order_by(sort_column.desc())
+
+        # Apply pagination
+        stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+
         result = await connection.execute(stmt)
-        items = [dict(row._mapping) for row in result.fetchall()]
+        items = []
+        for row in result.fetchall():
+            row_dict = dict(row._mapping)
+            # Extract user info into created_by_user
+            user_id = row_dict.pop("user_id", None)
+            user_email = row_dict.pop("user_email", None)
+            user_full_name = row_dict.pop("user_full_name", None)
+
+            if user_id and user_email and user_full_name:
+                row_dict["created_by_user"] = {
+                    "id": user_id,
+                    "email": user_email,
+                    "full_name": user_full_name,
+                }
+            else:
+                row_dict["created_by_user"] = None
+
+            items.append(row_dict)
 
         return items, total
 

@@ -11,6 +11,8 @@ export type TaskSplit = 'train' | 'val' | 'test';
 export type VersionMode = 'latest' | 'job_version' | 'timestamp';
 export type ClassificationMappingMode = 'categorized' | 'free_form';
 export type ExportStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type ExportSortBy = 'created_at' | 'version_number';
+export type SortOrder = 'asc' | 'desc';
 
 // ============================================================================
 // Configuration Types
@@ -96,6 +98,44 @@ export interface ExportSummary {
   split_counts: Record<string, number>;
 }
 
+export interface CreatedByUser {
+  id: string;
+  email: string;
+  full_name: string;
+}
+
+export interface ResolvedTagInfo {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface ResolvedLabelInfo {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export interface ResolvedProjectInfo {
+  id: number;
+  name: string;
+}
+
+export interface ResolvedMetadata {
+  tags: ResolvedTagInfo[];
+  excluded_tags: ResolvedTagInfo[];
+  labels: ResolvedLabelInfo[];
+  created_by?: CreatedByUser;
+  project?: ResolvedProjectInfo;
+  filter_summary: {
+    tag_count: number;
+    excluded_tag_count: number;
+    label_count: number;
+    include_match_mode: 'AND' | 'OR';
+    exclude_match_mode: 'AND' | 'OR';
+  };
+}
+
 export interface Export {
   id: string;
   project_id: number;
@@ -116,7 +156,9 @@ export interface Export {
   message?: string;
   error_message?: string;
   summary?: ExportSummary;
+  resolved_metadata?: ResolvedMetadata;
   created_by?: string;
+  created_by_user?: CreatedByUser;
   created_at: string;
   completed_at?: string;
 }
@@ -126,6 +168,15 @@ export interface ExportListResponse {
   total: number;
   page: number;
   page_size: number;
+}
+
+export interface ExportListParams {
+  page?: number;
+  pageSize?: number;
+  status?: ExportStatus;
+  exportMode?: ExportMode;
+  sortBy?: ExportSortBy;
+  sortOrder?: SortOrder;
 }
 
 // ============================================================================

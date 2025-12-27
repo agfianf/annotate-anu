@@ -74,6 +74,7 @@ async def _generate_export_async(export_id: str) -> dict:
         classification_config = export_data.get("classification_config")
         mode_options = export_data.get("mode_options") or {}
         include_images = export_data["include_images"]
+        resolved_metadata = export_data.get("resolved_metadata") or {}
 
         try:
             # Query filtered images
@@ -111,11 +112,21 @@ async def _generate_export_async(export_id: str) -> dict:
                     mode_options.get("label_filter"),
                     mode_options.get("include_bbox_from_segmentation", False),
                 )
+                # Enhance resolved_metadata with export-specific data
+                export_metadata = {
+                    **resolved_metadata,
+                    "export_id": export_id,
+                    "version_number": export_data.get("version_number"),
+                    "export_mode": export_mode,
+                    "output_format": output_format,
+                    "include_images": include_images,
+                }
                 content = build_coco_json(
                     images_data,
                     annotations,
                     labels_data,
                     "detection",
+                    export_metadata=export_metadata,
                 )
                 class_counts = {}
                 for ann in annotations:
@@ -133,6 +144,15 @@ async def _generate_export_async(export_id: str) -> dict:
                     mode_options.get("label_filter"),
                     mode_options.get("convert_bbox_to_segmentation", False),
                 )
+                # Enhance resolved_metadata with export-specific data
+                export_metadata = {
+                    **resolved_metadata,
+                    "export_id": export_id,
+                    "version_number": export_data.get("version_number"),
+                    "export_mode": export_mode,
+                    "output_format": output_format,
+                    "include_images": include_images,
+                }
                 content = build_coco_json(
                     images_data,
                     annotations,
@@ -141,6 +161,7 @@ async def _generate_export_async(export_id: str) -> dict:
                     include_bbox_alongside_seg=mode_options.get(
                         "include_bbox_alongside_segmentation", False
                     ),
+                    export_metadata=export_metadata,
                 )
                 class_counts = {}
                 for ann in annotations:

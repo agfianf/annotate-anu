@@ -51,6 +51,20 @@ class ExportStatus(str, Enum):
     FAILED = "failed"
 
 
+class ExportSortBy(str, Enum):
+    """Export list sort field."""
+
+    CREATED_AT = "created_at"
+    VERSION_NUMBER = "version_number"
+
+
+class SortOrder(str, Enum):
+    """Sort order."""
+
+    ASC = "asc"
+    DESC = "desc"
+
+
 # ============================================================================
 # Configuration Schemas
 # ============================================================================
@@ -208,6 +222,14 @@ class ExportSummary(BaseModel):
     )
 
 
+class CreatedByUser(BaseModel):
+    """User info for created_by field."""
+
+    id: UUID
+    email: str
+    full_name: str
+
+
 class ExportResponse(BaseModel):
     """Export response schema."""
 
@@ -230,7 +252,12 @@ class ExportResponse(BaseModel):
     message: str | None = None
     error_message: str | None = None
     summary: ExportSummary | None = None
+    resolved_metadata: dict | None = Field(
+        None,
+        description="Resolved metadata with human-readable names for tags, labels, user, project",
+    )
     created_by: UUID | None = None
+    created_by_user: CreatedByUser | None = None
     created_at: datetime
     completed_at: datetime | None = None
 

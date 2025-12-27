@@ -539,6 +539,29 @@ export function ExportWizardModal({
           {/* Step 3: Export Options */}
           {state.step === 3 && (
             <div className="space-y-5">
+              {/* Export Description - More Prominent */}
+              <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <label className="block text-sm font-medium text-emerald-800 mb-2">
+                  Export Description
+                </label>
+                <textarea
+                  value={state.message}
+                  onChange={(e) => setState((s) => ({ ...s, message: e.target.value }))}
+                  placeholder="Describe what this export contains and its purpose. For example: 'Training dataset for YOLOv8 object detection model - contains verified annotations only'"
+                  rows={3}
+                  maxLength={1000}
+                  className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-gray-900 placeholder-gray-400 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
+                />
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-xs text-emerald-600">
+                    A good description helps track export history
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {state.message.length}/1000
+                  </span>
+                </div>
+              </div>
+
               {/* Output Format */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -582,20 +605,6 @@ export function ExportWizardModal({
                   </div>
                 </div>
               </label>
-
-              {/* Export Note */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Export Note (optional)
-                </label>
-                <input
-                  type="text"
-                  value={state.message}
-                  onChange={(e) => setState((s) => ({ ...s, message: e.target.value }))}
-                  placeholder="e.g., Training dataset v1.0"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                />
-              </div>
             </div>
           )}
 

@@ -6,6 +6,7 @@ import type {
   ClassificationOptionsResponse,
   Export,
   ExportCreate,
+  ExportListParams,
   ExportListResponse,
   ExportPreview,
   SavedFilter,
@@ -106,22 +107,19 @@ export const exportsApi = {
   },
 
   /**
-   * List export history for a project.
+   * List export history for a project with optional filtering and sorting.
    */
   async list(
     projectId: string | number,
-    options?: {
-      page?: number;
-      pageSize?: number;
-      status?: string;
-      exportMode?: string;
-    }
+    options?: ExportListParams
   ): Promise<ExportListResponse> {
     const params = new URLSearchParams();
     if (options?.page) params.append('page', String(options.page));
     if (options?.pageSize) params.append('page_size', String(options.pageSize));
     if (options?.status) params.append('status', options.status);
     if (options?.exportMode) params.append('export_mode', options.exportMode);
+    if (options?.sortBy) params.append('sort_by', options.sortBy);
+    if (options?.sortOrder) params.append('sort_order', options.sortOrder);
 
     const response = await apiClient.get<ApiResponse<ExportListResponse>>(
       `/api/v1/projects/${projectId}/exports?${params.toString()}`
@@ -281,4 +279,61 @@ export function getOutputFormatLabel(format: string): string {
     default:
       return format;
   }
+}
+
+/**
+ * Get download URL for an export artifact.
+ * This URL requires authentication to access.
+ */
+export function getExportDownloadUrl(projectId: string | number, exportId: string): string {
+  const baseUrl = import.meta.env.VITE_API_CORE_URL || '';
+  return `${baseUrl}/api/v1/projects/${projectId}/exports/${exportId}/download`;
+}
+
+/**
+ * Generate a human-readable filter summary from filter snapshot.
+ */
+export function getFilterSummary(filterSnapshot: Record<string, unknown>): string {
+  const parts: string[] = [];
+
+  const tagIds = filterSnapshot.tag_ids as string[] | undefined;
+  const excludedTagIds = filterSnapshot.excluded_tag_ids as string[] | undefined;
+  const taskIds = filterSnapshot.task_ids as number[] | undefined;
+  const jobId = filterSnapshot.job_id as number | undefined;
+  const isAnnotated = filterSnapshot.is_annotated as boolean | undefined;
+  const filepathPaths = filterSnapshot.filepath_paths as string[] | undefined;
+  const includeMode = filterSnapshot.include_match_mode as string | undefined;
+
+  if (tagIds && tagIds.length > 0) {
+    const mode = includeMode === 'AND' ? 'AND' : 'OR';
+    parts.push(`${tagIds.length} tag${tagIds.length > 1 ? 's' : ''} (${mode})`);
+  }
+
+  if (excludedTagIds && excludedTagIds.length > 0) {
+    parts.push(`${excludedTagIds.length} excluded`);
+  }
+
+  if (taskIds && taskIds.length > 0) {
+    parts.push(`${taskIds.length} task${taskIds.length > 1 ? 's' : ''}`);
+  }
+
+  if (jobId) {
+    parts.push(`1 job`);
+  }
+
+  if (isAnnotated === true) {
+    parts.push('annotated only');
+  } else if (isAnnotated === false) {
+    parts.push('not annotated');
+  }
+
+  if (filepathPaths && filepathPaths.length > 0) {
+    parts.push(`${filepathPaths.length} path${filepathPaths.length > 1 ? 's' : ''}`);
+  }
+
+  if (parts.length === 0) {
+    return 'No filters';
+  }
+
+  return parts.join(', ');
 }
