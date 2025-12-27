@@ -1,17 +1,20 @@
 /**
  * Model selector dropdown component for the header
+ * Uses portal for dropdown to avoid overflow issues
  */
 
 import { ChevronDown, Sparkles, Settings, RefreshCw } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type { AvailableModel } from '../types/byom'
 
 interface ModelSelectorProps {
-  selectedModel: AvailableModel
+  selectedModel: AvailableModel | null
   allModels: AvailableModel[]
   onSelectModel: (id: string) => void
   onOpenSettings?: () => void
   onRefresh?: () => void
+  isNotConfigured?: boolean // True when job mode has no models configured
 }
 
 export function ModelSelector({
@@ -20,14 +23,45 @@ export function ModelSelector({
   onSelectModel,
   onOpenSettings,
   onRefresh,
+  isNotConfigured = false,
 }: ModelSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
+
+  // Calculate dropdown position relative to button
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      const dropdownHeight = 320 // max-h-80 = 320px
+      const viewportHeight = window.innerHeight
+      const spaceBelow = viewportHeight - rect.bottom
+      const spaceAbove = rect.top
+
+      // Open upward if not enough space below
+      const openUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow
+
+      setDropdownStyle({
+        position: 'fixed',
+        right: window.innerWidth - rect.right,
+        ...(openUpward
+          ? { bottom: viewportHeight - rect.top + 4 }
+          : { top: rect.bottom + 4 }),
+        width: 288, // w-72
+        zIndex: 9999,
+      })
+    }
+  }, [isOpen])
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(target) &&
+        buttonRef.current && !buttonRef.current.contains(target)
+      ) {
         setIsOpen(false)
       }
     }
@@ -46,28 +80,40 @@ export function ModelSelector({
     setIsOpen(false)
   }
 
+  // Show message when models aren't configured for this project
+  if (isNotConfigured) {
+    return (
+      <div className="glass flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm shadow-sm">
+        <Sparkles className="w-4 h-4 text-gray-400" />
+        <span className="text-gray-500">No model configured</span>
+      </div>
+    )
+  }
+
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative">
       {/* Trigger Button */}
       <button
+        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
         className="glass flex items-center gap-2 px-3 py-1.5 hover:bg-white/80
                    rounded-lg transition-all text-sm shadow-sm"
         title="Select Model"
       >
         <Sparkles className="w-4 h-4 text-emerald-600" />
-        <span className="text-gray-900 font-medium">{selectedModel.name}</span>
-        {!selectedModel.is_healthy && (
+        <span className="text-gray-900 font-medium">{selectedModel?.name || 'Select Model'}</span>
+        {selectedModel && !selectedModel.is_healthy && (
           <span className="w-2 h-2 bg-red-500 rounded-full" title="Model Unhealthy" />
         )}
         <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
+      {/* Dropdown Menu - rendered via portal */}
+      {isOpen && createPortal(
         <div
-          className="absolute right-0 mt-2 w-72 glass-strong
-                     rounded-lg shadow-xl z-50 overflow-hidden"
+          ref={dropdownRef}
+          style={dropdownStyle}
+          className="glass-strong rounded-lg shadow-xl overflow-hidden"
         >
           {/* Header */}
           <div className="px-3 py-2 bg-white/40 border-b border-gray-200 flex items-center justify-between">
@@ -182,7 +228,8 @@ export function ModelSelector({
               </button>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

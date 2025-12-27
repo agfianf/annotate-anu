@@ -42,7 +42,12 @@ export default function GlassMultiSelect({
   maxDisplayItems = 2,
 }: GlassMultiSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 0 });
+  const [position, setPosition] = useState<{
+    top?: number;
+    bottom?: number;
+    left: number;
+    width: number;
+  }>({ left: 0, width: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const prefersReducedMotion = useReducedMotion();
@@ -56,11 +61,19 @@ export default function GlassMultiSelect({
     if (!isOpen && triggerRef.current) {
       // Calculate position BEFORE showing
       const rect = triggerRef.current.getBoundingClientRect();
-      setPosition({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-      });
+      const dropdownHeight = 280; // max-h-[280px]
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const spaceAbove = rect.top;
+
+      // Open upward if not enough space below
+      const openUpward = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+
+      setPosition(
+        openUpward
+          ? { bottom: viewportHeight - rect.top + 4, top: undefined, left: rect.left, width: rect.width }
+          : { top: rect.bottom + 4, bottom: undefined, left: rect.left, width: rect.width }
+      );
       setIsOpen(true);
     } else {
       setIsOpen(false);
@@ -244,6 +257,7 @@ export default function GlassMultiSelect({
               className="fixed z-[9999]"
               style={{
                 top: position.top,
+                bottom: position.bottom,
                 left: position.left,
                 width: position.width,
               }}

@@ -34,8 +34,9 @@ export interface JobStorageState {
   jobId: string | null
   jobStatus: string | null
 
-  // BYOM - allowed models for project (null = all models)
-  allowedModelIds: string[] | null
+  // BYOM - allowed models for project
+  // undefined = solo mode (all models), null = job mode not configured, string[] = specific models
+  allowedModelIds: string[] | null | undefined
 
   // Auto-save state
   autoSaveConfig: AutoSaveConfig
@@ -604,7 +605,7 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
       isJobMode: false,
       jobId: null,
       jobStatus: null,
-      allowedModelIds: null, // No filtering in solo mode
+      allowedModelIds: undefined, // undefined = solo mode, show all models
       autoSaveConfig,
       setAutoSaveConfig,
       syncStatus: 'idle' as const,
@@ -633,6 +634,7 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
     isJobMode: true,
     jobId,
     jobStatus: jobContext.job?.status ?? null,
+    // null = not configured (show message), string[] = specific models allowed
     allowedModelIds: jobContext.job?.allowed_model_ids ?? null,
 
     // Auto-save state

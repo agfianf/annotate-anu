@@ -46,10 +46,22 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
   const [isSavingAnnotationTypes, setIsSavingAnnotationTypes] = useState(false);
 
   // Model configuration state
-  const [availableModels, setAvailableModels] = useState<RegisteredModel[]>([]);
+  const [byomModels, setByomModels] = useState<RegisteredModel[]>([]);
   const [isLoadingModels, setIsLoadingModels] = useState(true);
   const [allowedModelIds, setAllowedModelIds] = useState<string[]>(project.allowed_model_ids || []);
   const [isSavingModels, setIsSavingModels] = useState(false);
+
+  // SAM3 built-in model for selection
+  const SAM3_MODEL = {
+    id: 'sam3',
+    name: 'SAM3 (Built-in)',
+    is_active: true,
+    is_healthy: true,
+    description: 'Segment Anything Model 3 - General purpose segmentation',
+  };
+
+  // Combined models list (SAM3 + BYOM)
+  const allSelectableModels = [SAM3_MODEL, ...byomModels];
 
   // Load available models
   useEffect(() => {
@@ -57,7 +69,7 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
       setIsLoadingModels(true);
       try {
         const response = await byomClient.listModels(false);
-        setAvailableModels(response.models);
+        setByomModels(response.models);
       } catch (err) {
         console.error('Failed to load models:', err);
       } finally {
@@ -605,30 +617,18 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
                 Select which AI models can be used in this project. Leave empty to allow all models.
               </p>
 
-              {/* SAM3 Built-in Badge */}
-              <FadeIn direction="left" delay={0.15}>
-                <div className="mb-3 p-2 bg-emerald-50 rounded-lg border border-emerald-100">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-sm font-medium text-emerald-700">SAM3</span>
-                    <span className="text-xs text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">Built-in</span>
-                  </div>
-                  <p className="text-xs text-emerald-600 mt-1 ml-4">Always available for all projects</p>
-                </div>
-              </FadeIn>
-
-              {/* BYOM Models Multi-Select */}
-              <FadeIn direction="up" delay={0.2}>
+              {/* Models Multi-Select (SAM3 + BYOM) */}
+              <FadeIn direction="up" delay={0.15}>
                 <div className={`${!canEdit && 'opacity-60 pointer-events-none'}`}>
                   <GlassMultiSelect
-                    options={availableModels.map((model) => ({
+                    options={allSelectableModels.map((model) => ({
                       value: model.id,
                       label: model.name,
-                      sublabel: model.is_healthy ? 'Healthy' : 'Unhealthy',
+                      sublabel: model.id === 'sam3' ? 'Built-in' : (model.is_healthy ? 'Healthy' : 'Unhealthy'),
                       icon: (
                         <div
                           className={`w-2 h-2 rounded-full ${
-                            model.is_healthy ? 'bg-green-500' : 'bg-red-500'
+                            model.id === 'sam3' ? 'bg-emerald-500' : (model.is_healthy ? 'bg-green-500' : 'bg-red-500')
                           }`}
                         />
                       ),
@@ -636,10 +636,10 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
                     }))}
                     value={allowedModelIds}
                     onChange={setAllowedModelIds}
-                    placeholder="Select additional models (optional)..."
+                    placeholder="Select allowed models..."
                     isLoading={isLoadingModels}
                     disabled={!canEdit}
-                    emptyMessage="No registered models. Go to Model Management to add models."
+                    emptyMessage="No models available."
                     maxDisplayItems={3}
                   />
                 </div>

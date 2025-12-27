@@ -231,7 +231,7 @@ function AnnotationApp() {
   } = storage
 
   // BYOM model registry - filter by project's allowed models in job mode
-  const { allModels, selectedModel, selectModel, refreshModels } = useModelRegistry(allowedModelIds)
+  const { allModels, selectedModel, selectModel, refreshModels, isNotConfigured } = useModelRegistry(allowedModelIds)
 
   // History for undo/redo
   const { recordChange, undo, redo, canUndo, canRedo } = useHistory(currentImageId)
@@ -1011,7 +1011,8 @@ function AnnotationApp() {
             allModels={allModels}
             onSelectModel={selectModel}
             onOpenSettings={isJobMode ? undefined : () => navigate('/models')}
-            onRefresh={refreshModels}
+            onRefresh={isNotConfigured ? undefined : refreshModels}
+            isNotConfigured={isNotConfigured}
           />
 
           <button

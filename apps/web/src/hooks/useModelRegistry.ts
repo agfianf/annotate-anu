@@ -30,6 +30,12 @@ const SAM3_BUILTIN: AvailableModel = {
   description: 'Segment Anything Model 3 - General purpose segmentation',
 }
 
+/**
+ * @param allowedModelIds - Model IDs allowed for this project
+ *   - undefined: Solo mode, show all models (no restrictions)
+ *   - null: Job mode but no models configured, show nothing
+ *   - string[]: Job mode with specific models allowed
+ */
 export function useModelRegistry(allowedModelIds?: string[] | null) {
   const [registeredModels, setRegisteredModels] = useState<RegisteredModel[]>([])
   const [selectedModelId, setSelectedModelId] = useState<string>(() => {
@@ -38,6 +44,9 @@ export function useModelRegistry(allowedModelIds?: string[] | null) {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Check if models are not configured (null means job mode with no config)
+  const isNotConfigured = allowedModelIds === null
 
   /**
    * Load registered models from API
@@ -66,7 +75,7 @@ export function useModelRegistry(allowedModelIds?: string[] | null) {
    * Compute all available models (SAM3 + BYOM), filtered by project if applicable
    */
   const allModels: AvailableModel[] = useMemo(() => {
-    let byomModels: AvailableModel[] = registeredModels
+    const byomModels: AvailableModel[] = registeredModels
       .filter((m) => m.is_active)
       .map((m) => ({
         id: m.id,
@@ -85,13 +94,21 @@ export function useModelRegistry(allowedModelIds?: string[] | null) {
         description: m.description || undefined,
       }))
 
-    // Apply project-level filter if provided
-    if (allowedModelIds && allowedModelIds.length > 0) {
-      byomModels = byomModels.filter((m) => allowedModelIds.includes(m.id))
+    // Combine SAM3 + BYOM models
+    const allAvailable = [SAM3_BUILTIN, ...byomModels]
+
+    // Job mode with no models configured - return empty array
+    if (allowedModelIds === null) {
+      return []
     }
 
-    // SAM3 is always available as built-in
-    return [SAM3_BUILTIN, ...byomModels]
+    // Job mode with specific models allowed - filter
+    if (allowedModelIds && allowedModelIds.length > 0) {
+      return allAvailable.filter((m) => allowedModelIds.includes(m.id))
+    }
+
+    // Solo mode (undefined) or empty array - show all models
+    return allAvailable
   }, [registeredModels, allowedModelIds])
 
   /**
@@ -138,5 +155,6 @@ export function useModelRegistry(allowedModelIds?: string[] | null) {
     refreshModels,
     loading,
     error,
+    isNotConfigured, // True when job mode has no models configured
   }
 }
