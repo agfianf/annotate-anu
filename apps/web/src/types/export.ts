@@ -108,6 +108,9 @@ export interface ResolvedTagInfo {
   id: string;
   name: string;
   color: string;
+  category_id?: string;
+  category_name?: string;
+  category_color?: string;
 }
 
 export interface ResolvedLabelInfo {
@@ -246,3 +249,6 @@ export const initialExportWizardState: ExportWizardState = {
   versionMode: 'latest',
   message: '',
 };
+
+// Re-export diff types
+export * from './export-diff';

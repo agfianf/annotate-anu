@@ -1,8 +1,10 @@
 /**
  * Export History Panel - Lists past exports with full metadata, filtering, and sorting.
+ * Supports List View and Timeline View with compare mode for diffing exports.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Download,
   Trash2,
@@ -22,6 +24,10 @@ import {
   User,
   Filter,
   Palette,
+  List,
+  GitBranch,
+  ArrowLeftRight,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Export, ExportMode, ExportSortBy, SortOrder } from '@/types/export';
@@ -35,6 +41,12 @@ import {
   pollExportStatus,
   getExportDownloadUrl,
 } from '@/lib/export-client';
+import { ExportTimelineView } from './ExportTimelineView';
+import { ExportDiffModal } from './ExportDiffModal';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { SPRING_CONFIGS } from '@/lib/motion-config';
+
+type ViewMode = 'list' | 'timeline';
 
 interface ExportHistoryPanelProps {
   projectId: number | string;
@@ -47,6 +59,7 @@ export function ExportHistoryPanel({
   className = '',
   onExportReady,
 }: ExportHistoryPanelProps) {
+  const prefersReducedMotion = useReducedMotion();
   const [exports, setExports] = useState<Export[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +72,72 @@ export function ExportHistoryPanel({
   const [filterMode, setFilterMode] = useState<ExportMode | 'all'>('all');
   const [sortBy, setSortBy] = useState<ExportSortBy>('created_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+
+  // View mode state (persisted in localStorage)
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('exportHistoryViewMode') as ViewMode) || 'list';
+    }
+    return 'list';
+  });
+
+  // Compare mode state
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedExports, setSelectedExports] = useState<Set<string>>(new Set());
+
+  // Diff modal state
+  const [diffModalOpen, setDiffModalOpen] = useState(false);
+  const [diffExportA, setDiffExportA] = useState<Export | null>(null);
+  const [diffExportB, setDiffExportB] = useState<Export | null>(null);
+
+  // Persist view mode preference
+  useEffect(() => {
+    localStorage.setItem('exportHistoryViewMode', viewMode);
+  }, [viewMode]);
+
+  // Get selected exports as array for comparison
+  const selectedExportsArray = useMemo(() => {
+    return exports.filter((e) => selectedExports.has(e.id));
+  }, [exports, selectedExports]);
+
+  // Toggle export selection for compare mode
+  const toggleExportSelection = (exportId: string) => {
+    setSelectedExports((prev) => {
+      const next = new Set(prev);
+      if (next.has(exportId)) {
+        next.delete(exportId);
+      } else if (next.size < 2) {
+        next.add(exportId);
+      }
+      return next;
+    });
+  };
+
+  // Handle compare button click
+  const handleCompare = () => {
+    if (selectedExportsArray.length !== 2) return;
+
+    // Sort by created_at to determine which is older
+    const sorted = [...selectedExportsArray].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+    setDiffExportA(sorted[0]);
+    setDiffExportB(sorted[1]);
+    setDiffModalOpen(true);
+  };
+
+  // Handle diff click from timeline
+  const handleDiffClick = (exportA: Export, exportB: Export) => {
+    setDiffExportA(exportA);
+    setDiffExportB(exportB);
+    setDiffModalOpen(true);
+  };
+
+  // Exit compare mode
+  const exitCompareMode = () => {
+    setCompareMode(false);
+    setSelectedExports(new Set());
+  };
 
   const loadExports = useCallback(async () => {
     try {
@@ -238,17 +317,111 @@ export function ExportHistoryPanel({
     <div className={className}>
       {/* Header with Controls */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="font-semibold text-gray-900">Export History</h3>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={loadExports}
-          disabled={isLoading}
-        >
-          <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <h3 className="font-semibold text-gray-900">Export History</h3>
+
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
+                ${viewMode === 'list'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+                }
+              `}
+              title="List View"
+            >
+              <List className="w-4 h-4" />
+              <span className="hidden sm:inline">List</span>
+            </button>
+            <button
+              onClick={() => setViewMode('timeline')}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors
+                ${viewMode === 'timeline'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+                }
+              `}
+              title="Timeline View"
+            >
+              <GitBranch className="w-4 h-4" />
+              <span className="hidden sm:inline">Timeline</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Compare Mode Toggle (List view only) */}
+          {viewMode === 'list' && exports.length >= 2 && (
+            <Button
+              variant={compareMode ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => compareMode ? exitCompareMode() : setCompareMode(true)}
+              className={compareMode ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+            >
+              <ArrowLeftRight className="w-4 h-4 mr-1" />
+              {compareMode ? 'Exit Compare' : 'Compare'}
+            </Button>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadExports}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
+
+      {/* Compare Mode Selection Bar */}
+      <AnimatePresence>
+        {compareMode && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={prefersReducedMotion ? { duration: 0.01 } : SPRING_CONFIGS.gentle}
+            className="mb-4"
+          >
+            <div className="flex items-center justify-between p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-emerald-700">
+                <ArrowLeftRight className="w-4 h-4" />
+                <span>
+                  Select 2 exports to compare
+                  {selectedExports.size > 0 && (
+                    <span className="ml-1 font-medium">
+                      ({selectedExports.size}/2 selected)
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedExports.size === 2 && (
+                  <Button
+                    size="sm"
+                    onClick={handleCompare}
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                  >
+                    Compare Selected
+                  </Button>
+                )}
+                <button
+                  onClick={exitCompareMode}
+                  className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-100 rounded"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Filter and Sort Controls */}
       <div className="flex items-center gap-3 mb-4">
@@ -267,24 +440,26 @@ export function ExportHistoryPanel({
           </select>
         </div>
 
-        {/* Sort */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Sort:</span>
-          <select
-            value={`${sortBy}-${sortOrder}`}
-            onChange={(e) => {
-              const [newSortBy, newSortOrder] = e.target.value.split('-') as [ExportSortBy, SortOrder];
-              setSortBy(newSortBy);
-              setSortOrder(newSortOrder);
-            }}
-            className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="created_at-desc">Newest First</option>
-            <option value="created_at-asc">Oldest First</option>
-            <option value="version_number-desc">Version (High to Low)</option>
-            <option value="version_number-asc">Version (Low to High)</option>
-          </select>
-        </div>
+        {/* Sort (only in list view) */}
+        {viewMode === 'list' && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">Sort:</span>
+            <select
+              value={`${sortBy}-${sortOrder}`}
+              onChange={(e) => {
+                const [newSortBy, newSortOrder] = e.target.value.split('-') as [ExportSortBy, SortOrder];
+                setSortBy(newSortBy);
+                setSortOrder(newSortOrder);
+              }}
+              className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="created_at-desc">Newest First</option>
+              <option value="created_at-asc">Oldest First</option>
+              <option value="version_number-desc">Version (High to Low)</option>
+              <option value="version_number-asc">Version (Low to High)</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Error */}
@@ -297,26 +472,65 @@ export function ExportHistoryPanel({
         </div>
       )}
 
-      {/* Export List */}
+      {/* Export List / Timeline View */}
       {exports.length === 0 ? (
         <div className="text-center py-12 text-gray-500">
           <Download className="w-12 h-12 mx-auto mb-3 text-gray-300" />
           <p>No exports yet</p>
           <p className="text-sm">Create your first export using the Export Wizard</p>
         </div>
+      ) : viewMode === 'timeline' ? (
+        /* Timeline View */
+        <ExportTimelineView
+          exports={exports}
+          filterMode={filterMode}
+          onDiffClick={handleDiffClick}
+          onDownload={handleDownload}
+          isLoading={isLoading}
+        />
       ) : (
+        /* List View */
         <div className="space-y-4">
           {exports.map((exportData) => {
             const splits = getSplitDisplay(exportData.summary?.split_counts);
+            const isSelected = selectedExports.has(exportData.id);
 
             return (
-              <div
+              <motion.div
                 key={exportData.id}
-                className="p-4 border border-gray-200 rounded-lg bg-white hover:border-gray-300 transition-colors"
+                layout={!prefersReducedMotion}
+                className={`
+                  p-4 border rounded-lg bg-white transition-colors
+                  ${isSelected
+                    ? 'border-emerald-400 ring-2 ring-emerald-100'
+                    : 'border-gray-200 hover:border-gray-300'
+                  }
+                `}
               >
-                {/* Header Row: Version Badge + Mode, Actions */}
+                {/* Header Row: Checkbox + Version Badge + Mode, Actions */}
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2 flex-wrap">
+                    {/* Compare Mode Checkbox */}
+                    {compareMode && (
+                      <button
+                        onClick={() => toggleExportSelection(exportData.id)}
+                        className={`
+                          flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors
+                          ${isSelected
+                            ? 'bg-emerald-600 border-emerald-600 text-white'
+                            : 'border-gray-300 hover:border-emerald-400'
+                          }
+                          ${selectedExports.size >= 2 && !isSelected
+                            ? 'opacity-50 cursor-not-allowed'
+                            : ''
+                          }
+                        `}
+                        disabled={selectedExports.size >= 2 && !isSelected}
+                        aria-label={isSelected ? 'Deselect export' : 'Select export for comparison'}
+                      >
+                        {isSelected && <CheckCircle className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
                     {/* Version Badge (like a tag) */}
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
                       v{exportData.version_number || 1}
@@ -472,7 +686,7 @@ export function ExportHistoryPanel({
                             className="w-2 h-2 rounded-full"
                             style={{ backgroundColor: tag.color }}
                           />
-                          {tag.name}
+                          {tag.category_name ? `${tag.category_name}:${tag.name}` : tag.name}
                         </span>
                       ))
                     ) : (
@@ -497,7 +711,7 @@ export function ExportHistoryPanel({
                               className="w-2 h-2 rounded-full"
                               style={{ backgroundColor: tag.color }}
                             />
-                            {tag.name}
+                            {tag.category_name ? `${tag.category_name}:${tag.name}` : tag.name}
                           </span>
                         ))}
                       </>
@@ -555,11 +769,23 @@ export function ExportHistoryPanel({
                     </div>
                   </div>
                 )}
-              </div>
+              </motion.div>
             );
           })}
         </div>
       )}
+
+      {/* Diff Modal */}
+      <ExportDiffModal
+        isOpen={diffModalOpen}
+        onClose={() => {
+          setDiffModalOpen(false);
+          setDiffExportA(null);
+          setDiffExportB(null);
+        }}
+        exportA={diffExportA}
+        exportB={diffExportB}
+      />
     </div>
   );
 }

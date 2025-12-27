@@ -69,33 +69,57 @@ async def resolve_export_metadata(
         },
     }
 
-    # 1. Resolve included tags
+    # 1. Resolve included tags (with category info)
     tag_ids = filter_snapshot.get("tag_ids", [])
     if tag_ids:
-        tag_query = select(
-            tags.c.id, tags.c.name, tags.c.color
-        ).where(tags.c.id.in_(tag_ids))
+        tag_query = (
+            select(
+                tags.c.id,
+                tags.c.name,
+                tags.c.color,
+                tags.c.category_id,
+                tag_categories.c.name.label("category_name"),
+                tag_categories.c.color.label("category_color"),
+            )
+            .select_from(tags.join(tag_categories, tags.c.category_id == tag_categories.c.id))
+            .where(tags.c.id.in_(tag_ids))
+        )
         result = await connection.execute(tag_query)
         for row in result.mappings():
             resolved["tags"].append({
                 "id": str(row["id"]),
                 "name": row["name"],
                 "color": row["color"],
+                "category_id": str(row["category_id"]),
+                "category_name": row["category_name"],
+                "category_color": row["category_color"],
             })
         resolved["filter_summary"]["tag_count"] = len(resolved["tags"])
 
-    # 2. Resolve excluded tags
+    # 2. Resolve excluded tags (with category info)
     excluded_tag_ids = filter_snapshot.get("excluded_tag_ids", [])
     if excluded_tag_ids:
-        tag_query = select(
-            tags.c.id, tags.c.name, tags.c.color
-        ).where(tags.c.id.in_(excluded_tag_ids))
+        tag_query = (
+            select(
+                tags.c.id,
+                tags.c.name,
+                tags.c.color,
+                tags.c.category_id,
+                tag_categories.c.name.label("category_name"),
+                tag_categories.c.color.label("category_color"),
+            )
+            .select_from(tags.join(tag_categories, tags.c.category_id == tag_categories.c.id))
+            .where(tags.c.id.in_(excluded_tag_ids))
+        )
         result = await connection.execute(tag_query)
         for row in result.mappings():
             resolved["excluded_tags"].append({
                 "id": str(row["id"]),
                 "name": row["name"],
                 "color": row["color"],
+                "category_id": str(row["category_id"]),
+                "category_name": row["category_name"],
+                "category_color": row["category_color"],
             })
         resolved["filter_summary"]["excluded_tag_count"] = len(resolved["excluded_tags"])
 

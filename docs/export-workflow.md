@@ -260,14 +260,37 @@ flowchart LR
 
 ### Resolved Metadata Structure
 
+Tags now include full category information for hierarchical display:
+
 ```json
 {
   "tags": [
-    {"id": "uuid", "name": "Dog", "color": "#FF5733"},
-    {"id": "uuid", "name": "Cat", "color": "#3498DB"}
+    {
+      "id": "uuid",
+      "name": "Dog",
+      "color": "#FF5733",
+      "category_id": "uuid",
+      "category_name": "Animals",
+      "category_color": "#10B981"
+    },
+    {
+      "id": "uuid",
+      "name": "Cat",
+      "color": "#3498DB",
+      "category_id": "uuid",
+      "category_name": "Animals",
+      "category_color": "#10B981"
+    }
   ],
   "excluded_tags": [
-    {"id": "uuid", "name": "Blurry", "color": "#999999"}
+    {
+      "id": "uuid",
+      "name": "Blurry",
+      "color": "#999999",
+      "category_id": "uuid",
+      "category_name": "Quality",
+      "category_color": "#F59E0B"
+    }
   ],
   "labels": [
     {"id": "uuid", "name": "person", "color": "#10B981"},
@@ -291,6 +314,8 @@ flowchart LR
   }
 }
 ```
+
+**Tag Display Format**: Tags are displayed as `{category}:{tag-name}` (e.g., `Animals:Dog`, `Quality:Blurry`) to provide context about the tag's category hierarchy.
 
 ## Export Modes
 
@@ -595,9 +620,9 @@ Export events are automatically logged to the Activity Timeline:
 - **Export completed**: When the export finishes successfully (with image/annotation counts)
 - **Export failed**: When an export encounters an error (with error details)
 
-## Future: Data Versioning Features
+## Data Versioning Features
 
-With `resolved_metadata` stored in the database, future features can include:
+With `resolved_metadata` stored in the database (including category info for tags), the following features are available:
 
 ```mermaid
 flowchart LR
@@ -607,24 +632,60 @@ flowchart LR
         E[Export v3] --> F[resolved_metadata]
     end
 
+    subgraph Implemented["Implemented Features"]
+        G[Version Diff ✓]
+        H[Timeline View ✓]
+        I[Compare Mode ✓]
+    end
+
     subgraph Future["Future Features"]
-        G[Version Diff]
-        H[Timeline View]
-        I[Rollback/Restore]
+        J[Rollback/Restore]
+        K[Dataset Lineage]
     end
 
     B --> G
     D --> G
     G --> H
     H --> I
+    I --> J
+    J --> K
 ```
 
-| Feature | Description |
-|---------|-------------|
-| **Version Diff** | Compare two exports to show what changed (tags added/removed, labels changed) |
-| **Timeline View** | Visual history of dataset evolution with diffs between versions |
-| **Rollback/Restore** | Re-create a previous export with the exact same configuration |
-| **Dataset Lineage** | Track how datasets evolved over time for ML reproducibility |
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Version Diff** | ✅ Implemented | Compare two exports side-by-side showing tags added/removed/unchanged, labels changed, image/annotation count deltas with percentages |
+| **Timeline View** | ✅ Implemented | Visual timeline of exports with inline diff summaries between consecutive versions |
+| **Compare Mode** | ✅ Implemented | Select any two exports in list view to compare them |
+| **Category-Aware Tags** | ✅ Implemented | Tags displayed as `{category}:{tag-name}` format with category grouping in diffs |
+| **Rollback/Restore** | 🔮 Planned | Re-create a previous export with the exact same configuration |
+| **Dataset Lineage** | 🔮 Planned | Track how datasets evolved over time for ML reproducibility |
+
+### Compare Mode
+
+In the Export History panel, you can compare any two exports:
+
+1. Click **Compare** button to enter compare mode
+2. Select exactly 2 exports by clicking their checkboxes
+3. Click **Compare Selected** to open the diff modal
+4. Review changes across tags, labels, image counts, and split distributions
+
+### Timeline View
+
+Switch to **Timeline** view to see exports arranged chronologically with:
+- Version nodes connected by timeline
+- Inline diff summaries between consecutive exports (e.g., "+2 tags, -500 images")
+- Quick diff button to open full comparison modal
+- Filter by export mode (classification/detection/segmentation)
+
+### Diff Modal Details
+
+The diff modal shows comprehensive changes:
+- **Tags Section**: Added (green), Removed (red), Unchanged (gray) - grouped by category
+- **Excluded Tags Section**: Changes to exclusion filters
+- **Labels Section**: Annotation label changes
+- **Summary Section**: Image count, annotation count with delta and percentage
+- **Split Distribution**: Train/val/test count changes
+- **Filter Configuration**: Match mode changes (AND/OR)
 
 ## Technical Details
 
@@ -681,12 +742,25 @@ Exports run as background Celery tasks. Large exports may take several minutes.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `tags` | array | Included tags with id, name, color |
-| `excluded_tags` | array | Excluded tags with id, name, color |
+| `tags` | array | Included tags with id, name, color, category_id, category_name, category_color |
+| `excluded_tags` | array | Excluded tags with id, name, color, category_id, category_name, category_color |
 | `labels` | array | Annotation labels with id, name, color |
 | `created_by` | object | User info (id, email, full_name) |
 | `project` | object | Project info (id, name) |
 | `filter_summary` | object | Summary counts and match modes |
+
+### Tag Object Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | Tag unique identifier |
+| `name` | string | Tag name (e.g., "Dog") |
+| `color` | string | Tag color hex code |
+| `category_id` | UUID | Parent category ID |
+| `category_name` | string | Parent category name (e.g., "Animals") |
+| `category_color` | string | Parent category color hex code |
+
+Tags are displayed in the UI as `{category_name}:{name}` format for clarity.
 
 ### Database Schema
 
