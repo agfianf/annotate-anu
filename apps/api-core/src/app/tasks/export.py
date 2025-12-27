@@ -318,8 +318,11 @@ async def _query_images_for_export(
     exclude_match_mode = filter_snapshot.get("exclude_match_mode", "OR")
     task_ids = filter_snapshot.get("task_ids")
     job_id = filter_snapshot.get("job_id")
+    is_annotated = filter_snapshot.get("is_annotated")
     filepath_paths = filter_snapshot.get("filepath_paths")
     image_uids = filter_snapshot.get("image_uids")
+    file_size_min = filter_snapshot.get("file_size_min")
+    file_size_max = filter_snapshot.get("file_size_max")
 
     # Tag filters
     if tag_ids:
@@ -381,6 +384,12 @@ async def _query_images_for_export(
         uid_list = [UUID(u) if isinstance(u, str) else u for u in image_uids]
         query = query.where(shared_images.c.id.in_(uid_list))
 
+    # File size filters
+    if file_size_min is not None:
+        query = query.where(shared_images.c.file_size_bytes >= file_size_min)
+    if file_size_max is not None:
+        query = query.where(shared_images.c.file_size_bytes <= file_size_max)
+
     # Dimension filters
     if filter_snapshot.get("width_min"):
         query = query.where(shared_images.c.width >= filter_snapshot["width_min"])
@@ -390,6 +399,19 @@ async def _query_images_for_export(
         query = query.where(shared_images.c.height >= filter_snapshot["height_min"])
     if filter_snapshot.get("height_max"):
         query = query.where(shared_images.c.height <= filter_snapshot["height_max"])
+
+    # Annotation status filter
+    if is_annotated is not None:
+        annotated_subquery = (
+            select(images.c.shared_image_id)
+            .where(images.c.shared_image_id.isnot(None))
+            .where(images.c.is_annotated == True)  # noqa: E712
+            .distinct()
+        )
+        if is_annotated:
+            query = query.where(shared_images.c.id.in_(annotated_subquery))
+        else:
+            query = query.where(shared_images.c.id.notin_(annotated_subquery))
 
     result = await connection.execute(query)
     return [dict(row._mapping) for row in result.fetchall()]
