@@ -97,11 +97,11 @@ export const FileExplorerToolbar = memo(function FileExplorerToolbar({
   }
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+    <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
       <div className="flex items-center gap-2">
         <button
           onClick={onRefresh}
-          className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+          className="p-2 rounded hover:bg-gray-100 text-gray-600"
           title="Refresh"
         >
           <RefreshCw className="w-4 h-4" />
@@ -119,7 +119,7 @@ export const FileExplorerToolbar = memo(function FileExplorerToolbar({
 
         <button
           onClick={() => setShowNewFolder(!showNewFolder)}
-          className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
+          className="p-2 rounded hover:bg-gray-100 text-gray-600"
           title="New Folder"
         >
           <FolderPlus className="w-4 h-4" />
@@ -139,10 +139,10 @@ export const FileExplorerToolbar = memo(function FileExplorerToolbar({
                 placeholder="folder-name or path/to/folder"
                 mode="create"
                 disabled={createDirectory.isPending}
-                className={`px-2 py-1 text-sm border rounded bg-white dark:bg-gray-700 ${
+                className={`px-2 py-1 text-sm border rounded bg-white ${
                   validationError
-                    ? 'border-red-500 dark:border-red-500'
-                    : 'border-gray-300 dark:border-gray-600'
+                    ? 'border-red-500'
+                    : 'border-gray-300'
                 }`}
               />
               {validationError && (
@@ -164,7 +164,7 @@ export const FileExplorerToolbar = memo(function FileExplorerToolbar({
             </button>
             <button
               onClick={handleCancelNewFolder}
-              className="px-2 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+              className="px-2 py-1 text-sm text-gray-600 hover:text-gray-800"
             >
               Cancel
             </button>
@@ -175,7 +175,7 @@ export const FileExplorerToolbar = memo(function FileExplorerToolbar({
       <div className="flex items-center gap-3">
         {selectedCount > 0 && (
           <>
-            <span className="text-sm text-gray-600 dark:text-gray-300">
+            <span className="text-sm text-gray-600">
               {selectedCount} selected
             </span>
             <button

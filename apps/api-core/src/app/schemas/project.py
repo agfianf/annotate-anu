@@ -104,6 +104,10 @@ class ProjectCreate(BaseModel):
         default=["classification"],
         description="Enabled annotation types",
     )
+    allowed_model_ids: list[str] | None = Field(
+        None,
+        description="Allowed BYOM model IDs (null = all models)",
+    )
 
 
 class ProjectUpdate(BaseModel):
@@ -114,6 +118,7 @@ class ProjectUpdate(BaseModel):
     readme: str | None = None
     annotation_types: list[str] | None = None
     is_archived: bool | None = None
+    allowed_model_ids: list[str] | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -128,6 +133,7 @@ class ProjectResponse(BaseModel):
     owner_id: UUID
     storage_prefix: str | None
     is_archived: bool
+    allowed_model_ids: list[str] | None
     created_at: datetime
     updated_at: datetime
 

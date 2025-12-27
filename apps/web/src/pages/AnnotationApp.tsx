@@ -160,8 +160,8 @@ function AnnotationApp() {
     images: false,
   })
 
-  // BYOM model registry
-  const { allModels, selectedModel, selectModel, refreshModels } = useModelRegistry()
+  // BYOM model registry - initialized after storage to get allowedModelIds
+  // (actual call moved after useJobStorage)
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false)
   const [promptBboxes, setPromptBboxes] = useState<Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>>([])
   const [isBboxPromptMode, setIsBboxPromptMode] = useState(false)
@@ -227,7 +227,11 @@ function AnnotationApp() {
     dirtyImageIds, // Legacy
     dirtyImageInfo, // Enhanced
     syncHistory, // Sync history
+    allowedModelIds, // BYOM - project allowed models
   } = storage
+
+  // BYOM model registry - filter by project's allowed models in job mode
+  const { allModels, selectedModel, selectModel, refreshModels } = useModelRegistry(allowedModelIds)
 
   // History for undo/redo
   const { recordChange, undo, redo, canUndo, canRedo } = useHistory(currentImageId)

@@ -59,8 +59,8 @@ export function DropZone({
         transition-colors duration-200
         ${
           isDragActive
-            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-            : 'border-gray-300 dark:border-gray-600'
+            ? 'border-blue-500 bg-blue-50'
+            : 'border-gray-300'
         }
       `}
     >
@@ -87,10 +87,10 @@ export function DropZone({
           <>
             <Upload className="w-10 h-10 text-gray-400" />
             <div>
-              <p className="text-base font-medium text-gray-700 dark:text-gray-200">
+              <p className="text-base font-medium text-gray-700">
                 Drag and drop files or folders here
               </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              <p className="text-sm text-gray-500 mt-1">
                 or use the buttons below
               </p>
             </div>
@@ -100,7 +100,7 @@ export function DropZone({
               <button
                 type="button"
                 onClick={open}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
               >
                 <File className="w-4 h-4" />
                 Select Files

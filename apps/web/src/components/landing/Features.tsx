@@ -1,74 +1,126 @@
-import { Database, Download, Keyboard, Layers, Sparkles, Target } from 'lucide-react'
+import {
+  Box,
+  Brain,
+  Download,
+  GitCompare,
+  Layers,
+  Search,
+  Sparkles,
+  Tag,
+  Target,
+} from 'lucide-react'
+import { FadeIn, TiltCard } from '../ui/animate'
 
 const features = [
   {
-    icon: Sparkles,
-    title: 'Automated Segmentation',
+    icon: Search,
+    title: 'Image Exploration',
     description:
-      'SAM3 inference runs locally or via optimized endpoints to auto-segment objects instantly',
+      'FiftyOne-inspired image curation. Filter, sort, and explore your datasets with powerful query tools.',
+    color: 'emerald',
+  },
+  {
+    icon: Box,
+    title: 'BYOM - Bring Your Own Model',
+    description:
+      'Connect your own models via API. Support for segmentation, detection, classification, and more.',
+    color: 'chartreuse',
+  },
+  {
+    icon: Sparkles,
+    title: 'AI Segmentation',
+    description:
+      'Built-in SAM3 and other models for instant object segmentation with text or bbox prompts.',
+    color: 'emerald',
+  },
+  {
+    icon: Tag,
+    title: 'Auto-Tagging',
+    description:
+      'Automatically tag and classify images using models like Moondream, BLIP, and custom endpoints.',
+    color: 'chartreuse',
+  },
+  {
+    icon: GitCompare,
+    title: 'Embedding Visualization',
+    description:
+      'Map and visualize image embeddings. Cluster similar images and find outliers in your dataset.',
+    color: 'emerald',
   },
   {
     icon: Target,
-    title: 'Manual Precision',
+    title: 'Precision Annotation',
     description:
-      "Need to tweak the AI's work? Use our pixel-perfect pen, rectangle, and polygon tools for fine-tuning",
+      'Pixel-perfect pen, rectangle, and polygon tools. Fine-tune AI predictions with manual edits.',
+    color: 'chartreuse',
   },
   {
     icon: Layers,
-    title: 'Batch Workflow',
+    title: 'Batch Processing',
     description:
-      'Load hundreds of images at once. Our interface handles batch processing without browser lag',
+      'Process hundreds of images at once. Queue auto-annotation jobs and track progress in real-time.',
+    color: 'emerald',
   },
   {
-    icon: Keyboard,
-    title: 'Lightning Shortcuts',
+    icon: Brain,
+    title: 'Smart Workflows',
     description:
-      'Designed for power users. Keep your hands on the keyboard and annotate without breaking flow',
+      'Chain models together. Auto-detect objects, then segment, then classify - all in one pipeline.',
+    color: 'chartreuse',
   },
   {
     icon: Download,
-    title: 'Export Ready',
-    description: 'Export to COCO JSON, YOLO format, or ZIP archives with one click',
-  },
-  {
-    icon: Database,
-    title: 'Local-First Storage',
-    description: 'Your data stays local with IndexedDB - no server uploads, total privacy',
+    title: 'Flexible Export',
+    description:
+      'Export to COCO, YOLO, Pascal VOC, or custom formats. Integrate with your ML training pipeline.',
+    color: 'emerald',
   },
 ]
 
 function Features() {
   return (
-    <section id="features" className="py-20 px-4">
-      <div className="container mx-auto">
+    <section id="features" className="py-20 px-4 bg-gradient-to-b from-white to-emerald-50/30">
+      <div className="container mx-auto max-w-7xl">
         {/* Section Header */}
-        <div className="text-center mb-16">
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">Feature Deep Dive</h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Everything you need for professional-grade annotation workflows
-          </p>
-        </div>
+        <FadeIn direction="up">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+              Everything You Need
+            </h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              A complete platform for computer vision data management and annotation
+            </p>
+          </div>
+        </FadeIn>
 
         {/* Features Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map((feature) => {
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {features.map((feature, index) => {
             const Icon = feature.icon
+            const isEmerald = feature.color === 'emerald'
             return (
-              <div
-                key={feature.title}
-                className="group p-6 bg-white border border-gray-200 rounded-xl hover:glass transition-all duration-300 hover:shadow-lg"
-              >
-                {/* Icon */}
-                <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-emerald-600 transition-colors">
-                  <Icon className="w-6 h-6 text-emerald-600 group-hover:text-white transition-colors" />
-                </div>
+              <FadeIn key={feature.title} direction="up" delay={0.05 * index}>
+                <TiltCard tiltAngle={5} hoverScale={1.02} glare={false}>
+                  <div className="group h-full p-6 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl hover:border-emerald-300 transition-all duration-300 hover:shadow-lg">
+                    {/* Icon */}
+                    <div
+                      className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 transition-colors ${
+                        isEmerald
+                          ? 'bg-emerald-100 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white'
+                          : 'bg-chartreuse-100 text-chartreuse-700 group-hover:bg-chartreuse-600 group-hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-6 h-6" />
+                    </div>
 
-                {/* Title */}
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">{feature.title}</h3>
+                    {/* Title */}
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">{feature.title}</h3>
 
-                {/* Description */}
-                <p className="text-gray-600 leading-relaxed">{feature.description}</p>
-              </div>
+                    {/* Description */}
+                    <p className="text-gray-600 text-sm leading-relaxed">{feature.description}</p>
+                  </div>
+                </TiltCard>
+              </FadeIn>
             )
           })}
         </div>

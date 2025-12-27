@@ -253,6 +253,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     return map;
   }, [tagCategories]);
 
+
   // Fetch tasks for filter dropdown
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks', projectId],

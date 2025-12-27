@@ -53,6 +53,7 @@ export interface ProjectDetail extends Project {
   task_count: number;
   member_count: number;
   annotation_types: string[];
+  allowed_model_ids: string[] | null;
   user_role: 'owner' | 'maintainer' | 'annotator' | 'viewer';
 }
 
@@ -102,6 +103,7 @@ export interface JobDetail extends Job {
   image_count: number;
   project_id: number | null;
   labels: Label[];
+  allowed_model_ids: string[] | null;
 }
 
 
@@ -495,7 +497,13 @@ export const projectsApi = {
     return response.data.data;
   },
 
-  async update(projectId: number, data: { name?: string; description?: string; readme?: string }): Promise<Project> {
+  async update(projectId: number | string, data: {
+    name?: string;
+    description?: string;
+    readme?: string;
+    annotation_types?: string[];
+    allowed_model_ids?: string[] | null;
+  }): Promise<Project> {
     const response = await apiClient.patch<ApiResponse<Project>>(`/api/v1/projects/${projectId}`, data);
     return response.data.data;
   },

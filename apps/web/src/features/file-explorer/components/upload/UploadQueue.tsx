@@ -27,9 +27,9 @@ export const UploadQueue = memo(function UploadQueue({
   if (queue.length === 0) return null
 
   return (
-    <div className="mt-4 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-      <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+    <div className="mt-4 border border-gray-200 rounded-lg overflow-hidden">
+      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200">
+        <span className="text-sm font-medium text-gray-700">
           Upload Queue ({queue.length} files)
         </span>
       </div>
@@ -38,12 +38,12 @@ export const UploadQueue = memo(function UploadQueue({
         {queue.map((item) => (
           <div
             key={item.id}
-            className="flex items-center gap-3 px-3 py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+            className="flex items-center gap-3 px-3 py-2 border-b border-gray-100 last:border-b-0"
           >
             <File className="w-4 h-4 text-gray-400 flex-shrink-0" />
 
             <div className="flex-1 min-w-0">
-              <p className="text-sm truncate text-gray-700 dark:text-gray-200">
+              <p className="text-sm truncate text-gray-700">
                 {item.file.name}
               </p>
               <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -71,7 +71,7 @@ export const UploadQueue = memo(function UploadQueue({
               {(item.status === 'pending' || item.status === 'error') && (
                 <button
                   onClick={() => onRemove(item.id)}
-                  className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                  className="p-1 hover:bg-gray-100 rounded"
                 >
                   <X className="w-4 h-4 text-gray-400" />
                 </button>

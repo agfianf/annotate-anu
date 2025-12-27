@@ -1,4 +1,5 @@
 import { inferenceClient } from '@/lib/inference-client'
+import { imagesApi } from '@/lib/api-client'
 import type { ImageData, Label, PromptMode } from '@/types/annotations'
 import type { AvailableModel } from '@/types/byom'
 import { Loader2, Sparkles, X } from 'lucide-react'
@@ -8,6 +9,44 @@ import { BatchProgressModal, type BatchProgressItem } from './ui/BatchProgressMo
 import { Button } from './ui/button'
 import { ImageSelectorModal } from './ui/ImageSelectorModal'
 import { PromptModeSelector } from './ui/PromptModeSelector'
+
+/**
+ * Fetch image as blob from URL (for job mode images)
+ */
+async function fetchImageAsBlob(url: string): Promise<Blob> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.statusText}`)
+  }
+  return await response.blob()
+}
+
+/**
+ * Get image file from ImageData - handles both local and job mode
+ */
+async function getImageFile(image: ImageData): Promise<File> {
+  let imageBlob: Blob
+
+  if (image.s3Key && image.jobId && image.jobImageId) {
+    // Job mode: fetch image from API
+    const imageUrl = imagesApi.getFullImageUrl(
+      image.s3Key,
+      image.jobId.toString(),
+      image.jobImageId
+    )
+    console.log('[TextPromptPanel] Fetching job image from:', imageUrl)
+    imageBlob = await fetchImageAsBlob(imageUrl)
+  } else if (image.blob && image.blob.size > 0) {
+    // Local mode: use existing blob
+    imageBlob = image.blob
+  } else {
+    throw new Error('No valid image data available')
+  }
+
+  return new File([imageBlob], image.name, {
+    type: imageBlob.type || 'image/jpeg',
+  })
+}
 
 interface TextPromptPanelProps {
   labels: Label[]
@@ -155,10 +194,9 @@ export function TextPromptPanel({
       console.log('[AUTO-APPLY] Loading state set to TRUE, dimming overlay should show')
 
       try {
-        // Convert blob to File
-        const imageFile = new File([currentImage.blob], currentImage.name, {
-          type: currentImage.blob.type,
-        })
+        // Get image file (handles both local and job mode)
+        const imageFile = await getImageFile(currentImage)
+        console.log(`[AUTO-APPLY] Image file size: ${imageFile.size} bytes`)
 
         console.log(`[AUTO-APPLY] Calling inference API with ${selectedModel.name} for "${currentImage.name}"...`)
         // Call text prompt API using unified inference client
@@ -229,10 +267,9 @@ export function TextPromptPanel({
     console.log(`Manual run triggered for "${currentImage.name}"`)
 
     try {
-      // Convert blob to File
-      const imageFile = new File([currentImage.blob], currentImage.name, {
-        type: currentImage.blob.type,
-      })
+      // Get image file (handles both local and job mode)
+      const imageFile = await getImageFile(currentImage)
+      console.log(`[MANUAL] Image file size: ${imageFile.size} bytes`)
 
       console.log(`Calling API manually with ${selectedModel.name} for "${currentImage.name}"...`)
       // Call text prompt API using unified inference client

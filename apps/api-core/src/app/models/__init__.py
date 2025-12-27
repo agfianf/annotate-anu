@@ -1,6 +1,7 @@
 """SQLAlchemy Core models for AnnotateANU."""
 
 from app.models.activity import project_activity
+from app.models.byom import registered_models
 from app.models.annotation import (
     detections,
     image_tags,
@@ -60,4 +61,6 @@ __all__ = [
     # Exports
     "saved_filters",
     "exports",
+    # BYOM
+    "registered_models",
 ]

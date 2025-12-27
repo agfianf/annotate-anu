@@ -77,29 +77,36 @@ async def get_job(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Get job details with image count and project labels for annotation mode."""
-    from app.repositories.project import LabelRepository
+    from app.repositories.project import LabelRepository, ProjectRepository
     from app.repositories.task import TaskRepository
     from app.schemas.project import LabelResponse
 
-    
+
     # Get image count
     image_count = await JobRepository.get_image_count(connection, job["id"])
-    
-    # Traverse job -> task -> project to get labels
+
+    # Traverse job -> task -> project to get labels and allowed models
     project_id = None
     labels = []
-    
+    allowed_model_ids = None
+
     task = await TaskRepository.get_by_id(connection, job["task_id"])
     if task:
         project_id = task["project_id"]
         project_labels = await LabelRepository.list_for_project(connection, project_id)
         labels = [LabelResponse(**lb) for lb in project_labels]
-    
+
+        # Fetch project to get allowed_model_ids
+        project = await ProjectRepository.get_by_id(connection, project_id)
+        if project:
+            allowed_model_ids = project.get("allowed_model_ids")
+
     response = JobDetailResponse(
         **{k: v for k, v in job.items() if not k.startswith("_")},
         image_count=image_count,
         project_id=project_id,
         labels=labels,
+        allowed_model_ids=allowed_model_ids,
     )
     
     return JsonResponse(

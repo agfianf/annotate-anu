@@ -78,11 +78,11 @@ function App() {
         <Route path="projects/:projectId/tasks/:taskId" element={<JobsPage />} />
         <Route path="tasks/:taskId/jobs" element={<JobsPage />} />
         <Route path="files" element={<FileSharePage />} />
+        <Route path="models" element={<ModelConfigPage />} />
       </Route>
 
       {/* Existing routes */}
       <Route path="/app" element={<AnnotationApp />} />
-      <Route path="/models" element={<ModelConfigPage />} />
     </Routes>
   )
 }

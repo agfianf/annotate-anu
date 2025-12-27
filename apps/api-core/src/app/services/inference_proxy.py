@@ -4,7 +4,6 @@ import json
 import time
 
 import httpx
-from fastapi import UploadFile
 
 from app.helpers.logger import logger
 from app.schemas.inference.response import InferenceResponse, MaskPolygon
@@ -35,7 +34,9 @@ class InferenceProxyService:
     async def text_prompt(
         self,
         model: ModelBase,
-        image: UploadFile,
+        image_bytes: bytes,
+        image_filename: str,
+        image_content_type: str,
         text_prompt: str,
         threshold: float,
         mask_threshold: float,
@@ -47,8 +48,12 @@ class InferenceProxyService:
         ----------
         model : ModelBase
             Model to use for inference (includes endpoint_url for BYOM)
-        image : UploadFile
-            Image file to process
+        image_bytes : bytes
+            Image file bytes
+        image_filename : str
+            Original filename
+        image_content_type : str
+            MIME type of the image
         text_prompt : str
             Text description of objects to segment
         threshold : float
@@ -65,12 +70,15 @@ class InferenceProxyService:
         """
         if model.id == "sam3":
             return await self._sam3_text_prompt(
-                image, text_prompt, threshold, mask_threshold, return_visualization
+                image_bytes, image_filename, image_content_type,
+                text_prompt, threshold, mask_threshold, return_visualization
             )
         else:
             return await self._byom_inference(
                 model,
-                image,
+                image_bytes,
+                image_filename,
+                image_content_type,
                 "text",
                 text_prompt=text_prompt,
                 threshold=threshold,
@@ -81,7 +89,9 @@ class InferenceProxyService:
     async def bbox_prompt(
         self,
         model: ModelBase,
-        image: UploadFile,
+        image_bytes: bytes,
+        image_filename: str,
+        image_content_type: str,
         bounding_boxes: list[list[float]],
         threshold: float,
         mask_threshold: float,
@@ -93,8 +103,12 @@ class InferenceProxyService:
         ----------
         model : ModelBase
             Model to use for inference
-        image : UploadFile
-            Image file to process
+        image_bytes : bytes
+            Image file bytes
+        image_filename : str
+            Original filename
+        image_content_type : str
+            MIME type of the image
         bounding_boxes : list[list[float]]
             List of [x1, y1, x2, y2, label] bounding boxes
         threshold : float
@@ -111,12 +125,15 @@ class InferenceProxyService:
         """
         if model.id == "sam3":
             return await self._sam3_bbox_prompt(
-                image, bounding_boxes, threshold, mask_threshold, return_visualization
+                image_bytes, image_filename, image_content_type,
+                bounding_boxes, threshold, mask_threshold, return_visualization
             )
         else:
             return await self._byom_inference(
                 model,
-                image,
+                image_bytes,
+                image_filename,
+                image_content_type,
                 "bbox",
                 bounding_boxes=bounding_boxes,
                 threshold=threshold,
@@ -127,7 +144,9 @@ class InferenceProxyService:
     async def auto_detect(
         self,
         model: ModelBase,
-        image: UploadFile,
+        image_bytes: bytes,
+        image_filename: str,
+        image_content_type: str,
         threshold: float,
         class_filter: list[str] | None,
         return_visualization: bool,
@@ -138,8 +157,12 @@ class InferenceProxyService:
         ----------
         model : ModelBase
             Model to use for inference
-        image : UploadFile
-            Image file to process
+        image_bytes : bytes
+            Image file bytes
+        image_filename : str
+            Original filename
+        image_content_type : str
+            MIME type of the image
         threshold : float
             Detection confidence threshold
         class_filter : list[str] | None
@@ -162,7 +185,9 @@ class InferenceProxyService:
 
         return await self._byom_inference(
             model,
-            image,
+            image_bytes,
+            image_filename,
+            image_content_type,
             "auto",
             threshold=threshold,
             class_filter=class_filter,
@@ -171,7 +196,9 @@ class InferenceProxyService:
 
     async def _sam3_text_prompt(
         self,
-        image: UploadFile,
+        image_bytes: bytes,
+        image_filename: str,
+        image_content_type: str,
         text_prompt: str,
         threshold: float,
         mask_threshold: float,
@@ -181,8 +208,12 @@ class InferenceProxyService:
 
         Parameters
         ----------
-        image : UploadFile
-            Image file
+        image_bytes : bytes
+            Image file bytes
+        image_filename : str
+            Original filename
+        image_content_type : str
+            MIME type
         text_prompt : str
             Text description
         threshold : float
@@ -199,11 +230,9 @@ class InferenceProxyService:
         """
         url = f"{self.sam3_url}/api/v1/sam3/inference/text"
 
-        # Read image bytes
-        image_bytes = await image.read()
-        await image.seek(0)  # Reset for potential reuse
+        logger.info(f"Proxying text: image size={len(image_bytes)} bytes, filename={image_filename}")
 
-        files = {"image": (image.filename, image_bytes, image.content_type)}
+        files = {"image": (image_filename, image_bytes, image_content_type)}
         data = {
             "text_prompt": text_prompt,
             "threshold": str(threshold),
@@ -226,7 +255,9 @@ class InferenceProxyService:
 
     async def _sam3_bbox_prompt(
         self,
-        image: UploadFile,
+        image_bytes: bytes,
+        image_filename: str,
+        image_content_type: str,
         bounding_boxes: list[list[float]],
         threshold: float,
         mask_threshold: float,
@@ -236,8 +267,12 @@ class InferenceProxyService:
 
         Parameters
         ----------
-        image : UploadFile
-            Image file
+        image_bytes : bytes
+            Image file bytes
+        image_filename : str
+            Original filename
+        image_content_type : str
+            MIME type
         bounding_boxes : list[list[float]]
             Bounding boxes
         threshold : float
@@ -254,10 +289,9 @@ class InferenceProxyService:
         """
         url = f"{self.sam3_url}/api/v1/sam3/inference/bbox"
 
-        image_bytes = await image.read()
-        await image.seek(0)
+        logger.info(f"Proxying bbox: image size={len(image_bytes)} bytes, filename={image_filename}")
 
-        files = {"image": (image.filename, image_bytes, image.content_type)}
+        files = {"image": (image_filename, image_bytes, image_content_type)}
         data = {
             "bounding_boxes": json.dumps(bounding_boxes),
             "threshold": str(threshold),
@@ -281,7 +315,9 @@ class InferenceProxyService:
     async def _byom_inference(
         self,
         model: ModelBase,
-        image: UploadFile,
+        image_bytes: bytes,
+        image_filename: str,
+        image_content_type: str,
         mode: str,
         **params,
     ) -> InferenceResponse:
@@ -291,8 +327,12 @@ class InferenceProxyService:
         ----------
         model : ModelBase
             BYOM model configuration
-        image : UploadFile
-            Image file
+        image_bytes : bytes
+            Image file bytes
+        image_filename : str
+            Original filename
+        image_content_type : str
+            MIME type
         mode : str
             Inference mode ('text', 'bbox', 'auto')
         **params
@@ -312,14 +352,13 @@ class InferenceProxyService:
 
         url = f"{model.endpoint_url.rstrip('/')}{inference_path}"
 
-        image_bytes = await image.read()
-        await image.seek(0)
+        logger.info(f"Proxying BYOM: image size={len(image_bytes)} bytes, filename={image_filename}")
 
         headers = {}
         if model.auth_token:
             headers["Authorization"] = f"Bearer {model.auth_token}"
 
-        files = {"image": (image.filename, image_bytes, image.content_type)}
+        files = {"image": (image_filename, image_bytes, image_content_type)}
         data = {"mode": mode}
 
         # Add mode-specific params

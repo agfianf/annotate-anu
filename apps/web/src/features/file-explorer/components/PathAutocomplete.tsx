@@ -140,14 +140,14 @@ export function PathAutocomplete({
       {showDropdown && shouldFetchSuggestions && (
         <div
           ref={dropdownRef}
-          className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto"
+          className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto"
         >
           {isLoading ? (
-            <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+            <div className="px-3 py-2 text-sm text-gray-500">
               Loading folders...
             </div>
           ) : folderItems.length === 0 ? (
-            <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+            <div className="px-3 py-2 text-sm text-gray-500">
               No folders found
             </div>
           ) : (
@@ -156,10 +156,10 @@ export function PathAutocomplete({
                 key={folder.path}
                 type="button"
                 onClick={() => selectFolder(folder)}
-                className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100 transition-colors ${
                   index === selectedIndex
-                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                    : 'text-gray-900 dark:text-gray-100'
+                    ? 'bg-blue-50 text-blue-600'
+                    : 'text-gray-900'
                 }`}
               >
                 <Folder className="w-4 h-4 flex-shrink-0" />

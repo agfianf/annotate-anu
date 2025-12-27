@@ -18,10 +18,10 @@ export const BreadcrumbNav = memo(function BreadcrumbNav({
   }
 
   return (
-    <nav className="flex items-center gap-1 px-3 py-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 text-sm">
+    <nav className="flex items-center gap-1 px-3 py-2 bg-gray-50 border-b border-gray-200 text-sm">
       <button
         onClick={() => onNavigate('')}
-        className="flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+        className="flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-200 text-gray-600"
       >
         <Home className="w-4 h-4" />
         <span>Root</span>
@@ -36,8 +36,8 @@ export const BreadcrumbNav = memo(function BreadcrumbNav({
               px-2 py-1 rounded
               ${
                 index === parts.length - 1
-                  ? 'font-medium text-gray-900 dark:text-white'
-                  : 'hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'
+                  ? 'font-medium text-gray-900'
+                  : 'hover:bg-gray-200 text-gray-600'
               }
             `}
           >

@@ -22,11 +22,8 @@ Key features:
 ```mermaid
 flowchart TD
     subgraph Preparation["1. Preparation (Explore)"]
-        A[Set Task Splits] --> B[Apply Filters in Explore]
-        B --> B1{Save Filter?}
-        B1 -->|Yes| B2[Save to Saved Filters]
-        B1 -->|No| C
-        B2 --> C[Click Export Button]
+        A[Set Task Splits] --> B[Apply Filters in Explore (optional)]
+        B --> C[Click Export Button]
     end
 
     subgraph Wizard["2. Export Wizard"]
@@ -34,12 +31,11 @@ flowchart TD
         D -->|Classification| E1[Configure Tag Mapping]
         D -->|Detection| E2[Configure BBox Options]
         D -->|Segmentation| E3[Configure Polygon Options]
-        E1 --> F[Set Version & Options]
+        E1 --> F[Set Options & Description]
         E2 --> F
         E3 --> F
-        F --> F1[Optional: Set Custom Name]
-        F1 --> G[Preview Export]
-        G --> H{Confirm?}
+        F --> G[Preview Export]
+        G --> H{Create Export?}
         H -->|No| D
         H -->|Yes| I[Create Export]
     end
@@ -52,7 +48,7 @@ flowchart TD
         J --> K[Query Filtered Images]
         K --> L[Fetch Annotations]
         L --> M{Export Mode?}
-        M -->|Classification| N1[Build CSV/ImageFolder]
+        M -->|Classification| N1[Build CSV Manifest]
         M -->|Detection| N2[Build COCO JSON with Metadata]
         M -->|Segmentation| N3[Build COCO JSON with Metadata]
         N1 --> O[Save Artifact ZIP]
@@ -107,7 +103,7 @@ sequenceDiagram
     API-->>FE: Tag categories & labels
 
     U->>FE: Configure export settings
-    U->>FE: Click Preview
+    U->>FE: Go to Preview step
     FE->>API: POST /api/v1/projects/{project_id}/exports/preview
     API->>DB: Count filtered images
     API->>DB: Count annotations
@@ -370,7 +366,7 @@ Tasks can be assigned to dataset splits for proper train/validation/test separat
 | **Train** | Used for model training |
 | **Val** | Used for validation during training |
 | **Test** | Held out for final evaluation |
-| **None** | Unassigned (excluded from split-based exports) |
+| **None** | Unassigned (included as `none` in split counts/exports) |
 
 ### Setting Task Splits
 
@@ -395,6 +391,7 @@ The export uses the **current filter state** from the Explore view. This allows 
 | **Search** | Filename search |
 | **Metadata** | Width, height, file size ranges |
 | **Filepath** | Directory path filters |
+| **Image UID** | Filter by specific image IDs |
 
 ### Filter Logic
 
@@ -425,21 +422,27 @@ Configure mode-specific options:
 - Enable/disable bbox-to-polygon conversion
 - Filter by annotation labels
 
-### Step 3: Version & Options
-- **Version Mode**: Stored on the export record for future reproducibility features (not currently used by the export worker to “time travel” data)
+### Step 3: Options & Description
+- **Export Description**: Optional message shown in export history
+- **Output Format**: CSV manifest (classification) or COCO JSON (detection/segmentation)
+- **Image Folder**: The UI exposes an ImageFolder option for classification, but the backend does not generate the folder layout yet
 - **Include Images**: Whether to include image files in the export
 
-### Step 4: Preview & Confirm
+Name and version are auto-generated; the UI does not expose manual naming or version mode controls.
+
+### Step 4: Preview & Create
 Review export summary:
 - Total images count
 - Annotation counts
-- Split distribution (train/val/test)
+- Split distribution (train/val/test/none)
 - Class distribution
 
-Click **Export** to start the export job.
+The preview loads automatically when you reach this step.
 
-### Step 5: Download
-Once processing completes:
+Click **Create Export** to start the export job. The button is disabled if the preview has zero images.
+
+### Step 5: Completion & Download
+The wizard polls for status updates. Once processing completes:
 - View export status
 - Download the artifact (ZIP file)
 
@@ -480,8 +483,8 @@ COCO JSON exports include comprehensive metadata in the `info` section for self-
       },
       "filter": {
         "tags": [
-          {"id": "uuid-1", "name": "Dog", "color": "#FF5733"},
-          {"id": "uuid-2", "name": "Cat", "color": "#3498DB"}
+          {"id": "uuid-1", "name": "Dog", "color": "#FF5733", "category_id": "uuid-9", "category_name": "Animals", "category_color": "#10B981"},
+          {"id": "uuid-2", "name": "Cat", "color": "#3498DB", "category_id": "uuid-9", "category_name": "Animals", "category_color": "#10B981"}
         ],
         "excluded_tags": [],
         "include_match_mode": "OR",
@@ -515,8 +518,8 @@ COCO JSON exports include comprehensive metadata in the `info` section for self-
 | `output_format` | coco_json, manifest_csv, or image_folder |
 | `include_images` | Whether image files are included |
 | `project` | Project ID and name |
-| `filter.tags` | Tags used for filtering (with names and colors) |
-| `filter.excluded_tags` | Tags excluded from filtering |
+| `filter.tags` | Tags used for filtering (include category_id/name/color) |
+| `filter.excluded_tags` | Tags excluded from filtering (include category_id/name/color) |
 | `filter.include_match_mode` | AND or OR logic for tag inclusion |
 | `filter.exclude_match_mode` | AND or OR logic for tag exclusion |
 | `labels` | Annotation labels included (with names and colors) |
@@ -557,34 +560,22 @@ This enables clear tracking of export iterations without manual naming.
 
 ### History Tab
 
-The **History tab** in the Project page provides a unified view of all project activity:
+The **History** tab currently focuses on exports and displays the Export History panel:
 
 ```
 +-------------------------------------------------------------+
 | History Tab                                                 |
 +-------------------------------------------------------------+
-|                                                             |
-| +- Activity Timeline ------------------------------------+ |
-| | * task    Admin created "Batch 1"                5m ago | |
-| | * export  Detection Export v3 completed          2h ago | |
-| | * job     Status changed: draft -> review        3h ago | |
-| | * filter  "Training Set" saved                   1d ago | |
-| +--------------------------------------------------------+ |
-|                                                             |
-| v Saved Filters -----------------------------------------   |
-| | [Save Current]                                          | |
-| | +- Training Set Filter (3 tags) Created Dec 27          | |
-| | +- Validation Set (2 tasks) Created Dec 27              | |
-|                                                             |
-| v Export History ----------------------------------------   |
-| | [Refresh]                                               | |
+| +- Export History ----------------------------------------+ |
+| | [List | Timeline] [Compare] [Refresh]                   | |
+| | Filter: All Modes  Sort: Newest First                   | |
 | | +- Detection Export v3 | v3 | COCO | Completed [DL][X]  | |
 | | |   Tags: [Dog] [Cat]  Labels: [person] [car]           | |
 | | |   1,234 images * 5,678 annotations * 5.2 MB           | |
 | | |   train: 800 | val: 200 | test: 100                   | |
-| | |   Created by John Doe * Dec 27, 2025                  | |
 | | +- Classification Export v2 | v2 | CSV | Completed      | |
 | | +- Segmentation Export v1 | v1 | COCO | Failed          | |
+| +--------------------------------------------------------+ |
 +-------------------------------------------------------------+
 ```
 
@@ -592,26 +583,20 @@ The **History tab** in the Project page provides a unified view of all project a
 
 View past exports in the Export History panel:
 - **Name & Version**: Auto-generated name with version badge (e.g., "Detection Export v3")
-- **Mode badge**: Classification, Detection, or Segmentation icon
-- **Format badge**: COCO JSON, CSV, or ImageFolder
-- **Status**: Pending, Processing, Completed, Failed
-- **Tags used**: Colored chips showing included/excluded tags
-- **Labels used**: Colored chips showing annotation labels
-- **Splits breakdown**: Train/Val/Test distribution
-- **Metadata**: Creation timestamp, image count, annotation count, file size, creator
-- **Actions**: Download completed artifacts, delete old exports, view filter in Explore
+- **Mode / Format / Status**: Badges for export mode, output format, and current status
+- **Tags & Labels**: Colored chips for included/excluded tags and label filters
+- **Stats**: Image/annotation counts, split breakdown, file size, creator, timestamp
+- **Controls**: View toggle, mode filter, sort (list view), compare mode (list view)
+- **Actions (list view)**: Copy download link, download completed exports, delete exports, view filter in Explore
 
 ### Saved Filters Panel
 
-Save and reuse filter configurations:
-- **Save current filter**: Capture the current Explore tab filter state
-- **Apply saved filter**: Quickly apply a previously saved filter
-- **Manage filters**: Rename, update, or delete saved filters
-- **Use in exports**: Reference saved filters when creating exports
+Saved filters are supported by the API and a UI component exists, but the panel is not currently mounted in the Project UI.
+When wired, it will allow saving the current Explore filters, applying saved filters, and managing them.
 
 ### Activity Logging
 
-Export events are automatically logged to the Activity Timeline:
+Export events are logged to the project activity feed in the backend (the UI does not render a timeline yet):
 - **Export created**: When a new export is initiated
 - **Export completed**: When the export finishes successfully (with image/annotation counts)
 - **Export failed**: When an export encounters an error (with error details)

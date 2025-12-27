@@ -119,7 +119,7 @@ export const FileTreeNode = memo(function FileTreeNode({
   return (
     <>
       <div
-        className="flex items-center py-1.5 px-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer group"
+        className="flex items-center py-1.5 px-2 hover:bg-gray-100 cursor-pointer group"
         style={{ paddingLeft }}
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
@@ -148,7 +148,7 @@ export const FileTreeNode = memo(function FileTreeNode({
         )}
 
         {/* Icon */}
-        <Icon className="w-4 h-4 mr-2 text-gray-600 dark:text-gray-400" />
+        <Icon className="w-4 h-4 mr-2 text-gray-600" />
 
         {/* Name */}
         <span className="flex-1 truncate text-sm">{item.name}</span>

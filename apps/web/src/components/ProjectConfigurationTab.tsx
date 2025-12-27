@@ -3,14 +3,18 @@
  * Shows project configuration including labels and settings with proper color picker
  */
 
-import { Crown, Edit2, Eye, Loader2, Palette, Plus, Save, Settings, Shield, Trash2, UserPlus, Users, Wrench, X } from 'lucide-react';
+import { Crown, Edit2, Eye, Loader2, Palette, Plus, Save, Settings, Shield, Sparkles, Trash2, UserPlus, Users, Wrench, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import type { Label, ProjectDetail, ProjectMember } from '../lib/api-client';
 import { labelsApi, membersApi, projectsApi } from '../lib/api-client';
+import { byomClient } from '../lib/byom-client';
+import type { RegisteredModel } from '../types/byom';
 import { DEFAULT_LABEL_COLOR, PRESET_COLORS } from '../lib/colors';
 import GlassDropdown from './ui/GlassDropdown';
+import GlassMultiSelect from './ui/GlassMultiSelect';
+import { FadeIn } from './ui/animate';
 
 interface ProjectConfigurationTabProps {
   project: ProjectDetail;
@@ -40,6 +44,44 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
   // Annotation types state
   const [annotationTypes, setAnnotationTypes] = useState<string[]>(project.annotation_types || ['classification', 'detection', 'segmentation']);
   const [isSavingAnnotationTypes, setIsSavingAnnotationTypes] = useState(false);
+
+  // Model configuration state
+  const [availableModels, setAvailableModels] = useState<RegisteredModel[]>([]);
+  const [isLoadingModels, setIsLoadingModels] = useState(true);
+  const [allowedModelIds, setAllowedModelIds] = useState<string[]>(project.allowed_model_ids || []);
+  const [isSavingModels, setIsSavingModels] = useState(false);
+
+  // Load available models
+  useEffect(() => {
+    const loadModels = async () => {
+      setIsLoadingModels(true);
+      try {
+        const response = await byomClient.listModels(false);
+        setAvailableModels(response.models);
+      } catch (err) {
+        console.error('Failed to load models:', err);
+      } finally {
+        setIsLoadingModels(false);
+      }
+    };
+    loadModels();
+  }, []);
+
+  const handleSaveAllowedModels = async () => {
+    setIsSavingModels(true);
+    try {
+      await projectsApi.update(String(project.id), {
+        allowed_model_ids: allowedModelIds.length > 0 ? allowedModelIds : null,
+      });
+      toast.success('Allowed models updated');
+      onUpdate?.();
+    } catch (err) {
+      console.error('Failed to update allowed models:', err);
+      toast.error('Failed to update allowed models');
+    } finally {
+      setIsSavingModels(false);
+    }
+  };
 
   const handleToggleAnnotationType = (type: string) => {
     setAnnotationTypes((prev) =>
@@ -550,24 +592,83 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
             )}
           </div>
 
-          {/* Model Prediction Settings (Placeholder) */}
-          <div className="pt-4 border-t border-gray-100">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Model Prediction
-            </label>
-            <div className={`flex items-center gap-3 p-3 bg-gray-50 rounded-lg ${!canEdit && 'opacity-60'}`}>
-              <input
-                type="checkbox"
-                defaultChecked={false}
-                disabled={!canEdit}
-                className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 disabled:opacity-50"
-              />
-              <div>
-                <span className="text-sm text-gray-700">Enable auto-prediction on upload</span>
-                <p className="text-xs text-gray-400">Automatically run model predictions when images are uploaded</p>
+          {/* Model Configuration */}
+          <FadeIn direction="up" delay={0.1}>
+            <div className="pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <label className="text-sm font-medium text-gray-700">
+                  Allowed Models
+                </label>
               </div>
+              <p className="text-xs text-gray-500 mb-3">
+                Select which AI models can be used in this project. Leave empty to allow all models.
+              </p>
+
+              {/* SAM3 Built-in Badge */}
+              <FadeIn direction="left" delay={0.15}>
+                <div className="mb-3 p-2 bg-emerald-50 rounded-lg border border-emerald-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-sm font-medium text-emerald-700">SAM3</span>
+                    <span className="text-xs text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">Built-in</span>
+                  </div>
+                  <p className="text-xs text-emerald-600 mt-1 ml-4">Always available for all projects</p>
+                </div>
+              </FadeIn>
+
+              {/* BYOM Models Multi-Select */}
+              <FadeIn direction="up" delay={0.2}>
+                <div className={`${!canEdit && 'opacity-60 pointer-events-none'}`}>
+                  <GlassMultiSelect
+                    options={availableModels.map((model) => ({
+                      value: model.id,
+                      label: model.name,
+                      sublabel: model.is_healthy ? 'Healthy' : 'Unhealthy',
+                      icon: (
+                        <div
+                          className={`w-2 h-2 rounded-full ${
+                            model.is_healthy ? 'bg-green-500' : 'bg-red-500'
+                          }`}
+                        />
+                      ),
+                      disabled: !model.is_active,
+                    }))}
+                    value={allowedModelIds}
+                    onChange={setAllowedModelIds}
+                    placeholder="Select additional models (optional)..."
+                    isLoading={isLoadingModels}
+                    disabled={!canEdit}
+                    emptyMessage="No registered models. Go to Model Management to add models."
+                    maxDisplayItems={3}
+                  />
+                </div>
+              </FadeIn>
+
+              {/* Save Button */}
+              {canEdit && JSON.stringify(allowedModelIds.sort()) !== JSON.stringify((project.allowed_model_ids || []).sort()) && (
+                <FadeIn direction="up" delay={0.1}>
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      onClick={handleSaveAllowedModels}
+                      disabled={isSavingModels}
+                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-xs font-medium rounded-lg transition-all flex items-center gap-1.5"
+                    >
+                      {isSavingModels ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                      Save Model Settings
+                    </button>
+                  </div>
+                </FadeIn>
+              )}
+
+              {/* Help Text */}
+              {allowedModelIds.length === 0 && (
+                <p className="mt-2 text-xs text-gray-400 italic">
+                  No models selected — all registered models will be available.
+                </p>
+              )}
             </div>
-          </div>
+          </FadeIn>
         </div>
       </div>
     </div>

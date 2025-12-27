@@ -3,8 +3,47 @@ import { Modal } from './ui/Modal'
 import { Button } from './ui/button'
 import type { Label, ImageData } from '@/types/annotations'
 import { sam3Client } from '@/lib/sam3-client'
+import { imagesApi } from '@/lib/api-client'
 import { Sparkles, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+/**
+ * Fetch image as blob from URL (for job mode images)
+ */
+async function fetchImageAsBlob(url: string): Promise<Blob> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.statusText}`)
+  }
+  return await response.blob()
+}
+
+/**
+ * Get image file from ImageData - handles both local and job mode
+ */
+async function getImageFile(image: ImageData): Promise<File> {
+  let imageBlob: Blob
+
+  if (image.s3Key && image.jobId && image.jobImageId) {
+    // Job mode: fetch image from API
+    const imageUrl = imagesApi.getFullImageUrl(
+      image.s3Key,
+      image.jobId.toString(),
+      image.jobImageId
+    )
+    console.log('[AutoAnnotateModal] Fetching job image from:', imageUrl)
+    imageBlob = await fetchImageAsBlob(imageUrl)
+  } else if (image.blob && image.blob.size > 0) {
+    // Local mode: use existing blob
+    imageBlob = image.blob
+  } else {
+    throw new Error('No valid image data available')
+  }
+
+  return new File([imageBlob], image.name, {
+    type: imageBlob.type || 'image/jpeg',
+  })
+}
 
 interface AutoAnnotateModalProps {
   isOpen: boolean
@@ -60,10 +99,9 @@ export function AutoAnnotateModal({
     setIsLoading(true)
 
     try {
-      // Convert blob to File
-      const imageFile = new File([currentImage.blob], currentImage.name, {
-        type: currentImage.blob.type,
-      })
+      // Get image file (handles both local and job mode)
+      const imageFile = await getImageFile(currentImage)
+      console.log(`[AutoAnnotateModal] Image file size: ${imageFile.size} bytes`)
 
       if (mode === 'text') {
         // Call text prompt API

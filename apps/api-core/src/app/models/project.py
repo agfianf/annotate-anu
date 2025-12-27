@@ -82,6 +82,12 @@ projects = Table(
         comment="Whether project is archived",
     ),
     Column(
+        "allowed_model_ids",
+        ARRAY(String(64)),
+        nullable=True,
+        comment="Allowed BYOM model IDs (null = all models)",
+    ),
+    Column(
         "created_at",
         DateTime(timezone=True),
         nullable=False,

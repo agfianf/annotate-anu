@@ -23,7 +23,7 @@ export const FileTree = memo(function FileTree({
 
   if (items.length === 0) {
     return (
-      <div className="flex items-center justify-center h-32 text-gray-500 dark:text-gray-400">
+      <div className="flex items-center justify-center h-32 text-gray-500">
         <p>This folder is empty</p>
       </div>
     )

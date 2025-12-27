@@ -4,7 +4,46 @@ import { Button } from './ui/button'
 import type { Label, ImageData } from '@/types/annotations'
 import type { AvailableModel } from '@/types/byom'
 import { inferenceClient } from '@/lib/inference-client'
+import { imagesApi } from '@/lib/api-client'
 import toast from 'react-hot-toast'
+
+/**
+ * Fetch image as blob from URL (for job mode images)
+ */
+async function fetchImageAsBlob(url: string): Promise<Blob> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.statusText}`)
+  }
+  return await response.blob()
+}
+
+/**
+ * Get image file from ImageData - handles both local and job mode
+ */
+async function getImageFile(image: ImageData): Promise<File> {
+  let imageBlob: Blob
+
+  if (image.s3Key && image.jobId && image.jobImageId) {
+    // Job mode: fetch image from API
+    const imageUrl = imagesApi.getFullImageUrl(
+      image.s3Key,
+      image.jobId.toString(),
+      image.jobImageId
+    )
+    console.log('[AutoDetectPanel] Fetching job image from:', imageUrl)
+    imageBlob = await fetchImageAsBlob(imageUrl)
+  } else if (image.blob && image.blob.size > 0) {
+    // Local mode: use existing blob
+    imageBlob = image.blob
+  } else {
+    throw new Error('No valid image data available')
+  }
+
+  return new File([imageBlob], image.name, {
+    type: imageBlob.type || 'image/jpeg',
+  })
+}
 
 interface AutoDetectPanelProps {
   labels: Label[]
@@ -49,9 +88,9 @@ export function AutoDetectPanel({
     setIsLoading(true)
 
     try {
-      const imageFile = new File([currentImage.blob], currentImage.name, {
-        type: currentImage.blob.type,
-      })
+      // Get image file (handles both local and job mode)
+      const imageFile = await getImageFile(currentImage)
+      console.log(`[AutoDetectPanel] Image file size: ${imageFile.size} bytes`)
 
       const result = await inferenceClient.autoDetect(selectedModel, {
         image: imageFile,

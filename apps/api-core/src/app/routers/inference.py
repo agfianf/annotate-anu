@@ -149,12 +149,22 @@ async def inference_text(
             detail=f"Model {model.name} does not support text prompts",
         )
 
+    # Read image bytes immediately to avoid consumption issues
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty image file received",
+        )
+
     proxy: InferenceProxyService = request.state.inference_proxy
 
     try:
         result = await proxy.text_prompt(
             model=model,
-            image=image,
+            image_bytes=image_bytes,
+            image_filename=image.filename or "image.jpg",
+            image_content_type=image.content_type or "image/jpeg",
             text_prompt=text_prompt,
             threshold=threshold,
             mask_threshold=mask_threshold,
@@ -232,12 +242,22 @@ async def inference_bbox(
             detail=f"Invalid bounding_boxes JSON: {str(e)}",
         )
 
+    # Read image bytes immediately to avoid consumption issues
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty image file received",
+        )
+
     proxy: InferenceProxyService = request.state.inference_proxy
 
     try:
         result = await proxy.bbox_prompt(
             model=model,
-            image=image,
+            image_bytes=image_bytes,
+            image_filename=image.filename or "image.jpg",
+            image_content_type=image.content_type or "image/jpeg",
             bounding_boxes=boxes,
             threshold=threshold,
             mask_threshold=mask_threshold,
@@ -314,12 +334,22 @@ async def inference_auto(
                 detail=f"Invalid class_filter JSON: {str(e)}",
             )
 
+    # Read image bytes immediately to avoid consumption issues
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty image file received",
+        )
+
     proxy: InferenceProxyService = request.state.inference_proxy
 
     try:
         result = await proxy.auto_detect(
             model=model,
-            image=image,
+            image_bytes=image_bytes,
+            image_filename=image.filename or "image.jpg",
+            image_content_type=image.content_type or "image/jpeg",
             threshold=threshold,
             class_filter=filters,
             return_visualization=return_visualization,

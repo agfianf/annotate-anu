@@ -95,7 +95,7 @@ export function FileExplorer({
 
   return (
     <div
-      className={`flex flex-col h-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden ${className ?? ''}`}
+      className={`flex flex-col h-full bg-white border border-gray-200 rounded-lg overflow-hidden ${className ?? ''}`}
     >
       {/* Toolbar */}
       <FileExplorerToolbar

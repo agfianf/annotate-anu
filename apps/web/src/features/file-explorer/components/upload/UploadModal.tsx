@@ -76,16 +76,16 @@ export function UploadModal({
       />
 
       {/* Modal */}
-      <div className="relative z-10 bg-white dark:bg-gray-900 rounded-lg shadow-xl w-full max-w-lg mx-4">
+      <div className="relative z-10 bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">
             Upload Files
           </h2>
           <button
             onClick={handleClose}
             disabled={isUploading}
-            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded disabled:opacity-50"
+            className="p-1 hover:bg-gray-100 rounded disabled:opacity-50"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -95,7 +95,7 @@ export function UploadModal({
         <div className="p-4">
           {/* Destination folder */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Destination Folder
             </label>
             <PathAutocomplete
@@ -103,9 +103,9 @@ export function UploadModal({
               onChange={setDestination}
               placeholder="/ (root)"
               disabled={isUploading}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-xs text-gray-500 mt-1">
               Type "/" to see folder suggestions. Leave empty for root folder.
             </p>
           </div>
@@ -120,14 +120,14 @@ export function UploadModal({
           {isUploading && (
             <div className="mt-4">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-sm text-gray-600 dark:text-gray-300">
+                <span className="text-sm text-gray-600">
                   Uploading...
                 </span>
-                <span className="text-sm text-gray-600 dark:text-gray-300">
+                <span className="text-sm text-gray-600">
                   {overallProgress}%
                 </span>
               </div>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
                   className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${overallProgress}%` }}
@@ -138,11 +138,11 @@ export function UploadModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-end gap-3 px-4 py-3 border-t border-gray-200">
           <button
             onClick={handleClose}
             disabled={isUploading}
-            className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg disabled:opacity-50"
+            className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-50"
           >
             Cancel
           </button>

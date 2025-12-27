@@ -30,7 +30,7 @@ const SAM3_BUILTIN: AvailableModel = {
   description: 'Segment Anything Model 3 - General purpose segmentation',
 }
 
-export function useModelRegistry() {
+export function useModelRegistry(allowedModelIds?: string[] | null) {
   const [registeredModels, setRegisteredModels] = useState<RegisteredModel[]>([])
   const [selectedModelId, setSelectedModelId] = useState<string>(() => {
     // Load from localStorage
@@ -63,10 +63,10 @@ export function useModelRegistry() {
   }
 
   /**
-   * Compute all available models (SAM3 + BYOM)
+   * Compute all available models (SAM3 + BYOM), filtered by project if applicable
    */
   const allModels: AvailableModel[] = useMemo(() => {
-    const byomModels: AvailableModel[] = registeredModels
+    let byomModels: AvailableModel[] = registeredModels
       .filter((m) => m.is_active)
       .map((m) => ({
         id: m.id,
@@ -85,8 +85,14 @@ export function useModelRegistry() {
         description: m.description || undefined,
       }))
 
+    // Apply project-level filter if provided
+    if (allowedModelIds && allowedModelIds.length > 0) {
+      byomModels = byomModels.filter((m) => allowedModelIds.includes(m.id))
+    }
+
+    // SAM3 is always available as built-in
     return [SAM3_BUILTIN, ...byomModels]
-  }, [registeredModels])
+  }, [registeredModels, allowedModelIds])
 
   /**
    * Get currently selected model

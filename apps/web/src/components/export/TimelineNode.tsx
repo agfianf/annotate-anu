@@ -256,7 +256,7 @@ export function TimelineNode({
                     className="w-1.5 h-1.5 rounded-full"
                     style={{ backgroundColor: tag.color }}
                   />
-                  {tag.name}
+                  {tag.category_name ? `${tag.category_name}:${tag.name}` : tag.name}
                 </span>
               ))}
               {export_.resolved_metadata.tags.length > 5 && (

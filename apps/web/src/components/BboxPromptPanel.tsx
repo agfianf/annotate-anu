@@ -5,7 +5,19 @@ import { PromptModeSelector } from './ui/PromptModeSelector'
 import type { Label, ImageData, PromptMode } from '@/types/annotations'
 import type { AvailableModel } from '@/types/byom'
 import { inferenceClient } from '@/lib/inference-client'
+import { imagesApi } from '@/lib/api-client'
 import toast from 'react-hot-toast'
+
+/**
+ * Fetch image as blob from URL (for job mode images)
+ */
+async function fetchImageAsBlob(url: string): Promise<Blob> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image: ${response.statusText}`)
+  }
+  return await response.blob()
+}
 
 interface BboxPromptPanelProps {
   labels: Label[]
@@ -77,10 +89,31 @@ export function BboxPromptPanel({
     setIsLoading(true)
 
     try {
+      // Get image blob - for job mode, fetch from API; for local mode, use blob directly
+      let imageBlob: Blob
+
+      if (currentImage.s3Key && currentImage.jobId && currentImage.jobImageId) {
+        // Job mode: fetch image from API
+        const imageUrl = imagesApi.getFullImageUrl(
+          currentImage.s3Key,
+          currentImage.jobId.toString(),
+          currentImage.jobImageId
+        )
+        console.log('[BboxPromptPanel] Fetching job image from:', imageUrl)
+        imageBlob = await fetchImageAsBlob(imageUrl)
+      } else if (currentImage.blob && currentImage.blob.size > 0) {
+        // Local mode: use existing blob
+        imageBlob = currentImage.blob
+      } else {
+        throw new Error('No valid image data available')
+      }
+
       // Convert blob to File
-      const imageFile = new File([currentImage.blob], currentImage.name, {
-        type: currentImage.blob.type,
+      const imageFile = new File([imageBlob], currentImage.name, {
+        type: imageBlob.type || 'image/jpeg',
       })
+
+      console.log('[BboxPromptPanel] Image file size:', imageFile.size, 'bytes')
 
       // Group bboxes by label so we can assign correct labels to detected objects
       const bboxesByLabel = new Map<string, typeof promptBboxes>()

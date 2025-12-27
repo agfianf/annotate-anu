@@ -11,6 +11,7 @@ import {
     Home,
     LogOut,
     Menu,
+    Sparkles,
     User,
     Users,
     X,
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   { path: '/dashboard/admin', label: 'Users', icon: <Users className="w-4 h-4" />, adminOnly: true },
   { path: '/dashboard/projects', label: 'Projects', icon: <Boxes className="w-4 h-4" /> },
   { path: '/dashboard/files', label: 'File Share', icon: <HardDrive className="w-4 h-4" /> },
+  { path: '/dashboard/models', label: 'Model Management', icon: <Sparkles className="w-4 h-4" /> },
 ];
 
 export default function DashboardLayout() {

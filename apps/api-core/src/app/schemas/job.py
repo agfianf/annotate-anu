@@ -68,6 +68,7 @@ class JobDetailResponse(JobResponse):
     image_count: int = 0
     project_id: int | None = None
     labels: list["LabelResponse"] = []
+    allowed_model_ids: list[str] | None = None
 
 
 # Import for forward reference

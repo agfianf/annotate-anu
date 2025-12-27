@@ -171,7 +171,12 @@ async def get_job_image_thumbnail(
         return FileResponse(
             thumbnail_path,
             media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=86400"},  # 24h cache
+            headers={
+                "Cache-Control": "public, max-age=86400",  # 24h cache
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+            },
         )
     except FileNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
@@ -220,6 +225,9 @@ async def get_job_image_file(
         headers={
             "Cache-Control": "public, max-age=86400",  # 24h cache
             "Content-Disposition": f"inline; filename=\"{image['filename']}\"",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
         },
     )
 
