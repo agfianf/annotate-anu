@@ -112,6 +112,7 @@ export interface KanbanBoardProps {
   userRole?: 'owner' | 'maintainer' | 'annotator' | 'viewer';
   onSplitChange: (taskId: number, split: Split) => Promise<void>;
   onTaskClick: (taskId: number) => void;
+  onCreateTask?: (split: Split) => void;
 }
 
 export interface KanbanColumnProps {
@@ -121,6 +122,8 @@ export interface KanbanColumnProps {
   onTaskClick: (taskId: number) => void;
   isDragging: boolean;
   columnIndex: number;
+  onCreateTask?: (split: Split) => void;
+  canCreate?: boolean;
 }
 
 export interface KanbanTaskCardProps {

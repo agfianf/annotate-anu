@@ -35,6 +35,7 @@ interface CreateTaskWizardProps {
   projectName: string;
   onClose: () => void;
   onSuccess: () => void;
+  initialSplit?: 'train' | 'val' | 'test' | null;
 }
 
 type WizardStep = 'basic' | 'images' | 'config' | 'review';
@@ -47,7 +48,7 @@ const STEPS: { id: WizardStep; label: string; icon: React.ReactNode }[] = [
   { id: 'review', label: 'Review', icon: <Check className="w-4 h-4" /> },
 ];
 
-export default function CreateTaskWizard({ projectId, projectName, onClose, onSuccess }: CreateTaskWizardProps) {
+export default function CreateTaskWizard({ projectId, projectName, onClose, onSuccess, initialSplit }: CreateTaskWizardProps) {
   const [currentStep, setCurrentStep] = useState<WizardStep>('basic');
   const [isCreating, setIsCreating] = useState(false);
 
@@ -55,7 +56,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
-  const [split, setSplit] = useState<'train' | 'val' | 'test' | null>(null);
+  const [split, setSplit] = useState<'train' | 'val' | 'test' | null>(initialSplit ?? null);
 
   // Step 2: Images - Mode selection
   const [imageSourceMode, setImageSourceMode] = useState<ImageSourceMode>('select');

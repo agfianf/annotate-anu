@@ -6,7 +6,7 @@
 
 import { useRef, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
-import { Briefcase, Image, GripVertical } from 'lucide-react';
+import { Briefcase, Image, GripVertical, ExternalLink } from 'lucide-react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { KanbanTaskCardProps, Split } from './types';
 import { SPLIT_ORDER } from './types';
@@ -102,6 +102,12 @@ export const KanbanTaskCard = memo(function KanbanTaskCard({
     // Only handle left mouse button or touch
     if (e.button !== 0) return;
 
+    // Don't start drag if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a')) {
+      return;
+    }
+
     e.preventDefault();
     isDraggingRef.current = true;
     document.body.style.cursor = 'grabbing';
@@ -134,26 +140,37 @@ export const KanbanTaskCard = memo(function KanbanTaskCard({
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
             }
       }
+      onPointerDown={handlePointerDown}
       className={`
-        bg-white rounded-xl border-2 p-3 select-none
+        group relative bg-white rounded-xl border-2 p-3 select-none
         ${isDragging ? 'border-emerald-400 border-dashed' : config.colors.border}
         ${isDragging ? '' : 'cursor-grab active:cursor-grabbing hover:shadow-md'}
         transition-colors
       `}
     >
+      {/* Open Task Button - Top Right */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="absolute top-2 right-2 p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all opacity-0 group-hover:opacity-100 z-10"
+        title="Open task details"
+      >
+        <ExternalLink className="w-4 h-4" />
+      </button>
+
       {/* Drag Handle + Task Header */}
       <div className="flex items-start gap-2 mb-2">
-        <div
-          className="flex items-center gap-1.5 cursor-grab active:cursor-grabbing touch-none"
-          onPointerDown={handlePointerDown}
-        >
+        <div className="flex items-center gap-1.5 touch-none">
           <GripVertical className="w-4 h-4 text-gray-300 flex-shrink-0" />
           <div className={`p-1.5 rounded-lg ${config.colors.bg} flex-shrink-0`}>
             <Briefcase className={`w-4 h-4 ${config.colors.text}`} />
           </div>
         </div>
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={onClick}>
-          <h4 className="font-medium text-gray-900 text-sm leading-tight truncate hover:text-emerald-700 flex items-center gap-1">
+        <div className="flex-1 min-w-0">
+          <h4 className="font-medium text-gray-900 text-sm leading-tight truncate flex items-center gap-1">
             <span className="text-gray-400 font-normal">#{task.id}</span>
             <span className="truncate">{task.name}</span>
           </h4>

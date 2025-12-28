@@ -9,6 +9,9 @@ import { tasksApi, jobsApi } from '@/lib/api-client';
 import type { Split, KanbanTaskWithStats, ColumnStats } from './types';
 import { SPLIT_ORDER } from './types';
 
+export type SortField = 'created_at' | 'updated_at';
+export type SortOrder = 'asc' | 'desc';
+
 interface UseKanbanStatsResult {
   tasksWithStats: KanbanTaskWithStats[];
   tasksBySplit: Record<string, KanbanTaskWithStats[]>;
@@ -25,7 +28,11 @@ const EMPTY_STATS: ColumnStats = {
   completionPercentage: 0,
 };
 
-export function useKanbanStats(tasks: Task[]): UseKanbanStatsResult {
+export function useKanbanStats(
+  tasks: Task[],
+  sortField: SortField = 'created_at',
+  sortOrder: SortOrder = 'desc'
+): UseKanbanStatsResult {
   const [jobsByTask, setJobsByTask] = useState<Record<number, Job[]>>({});
   const [isLoading, setIsLoading] = useState(true);
 
@@ -101,7 +108,7 @@ export function useKanbanStats(tasks: Task[]): UseKanbanStatsResult {
     });
   }, [tasks, jobsByTask]);
 
-  // Group tasks by split
+  // Group tasks by split and apply sorting
   const tasksBySplit = useMemo(() => {
     const groups: Record<string, KanbanTaskWithStats[]> = {
       null: [],
@@ -110,13 +117,25 @@ export function useKanbanStats(tasks: Task[]): UseKanbanStatsResult {
       test: [],
     };
 
+    // Group by split
     for (const task of tasksWithStats) {
       const key = task.split === null ? 'null' : task.split;
       groups[key].push(task);
     }
 
+    // Sort each group
+    const compareFn = (a: KanbanTaskWithStats, b: KanbanTaskWithStats) => {
+      const aDate = new Date(a[sortField]).getTime();
+      const bDate = new Date(b[sortField]).getTime();
+      return sortOrder === 'desc' ? bDate - aDate : aDate - bDate;
+    };
+
+    for (const key in groups) {
+      groups[key].sort(compareFn);
+    }
+
     return groups;
-  }, [tasksWithStats]);
+  }, [tasksWithStats, sortField, sortOrder]);
 
   // Compute column stats
   const columnStats = useMemo(() => {

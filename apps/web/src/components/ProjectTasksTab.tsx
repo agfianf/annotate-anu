@@ -32,6 +32,7 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
   const [isLoading, setIsLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [preSelectedSplit, setPreSelectedSplit] = useState<Split | undefined>(undefined);
 
   // Permission checks based on user role
   const canCreate = userRole === 'owner' || userRole === 'maintainer';
@@ -80,6 +81,16 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
 
       return updatedTasks;
     });
+  }, []);
+
+  const handleCreateTask = useCallback((split: Split) => {
+    setPreSelectedSplit(split);
+    setShowWizard(true);
+  }, []);
+
+  const handleWizardClose = useCallback(() => {
+    setShowWizard(false);
+    setPreSelectedSplit(undefined);
   }, []);
 
   if (isLoading) {
@@ -160,6 +171,7 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
           userRole={userRole}
           onSplitChange={handleSplitChange}
           onTaskClick={handleTaskClick}
+          onCreateTask={handleCreateTask}
         />
       )}
 
@@ -168,8 +180,9 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
         <CreateTaskWizard
           projectId={projectId}
           projectName={projectName}
-          onClose={() => setShowWizard(false)}
+          onClose={handleWizardClose}
           onSuccess={() => loadTasks()}
+          initialSplit={preSelectedSplit}
         />
       )}
     </div>

@@ -4,11 +4,12 @@
  * Optimized to avoid re-renders during drag
  */
 
-import { useRef, useState, useCallback, memo } from 'react';
+import { useRef, useState, useCallback, memo, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { useKanbanStats } from './useKanbanStats';
+import { useKanbanStats, type SortField, type SortOrder } from './useKanbanStats';
 import { KanbanColumn } from './KanbanColumn';
 import { DragOverlay, type DragOverlayHandle } from './DragOverlay';
+import { KanbanSortControls } from './KanbanSortControls';
 import { SPLIT_ORDER, getColumnConfig, type Split, type KanbanBoardProps, type KanbanTaskWithStats, type ColumnConfig } from './types';
 
 export function KanbanBoard({
@@ -17,9 +18,46 @@ export function KanbanBoard({
   userRole,
   onSplitChange,
   onTaskClick,
+  onCreateTask,
 }: KanbanBoardProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [draggingTaskId, setDraggingTaskId] = useState<number | null>(null);
+
+  // Sorting state with localStorage persistence
+  const [sortField, setSortField] = useState<SortField>(() => {
+    try {
+      const stored = localStorage.getItem('kanban-sort-field');
+      return (stored === 'updated_at' ? 'updated_at' : 'created_at') as SortField;
+    } catch {
+      return 'created_at';
+    }
+  });
+
+  const [sortOrder, setSortOrder] = useState<SortOrder>(() => {
+    try {
+      const stored = localStorage.getItem('kanban-sort-order');
+      return (stored === 'asc' ? 'asc' : 'desc') as SortOrder;
+    } catch {
+      return 'desc';
+    }
+  });
+
+  // Persist sorting preferences to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('kanban-sort-field', sortField);
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [sortField]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('kanban-sort-order', sortOrder);
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [sortOrder]);
 
   const dragOverlayRef = useRef<DragOverlayHandle>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -30,7 +68,10 @@ export function KanbanBoard({
     test: null,
   });
 
-  const { tasksWithStats, tasksBySplit, columnStats, isLoading } = useKanbanStats(tasks);
+  const { tasksWithStats, tasksBySplit, columnStats, isLoading } = useKanbanStats(tasks, sortField, sortOrder);
+
+  // Determine if user can create tasks
+  const canCreate = userRole === 'owner' || userRole === 'maintainer';
 
   // Use ref to avoid re-creating callback on every render
   const handleDragStart = useCallback((taskId: number, task: KanbanTaskWithStats, config: ColumnConfig, x: number, y: number) => {
@@ -106,6 +147,17 @@ export function KanbanBoard({
 
   return (
     <>
+      {/* Sort Controls */}
+      <div className="flex justify-end mb-3">
+        <KanbanSortControls
+          sortField={sortField}
+          sortOrder={sortOrder}
+          onSortFieldChange={setSortField}
+          onSortOrderChange={setSortOrder}
+        />
+      </div>
+
+      {/* Kanban Board */}
       <div ref={boardRef} className="grid grid-cols-4 gap-4 min-h-[500px]">
         {SPLIT_ORDER.map((split, index) => {
           const config = getColumnConfig(split);
@@ -125,6 +177,8 @@ export function KanbanBoard({
               onDragStart={handleDragStart}
               onDragMove={handleDragMove}
               onDragEnd={handleDragEnd}
+              onCreateTask={onCreateTask}
+              canCreate={canCreate}
             />
           );
         })}

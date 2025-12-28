@@ -34,6 +34,8 @@ export const KanbanColumn = memo(forwardRef<HTMLDivElement, KanbanColumnPropsExt
       onDragStart,
       onDragMove,
       onDragEnd,
+      onCreateTask,
+      canCreate,
     },
     ref
   ) {
@@ -81,12 +83,27 @@ export const KanbanColumn = memo(forwardRef<HTMLDivElement, KanbanColumnPropsExt
                   <div className={`p-3 rounded-full ${config.colors.accent} mb-3`}>
                     <Plus className={`w-5 h-5 ${config.colors.text}`} />
                   </div>
-                  <p className={`text-sm font-medium ${config.colors.text}`}>
+                  <p className={`text-sm font-medium ${config.colors.text} mb-1`}>
                     No tasks
                   </p>
-                  <p className="text-xs text-gray-400 mt-1 text-center">
-                    Drag tasks here to assign them to {config.title.toLowerCase()}
+                  <p className="text-xs text-gray-400 mb-3 text-center">
+                    Drag tasks here or create a new one
                   </p>
+                  {canCreate && onCreateTask && (
+                    <button
+                      onClick={() => onCreateTask(config.key)}
+                      className={`
+                        px-3 py-1.5 rounded-lg font-medium text-sm
+                        ${config.colors.text} ${config.colors.bgHover}
+                        border-2 ${config.colors.border}
+                        transition-all hover:shadow-md
+                        flex items-center gap-1.5
+                      `}
+                    >
+                      <Plus className="w-4 h-4" />
+                      New Task
+                    </button>
+                  )}
                 </motion.div>
               ) : (
                 tasks.map((task) => (
