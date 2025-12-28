@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Tech Stack**:
 - **Backend**: FastAPI (Python 3.12), SQLAlchemy, Alembic, PostgreSQL, Redis
-- **Frontend**: React 18, TypeScript, Vite, TailwindCSS, Konva
+- **Frontend**: React 18, TypeScript, Vite, TailwindCSS, Konva, **TanStack Router** (IMPORTANT: Code-based routing)
 - **ML**: HuggingFace Transformers (SAM3), CUDA support
 - **Infrastructure**: Docker Compose, Traefik, Celery
 
@@ -77,7 +77,9 @@ sam3-app/
 │   │
 │   └── web/                        # Frontend (Port 5173/3000)
 │       ├── src/
-│       │   ├── pages/                         # React pages
+│       │   ├── routes/                        # TanStack Router configuration (IMPORTANT)
+│       │   │   └── __root.tsx                 # Route tree definition (code-based routing)
+│       │   ├── pages/                         # React page components
 │       │   │   ├── LandingPage.tsx
 │       │   │   ├── DashboardPage.tsx
 │       │   │   ├── ProjectsPage.tsx
@@ -157,6 +159,7 @@ sam3-app/
 
 **Frontend** (`/apps/web`):
 - React 18 + TypeScript + Vite + TailwindCSS
+- **TanStack Router** with code-based routing (`src/routes/__root.tsx`) - IMPORTANT
 - Konva-based annotation canvas (rectangles, polygons, points)
 - IndexedDB persistence (Solo) or hybrid IndexedDB + API (Team)
 - Ports: 5173 (dev), 3000 (solo), 80 (team via Traefik)
@@ -516,11 +519,29 @@ function MyComponent() {
 
 ### Adding New Frontend Page
 
-1. Create page component in `apps/web/src/pages/`
-2. Add route in `apps/web/src/main.tsx`
-3. Update navigation in `apps/web/src/components/DashboardLayout.tsx`
+**IMPORTANT: This project uses TanStack Router with code-based routing.**
+
+1. Create page component in `apps/web/src/pages/` (e.g., `MyPage.tsx`)
+2. Open `apps/web/src/routes/__root.tsx` and:
+   - Import your page component at the top
+   - Create a route using `createRoute()`:
+     ```typescript
+     const myPageRoute = createRoute({
+       getParentRoute: () => rootRoute, // or dashboardLayoutRoute for authenticated pages
+       path: '/my-page',
+       component: MyPage,
+     })
+     ```
+   - Add the route to the `routeTree` (bottom of file)
+3. Update navigation in `apps/web/src/components/DashboardLayout.tsx` if needed
 4. Add API client methods in `apps/web/src/lib/api-client.ts` if needed
 5. Update types in `apps/web/src/types/` if needed
+
+**Notes**:
+- All routes are manually defined in `src/routes/__root.tsx`
+- Use `$paramName` syntax for dynamic routes (e.g., `/projects/$projectId`)
+- Add routes under `authenticatedRoute` for protected pages
+- Use `validateSearch` with Zod schemas for type-safe query parameters
 
 ### Animation System (Frontend)
 
@@ -529,7 +550,7 @@ function MyComponent() {
 - `apps/web/ANIMATION_COMPLETE.md`
 - `apps/web/TOOLTIP_DEMO.md`
 
-**Demo page**: `GET /animations` (route in `apps/web/src/main.tsx`)
+**Demo page**: `GET /animations` (route defined in `apps/web/src/routes/__root.tsx`)
 
 **Implementation notes**:
 - Prefer importing primitives from `apps/web/src/components/ui/animate/index.ts`.
