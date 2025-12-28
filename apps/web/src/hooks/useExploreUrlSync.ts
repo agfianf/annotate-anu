@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import type { ExploreFiltersState } from './useExploreFilters';
 import type { FilterSnapshot } from '@/types/export';
 
@@ -77,14 +77,21 @@ export function useExploreUrlSync(
   filters: ExploreFiltersState,
   setFilters: (filters: ExploreFiltersState) => void
 ) {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as Record<string, unknown>;
+
+  // Get raw URL search params for dynamic keys (attr_*, range_*)
+  const getUrlSearchParams = useCallback(() => {
+    return new URLSearchParams(window.location.search);
+  }, []);
 
   // Parse URL params into filter state
   const parseUrlToFilters = useCallback((): Partial<ExploreFiltersState> => {
     const parsed: Partial<ExploreFiltersState> = {};
+    const searchParams = getUrlSearchParams();
 
     // Check for base64-encoded FilterSnapshot (from export history)
-    const filterParam = searchParams.get('filter');
+    const filterParam = search.filter as string | undefined;
     if (filterParam) {
       try {
         const filterJson = atob(filterParam);
@@ -95,7 +102,7 @@ export function useExploreUrlSync(
       }
     }
 
-    // Tags (legacy format)
+    // Tags (legacy format) - from URL directly since TanStack doesn't support arrays well
     const tags = searchParams.getAll('tag');
     if (tags.length > 0) {
       const tagFilters: Record<string, 'include' | 'exclude'> = {};
@@ -133,7 +140,7 @@ export function useExploreUrlSync(
     }
 
     // Size filter
-    const sizes = searchParams.get('size');
+    const sizes = search.size as string | undefined;
     if (sizes) {
       parsed.sizeFilter = sizes.split(',').filter((s): s is 'small' | 'medium' | 'large' =>
         ['small', 'medium', 'large'].includes(s)
@@ -141,55 +148,86 @@ export function useExploreUrlSync(
     }
 
     return parsed;
-  }, [searchParams]);
+  }, [search, getUrlSearchParams]);
 
   // Serialize filter state to URL params
   const serializeFiltersToUrl = useCallback((state: ExploreFiltersState) => {
-    const params = new URLSearchParams();
+    const newSearch: Record<string, unknown> = {};
 
     // Keep the tab parameter if present
-    const currentTab = searchParams.get('tab');
-    if (currentTab) {
-      params.set('tab', currentTab);
+    if (search.tab) {
+      newSearch.tab = search.tab;
     }
+
+    // Keep fullview if present
+    if (search.fullview) {
+      newSearch.fullview = search.fullview;
+    }
+
+    // For dynamic params (attr_*, range_*, tag[]), we need to use URL manipulation
+    // TanStack Router handles the base search params, we'll append the rest
+    const dynamicParams: string[] = [];
 
     // Tags (using include mode only for URL serialization)
     Object.entries(state.tagFilters).forEach(([tagId, mode]) => {
       if (mode === 'include') {
-        params.append('tag', tagId);
+        dynamicParams.push(`tag=${encodeURIComponent(tagId)}`);
       }
     });
 
     // Categorical attributes
     Object.entries(state.selectedAttributes).forEach(([schemaId, values]) => {
       if (values.length > 0) {
-        params.set(`attr_${schemaId}`, values.join(','));
+        dynamicParams.push(`attr_${schemaId}=${encodeURIComponent(values.join(','))}`);
       }
     });
 
     // Numeric ranges
     Object.entries(state.numericRanges).forEach(([schemaId, range]) => {
-      params.set(`range_${schemaId}`, `${range.min},${range.max}`);
+      dynamicParams.push(`range_${schemaId}=${range.min},${range.max}`);
     });
 
     // Size filter
     if (state.sizeFilter.length > 0) {
-      params.set('size', state.sizeFilter.join(','));
+      newSearch.size = state.sizeFilter.join(',');
     }
 
-    return params;
-  }, [searchParams]);
+    return { newSearch, dynamicParams };
+  }, [search]);
 
   // Update URL when filters change
   useEffect(() => {
-    const newParams = serializeFiltersToUrl(filters);
-    const currentParams = new URLSearchParams(searchParams);
+    const { newSearch, dynamicParams } = serializeFiltersToUrl(filters);
 
-    // Only update if actually changed (avoid infinite loops)
-    if (newParams.toString() !== currentParams.toString()) {
-      setSearchParams(newParams, { replace: true });
+    // Build new URL with both TanStack search params and dynamic params
+    navigate({
+      search: newSearch as any,
+      replace: true,
+    });
+
+    // For dynamic params, we need to update the URL directly after navigate
+    // This is a workaround since TanStack Router doesn't support dynamic keys well
+    if (dynamicParams.length > 0) {
+      const currentUrl = new URL(window.location.href);
+      // Clear old dynamic params
+      const keysToRemove = Array.from(currentUrl.searchParams.keys())
+        .filter(k => k.startsWith('attr_') || k.startsWith('range_') || k === 'tag');
+      keysToRemove.forEach(k => {
+        // Remove all values for this key
+        while (currentUrl.searchParams.has(k)) {
+          currentUrl.searchParams.delete(k);
+        }
+      });
+
+      // Add new dynamic params
+      dynamicParams.forEach(param => {
+        const [key, value] = param.split('=');
+        currentUrl.searchParams.append(key, decodeURIComponent(value));
+      });
+
+      window.history.replaceState({}, '', currentUrl.toString());
     }
-  }, [filters, serializeFiltersToUrl, setSearchParams, searchParams]);
+  }, [filters, serializeFiltersToUrl, navigate]);
 
   // Initialize filters from URL on mount
   useEffect(() => {
@@ -215,13 +253,14 @@ export function useExploreUrlSync(
 
   // Check if URL has any filter params
   const hasUrlFilters = useMemo(() => {
+    const searchParams = getUrlSearchParams();
     return (
-      searchParams.has('filter') ||
+      !!search.filter ||
       searchParams.has('tag') ||
       Array.from(searchParams.keys()).some((k) => k.startsWith('attr_') || k.startsWith('range_')) ||
-      searchParams.has('size')
+      !!search.size
     );
-  }, [searchParams]);
+  }, [search, getUrlSearchParams]);
 
   return {
     hasUrlFilters,

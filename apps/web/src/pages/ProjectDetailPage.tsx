@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useNavigate, useSearch } from '@tanstack/react-router';
 import ProjectConfigurationTab from '../components/ProjectConfigurationTab';
 import ProjectExploreTab from '../components/ProjectExploreTab';
 import ProjectHistoryTab from '../components/ProjectHistoryTab';
@@ -49,8 +49,9 @@ Add any additional information that annotators should know.
 `;
 
 export default function ProjectDetailPage() {
-  const { projectId } = useParams<{ projectId: string }>();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { projectId } = useParams({ strict: false }) as { projectId: string };
+  const search = useSearch({ strict: false }) as { tab?: ProjectTabId; fullview?: boolean };
+  const navigate = useNavigate();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -59,7 +60,7 @@ export default function ProjectDetailPage() {
   const editorRef = useRef<ProjectReadmeEditorHandle>(null);
 
   // Get active tab from URL or default to 'readme'
-  const activeTab = (searchParams.get('tab') as ProjectTabId) || 'readme';
+  const activeTab = search.tab || 'readme';
 
   // Full-view mode for explore tab (must be at top to satisfy Rules of Hooks)
   const { isFullView } = useExploreView();
@@ -68,7 +69,7 @@ export default function ProjectDetailPage() {
   const needsFullHeight = activeTab === 'explore';
 
   const handleTabChange = (tab: ProjectTabId) => {
-    setSearchParams({ tab });
+    navigate({ search: { tab } });
     // Cancel editing when switching tabs
     if (isEditing && tab !== 'readme') {
       setIsEditing(false);

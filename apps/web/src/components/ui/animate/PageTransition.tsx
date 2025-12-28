@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from '@tanstack/react-router';
 import { type ReactNode } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { ANIMATION_TIMINGS } from '@/lib/motion-config';

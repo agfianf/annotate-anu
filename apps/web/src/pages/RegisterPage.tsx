@@ -7,7 +7,7 @@ import { AlertCircle, Check, Eye, EyeOff, Loader2, UserPlus, X } from 'lucide-re
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../lib/api-client';
 
@@ -111,10 +111,10 @@ export default function RegisterPage() {
       
       if (isFirstUser) {
         toast.success('Account created! You are the admin.');
-        navigate('/dashboard');
+        navigate({ to: '/dashboard' });
       } else {
         toast.success('Account created! Please wait for admin approval.');
-        navigate('/login');
+        navigate({ to: '/login' });
       }
     } catch (err: unknown) {
       const axiosError = err as { response?: { data?: { detail?: string } } };

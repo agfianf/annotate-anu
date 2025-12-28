@@ -14,7 +14,7 @@ import {
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from '@tanstack/react-router';
 import ConfirmationModal from '../components/ConfirmationModal';
 import CreateTaskWizard from '../components/CreateTaskWizard';
 import Toggle from '../components/Toggle';
@@ -26,7 +26,7 @@ export default function TasksPage() {
   const [includeArchived, setIncludeArchived] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId } = useParams({ strict: false }) as { projectId: string };
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);

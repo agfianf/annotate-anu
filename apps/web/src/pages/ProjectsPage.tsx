@@ -13,7 +13,7 @@ import {
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link } from 'react-router-dom';
+import { Link } from '@tanstack/react-router';
 import ConfirmationModal from '../components/ConfirmationModal';
 import Toggle from '../components/Toggle';
 import { useAuth } from '../contexts/AuthContext';

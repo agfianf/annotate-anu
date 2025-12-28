@@ -1,5 +1,5 @@
 import { Github } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link } from '@tanstack/react-router'
 import { markAsVisited } from '../../lib/navigation'
 
 function Footer() {

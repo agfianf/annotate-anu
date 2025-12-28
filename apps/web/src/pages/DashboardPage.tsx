@@ -5,7 +5,7 @@
 
 import { ArrowRight, Boxes, Briefcase, ClipboardList, Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@tanstack/react-router';
 import { useAuth } from '../contexts/AuthContext';
 import type { Project } from '../lib/api-client';
 import { projectsApi } from '../lib/api-client';

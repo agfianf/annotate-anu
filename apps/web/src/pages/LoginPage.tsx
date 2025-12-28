@@ -7,11 +7,12 @@ import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as { redirect?: string };
   const { login } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -31,7 +32,9 @@ export default function LoginPage() {
     try {
       await login(email, password);
       toast.success('Welcome back!');
-      navigate('/dashboard');
+      // Navigate to redirect URL or dashboard
+      const redirectTo = search.redirect || '/dashboard';
+      navigate({ to: redirectTo });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Login failed';
       const axiosError = error as { response?: { data?: { detail?: string } } };

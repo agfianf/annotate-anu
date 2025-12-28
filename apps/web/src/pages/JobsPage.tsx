@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import AssigneeDropdown from '../components/AssigneeDropdown';
 import ConfirmationModal from '../components/ConfirmationModal';
 import Toggle from '../components/Toggle';
@@ -27,7 +27,7 @@ import type { Job, TaskDetail } from '../lib/api-client';
 import { jobsApi, tasksApi } from '../lib/api-client';
 
 export default function JobsPage() {
-  const { taskId, projectId } = useParams<{ taskId: string; projectId?: string }>();
+  const { taskId, projectId } = useParams({ strict: false }) as { taskId: string; projectId?: string };
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const navigate = useNavigate();
@@ -126,7 +126,7 @@ export default function JobsPage() {
 
   const handleJobClick = (jobId: string) => {
     // Navigate to annotation page with job context
-    navigate(`/annotate?jobId=${jobId}`);
+    navigate({ to: '/annotate', search: { jobId } });
   };
 
   const handleAssigneeChange = async (jobId: string, assigneeId: string | null) => {

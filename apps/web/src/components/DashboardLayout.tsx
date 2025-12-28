@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useExploreView } from '../contexts/ExploreViewContext';
 
@@ -53,7 +53,7 @@ export default function DashboardLayout() {
     try {
       await logout();
       toast.success('Logged out successfully');
-      navigate('/');
+      navigate({ to: '/' });
     } catch {
       toast.error('Failed to logout');
     }

@@ -6,7 +6,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from '@tanstack/react-router';
 import { authApi } from '../lib/api-client';
 
 interface FirstUserCheckProps {
@@ -25,7 +25,7 @@ export default function FirstUserCheck({ children }: FirstUserCheckProps) {
         
         // If no users exist and not already on register page, redirect to register
         if (result.is_first_user && location.pathname !== '/register') {
-          navigate('/register', { replace: true });
+          navigate({ to: '/register', replace: true });
         }
       } catch (error) {
         // If API fails, assume users exist and continue normally

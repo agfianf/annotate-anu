@@ -5,7 +5,7 @@
 
 import type { ReactNode } from 'react';
 import { createContext, useContext } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 
 interface ExploreViewContextType {
   isFullView: boolean;
@@ -16,23 +16,26 @@ interface ExploreViewContextType {
 const ExploreViewContext = createContext<ExploreViewContextType | undefined>(undefined);
 
 export function ExploreViewProvider({ children }: { children: ReactNode }) {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const isFullView = searchParams.get('fullview') === 'true';
+  const search = useSearch({ strict: false }) as { fullview?: boolean; [key: string]: unknown };
+  const navigate = useNavigate();
+  const isFullView = search.fullview === true;
 
   const toggleFullView = () => {
-    const newParams = new URLSearchParams(searchParams);
-    if (isFullView) {
-      newParams.delete('fullview');
-    } else {
-      newParams.set('fullview', 'true');
-    }
-    setSearchParams(newParams);
+    navigate({
+      search: (prev: Record<string, unknown>) => ({
+        ...prev,
+        fullview: isFullView ? undefined : true,
+      }),
+    });
   };
 
   const exitFullView = () => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.delete('fullview');
-    setSearchParams(newParams);
+    navigate({
+      search: (prev: Record<string, unknown>) => {
+        const { fullview: _, ...rest } = prev;
+        return rest;
+      },
+    });
   };
 
   return (

@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@tanstack/react-router';
 import { useExploreView } from '../contexts/ExploreViewContext';
 import { useExploreFilters, useSidebarAggregations } from '../hooks/useExploreFilters';
 import { useExploreVisibility } from '../hooks/useExploreVisibility';

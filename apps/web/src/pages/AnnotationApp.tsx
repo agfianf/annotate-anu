@@ -1,7 +1,7 @@
 import { Check, Cloud, CloudOff, Copy, Download, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import '../App.css'
 import Canvas from '../components/Canvas'
 import { ExportModal } from '../components/ExportModal'
@@ -142,9 +142,9 @@ const ImageThumbnail = ({
 
 function AnnotationApp() {
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const jobId = searchParams.get('jobId')
-  const imageIdParam = searchParams.get('imageId')
+  const search = useSearch({ strict: false }) as { jobId?: string; imageId?: string }
+  const jobId = search.jobId || null
+  const imageIdParam = search.imageId || null
 
   const [selectedTool, setSelectedTool] = useState<Tool>('select')
   const [selectedAnnotations, setSelectedAnnotations] = useState<string[]>([])
@@ -266,13 +266,17 @@ function AnnotationApp() {
   // Sync URL when current image changes (for navigation)
   useEffect(() => {
     if (isJobMode && currentImageId && jobId && imagesInitializedRef.current) {
-      const currentParams = new URLSearchParams(searchParams)
-      if (currentParams.get('imageId') !== currentImageId) {
-        currentParams.set('imageId', currentImageId)
-        setSearchParams(currentParams, { replace: true })
+      if (search.imageId !== currentImageId) {
+        navigate({
+          search: (prev: Record<string, unknown>) => ({
+            ...prev,
+            imageId: currentImageId,
+          }),
+          replace: true,
+        })
       }
     }
-  }, [isJobMode, currentImageId, jobId, searchParams, setSearchParams])
+  }, [isJobMode, currentImageId, jobId, search.imageId, navigate])
 
   // Persist prompt mode to localStorage
   useEffect(() => {
@@ -1010,7 +1014,7 @@ function AnnotationApp() {
             selectedModel={selectedModel}
             allModels={allModels}
             onSelectModel={selectModel}
-            onOpenSettings={isJobMode ? undefined : () => navigate('/models')}
+            onOpenSettings={isJobMode ? undefined : () => navigate({ to: '/dashboard/models' })}
             onRefresh={isNotConfigured ? undefined : refreshModels}
             isNotConfigured={isNotConfigured}
           />

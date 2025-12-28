@@ -1,5 +1,5 @@
 import { ArrowRight, LogIn, Shield, User, UserPlus, Users, Zap } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { FadeIn, GradientText, TiltCard } from '../ui/animate'
 import { useAuth } from '../../contexts/AuthContext'
 import { markAsVisited } from '../../lib/navigation'
@@ -71,7 +71,7 @@ function TeamCard() {
 
   const handleDashboard = () => {
     markAsVisited()
-    navigate('/dashboard')
+    navigate({ to: '/dashboard' })
   }
 
   return (
@@ -142,7 +142,7 @@ function Hero() {
 
   const handleSoloMode = () => {
     markAsVisited()
-    navigate('/annotate')
+    navigate({ to: '/annotate' })
   }
 
   return (
