@@ -5,16 +5,10 @@
  */
 
 import {
-  AlertCircle,
   ArrowLeft,
-  Briefcase,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
   Loader2,
-  Play,
-  Trash2,
-  User
+  Filter,
+  X
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -22,6 +16,7 @@ import { Link, useNavigate, useParams } from '@tanstack/react-router';
 import AssigneeDropdown from '../components/AssigneeDropdown';
 import ConfirmationModal from '../components/ConfirmationModal';
 import Toggle from '../components/Toggle';
+import JobTable from '../components/table/JobTable';
 import { useAuth } from '../contexts/AuthContext';
 import type { Job, TaskDetail } from '../lib/api-client';
 import { jobsApi, tasksApi } from '../lib/api-client';
@@ -35,6 +30,10 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [includeArchived, setIncludeArchived] = useState(false);
+
+  // Filter state
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
   
   // Modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -146,40 +145,36 @@ export default function JobsPage() {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
-      case 'completed':
-      case 'review':
-        return <CheckCircle2 className="w-4 h-4 text-blue-600" />;
-      case 'in_progress':
-        return <Play className="w-4 h-4 text-yellow-600" />;
-      case 'rejected':
-        return <AlertCircle className="w-4 h-4 text-red-600" />;
-      case 'assigned':
-        return <User className="w-4 h-4 text-purple-600" />;
-      default:
-        return <Clock className="w-4 h-4 text-gray-400" />;
+  // Apply filters to jobs
+  const filteredJobs = jobs.filter(job => {
+    // Status filter
+    if (statusFilter.length > 0 && !statusFilter.includes(job.status)) {
+      return false;
     }
-  };
+    // Assignee filter
+    if (assigneeFilter && job.assignee_id !== assigneeFilter) {
+      return false;
+    }
+    return true;
+  });
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return 'bg-emerald-100 text-emerald-700';
-      case 'completed':
-      case 'review':
-        return 'bg-blue-100 text-blue-700';
-      case 'in_progress':
-        return 'bg-yellow-100 text-yellow-700';
-      case 'rejected':
-        return 'bg-red-100 text-red-700';
-      case 'assigned':
-        return 'bg-purple-100 text-purple-700';
-      default:
-        return 'bg-gray-100 text-gray-600';
-    }
+  // Available status options
+  const statusOptions = [
+    { value: 'pending', label: 'Pending' },
+    { value: 'assigned', label: 'Assigned' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'review', label: 'Review' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'rejected', label: 'Rejected' },
+  ];
+
+  const toggleStatusFilter = (status: string) => {
+    setStatusFilter(prev =>
+      prev.includes(status)
+        ? prev.filter(s => s !== status)
+        : [...prev, status]
+    );
   };
 
   if (isLoading) {
@@ -210,125 +205,107 @@ export default function JobsPage() {
                 onChange={setIncludeArchived}
                 label="Show Archived"
             />
-            <span className="text-gray-500">{jobs.length} jobs</span>
+            <span className="text-gray-500">{filteredJobs.length} of {jobs.length} jobs</span>
         </div>
       </div>
 
-      {/* Jobs list */}
-      {jobs.length === 0 ? (
-        <div className="glass-strong rounded-2xl p-12 text-center shadow-lg shadow-emerald-500/5">
-          <Briefcase className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">No jobs yet</h3>
-          <p className="text-gray-500">
-             {includeArchived ? 'No archived or active jobs found' : 'Jobs will appear here when created'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {jobs.map((job) => (
-            <div
-              key={job.id}
-               className={`glass rounded-xl p-5 shadow-lg shadow-emerald-500/5 border border-gray-100 hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all group relative ${job.is_archived ? 'opacity-75 bg-gray-50' : ''}`}
-            >
-              {/* Header with status and admin actions */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  {getStatusIcon(job.status)}
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${getStatusColor(job.status)}`}>
-                    {job.status.replace('_', ' ')}
-                  </span>
-                  {job.is_archived && <span className="px-2 py-0.5 text-xs font-medium bg-gray-200 text-gray-600 rounded-lg">Archived</span>}
-                </div>
-                
-                 {isAdmin && (
-                  <div className="flex items-center gap-3">
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <Toggle
-                        checked={job.is_archived}
-                        onChange={(checked) => {
-                          if (checked) {
-                            handleArchive({ stopPropagation: () => {} } as React.MouseEvent, job);
-                          } else {
-                            handleUnarchive({ stopPropagation: () => {} } as React.MouseEvent, job);
-                          }
-                        }}
-                        size="sm"
-                      />
-                    </div>
-                      {job.is_archived && (
-                           <button 
-                             onClick={(e) => handleDelete(e, job)}
-                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                             title="Delete"
-                           >
-                             <Trash2 className="w-4 h-4" />
-                           </button>
-                     )}
-                  </div>
-                )}
-              </div>
-
-              {/* Job title - clickable */}
-              <div 
-                className="cursor-pointer group mb-3"
-                onClick={() => handleJobClick(job.id)}
-              >
-                <h3 className="font-semibold text-gray-900 group-hover:text-emerald-600 transition-colors flex items-center gap-1">
-                  <span className="text-gray-400 font-normal">#{job.id}</span> 
-                  Job {(job as any).sequence_number !== undefined ? (job as any).sequence_number + 1 : ''}
-                  <ChevronRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </h3>
-                <p className="text-xs text-gray-400 mt-1">
-                  Created: {new Date(job.created_at).toLocaleDateString()}
-                </p>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="mb-4">
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-xs font-medium text-gray-500">Progress</span>
-                  <span className="text-xs font-mono font-medium text-emerald-600">
-                    {job.annotated_images}/{job.total_images}
-                  </span>
-                </div>
-                <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-emerald-500 rounded-full transition-all duration-500 ease-out"
-                    style={{
-                      width: `${(job.annotated_images / Math.max(job.total_images, 1)) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Assignee Dropdown */}
-              <div className="mb-3" onClick={(e) => e.stopPropagation()}>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Assignee</label>
-                {task && (
-                  <AssigneeDropdown
-                    projectId={String(task.project_id)}
-                    value={job.assignee_id}
-                    onChange={(id) => handleAssigneeChange(job.id, id)}
-                    placeholder="Unassigned"
-                    size="sm"
-                    assignedUser={job.assignee}
-                  />
-                )}
-              </div>
-
-              {/* Open Annotation button */}
-              <div className="pt-3 border-t border-gray-100">
-                <button
-                  onClick={() => handleJobClick(job.id)}
-                  className="w-full py-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 text-sm font-medium rounded-lg transition-all"
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* Status Filter */}
+        <div className="relative">
+          <details className="group">
+            <summary className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg cursor-pointer hover:border-emerald-300 transition-colors">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <span className="text-sm font-medium text-gray-700">
+                Status {statusFilter.length > 0 && `(${statusFilter.length})`}
+              </span>
+            </summary>
+            <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10 py-2">
+              {statusOptions.map((option) => (
+                <label
+                  key={option.value}
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 cursor-pointer"
                 >
-                  Open Annotation →
-                </button>
-              </div>
+                  <input
+                    type="checkbox"
+                    checked={statusFilter.includes(option.value)}
+                    onChange={() => toggleStatusFilter(option.value)}
+                    className="w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                  <span className="text-sm text-gray-700">{option.label}</span>
+                </label>
+              ))}
+              {statusFilter.length > 0 && (
+                <div className="border-t border-gray-200 mt-2 pt-2 px-4">
+                  <button
+                    onClick={() => setStatusFilter([])}
+                    className="text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+                  >
+                    Clear all
+                  </button>
+                </div>
+              )}
             </div>
-          ))}
+          </details>
         </div>
-      )}
+
+        {/* Assignee Filter */}
+        <div className="relative">
+          {task && (
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <AssigneeDropdown
+                projectId={String(task.project_id)}
+                value={assigneeFilter}
+                onChange={setAssigneeFilter}
+                placeholder="All Assignees"
+                size="sm"
+                showClear={true}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Active Filters Display */}
+        {(statusFilter.length > 0 || assigneeFilter) && (
+          <button
+            onClick={() => {
+              setStatusFilter([]);
+              setAssigneeFilter(null);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <X className="w-4 h-4" />
+            Clear all filters
+          </button>
+        )}
+      </div>
+
+      {/* Jobs Table */}
+      <JobTable
+        jobs={filteredJobs}
+        onJobClick={handleJobClick}
+        onAssigneeChange={handleAssigneeChange}
+        onArchive={isAdmin ? (jobId) => {
+          const job = jobs.find(j => j.id === jobId);
+          if (job) {
+            if (job.is_archived) {
+              handleUnarchive({ stopPropagation: () => {} } as React.MouseEvent, job);
+            } else {
+              handleArchive({ stopPropagation: () => {} } as React.MouseEvent, job);
+            }
+          }
+        } : undefined}
+        onDelete={isAdmin ? (jobId) => {
+          const job = jobs.find(j => j.id === jobId);
+          if (job) {
+            handleDelete({ stopPropagation: () => {} } as React.MouseEvent, job);
+          }
+        } : undefined}
+        projectId={projectId || String(task?.project_id || '')}
+        taskId={taskId}
+        userRole={user?.role}
+      />
 
       {/* Confirmation Modal */}
       <ConfirmationModal
