@@ -336,7 +336,8 @@ export default function AssigneeDropdown({
                         <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                       )}
                     </button>
-                ))}
+                  ))
+                )}
               </div>
             )}
           </div>

@@ -9,7 +9,7 @@ import type { MemberUserInfo } from '@/lib/api-client';
 
 export interface AssigneeDropdownCellProps {
   projectId: string;
-  taskId: number;
+  taskId: number | string;
   assigneeId: string | null;
   assignee?: MemberUserInfo | null;
   onChange: (assigneeId: string | null) => Promise<void>;
