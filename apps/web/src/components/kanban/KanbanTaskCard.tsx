@@ -6,7 +6,7 @@
 
 import { useRef, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
-import { Briefcase, Image, GripVertical, ExternalLink } from 'lucide-react';
+import { Briefcase, Image, GripVertical, ExternalLink, Calendar, Clock } from 'lucide-react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { KanbanTaskCardProps, Split } from './types';
 import { SPLIT_ORDER } from './types';
@@ -26,6 +26,23 @@ const getStatusColor = (status: string) => {
     default:
       return 'bg-gray-100 text-gray-600';
   }
+};
+
+const formatRelativeTime = (dateString: string): string => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  // For older dates, show formatted date
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
 interface KanbanTaskCardPropsExtended extends Omit<KanbanTaskCardProps, 'onDragStart' | 'onDragEnd'> {
@@ -221,6 +238,18 @@ export const KanbanTaskCard = memo(function KanbanTaskCard({
             </div>
           </div>
         )}
+      </div>
+
+      {/* Timestamps */}
+      <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
+        <div className="flex items-center gap-1" title={`Created: ${new Date(task.created_at).toLocaleString()}`}>
+          <Calendar className="w-3 h-3" />
+          <span>{formatRelativeTime(task.created_at)}</span>
+        </div>
+        <div className="flex items-center gap-1" title={`Updated: ${new Date(task.updated_at).toLocaleString()}`}>
+          <Clock className="w-3 h-3" />
+          <span>{formatRelativeTime(task.updated_at)}</span>
+        </div>
       </div>
     </motion.div>
   );
