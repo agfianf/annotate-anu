@@ -69,7 +69,7 @@ const projectDetailSearchSchema = z.object({
 
 // Annotation app
 const annotateSearchSchema = z.object({
-  jobId: z.string().optional(),
+  jobId: z.coerce.string().optional(),
 })
 
 // ============================================================================
@@ -136,7 +136,7 @@ const animationsRoute = createRoute({
 
 const annotateRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/annotate',
+  path: '/annotation',
   validateSearch: annotateSearchSchema,
   component: AnnotationApp,
 })

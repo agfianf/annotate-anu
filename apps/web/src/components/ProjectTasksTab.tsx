@@ -6,10 +6,10 @@
 import {
     Boxes,
     LayoutGrid,
-    ListTodo,
     Loader2,
     Plus,
     RefreshCw,
+    Table2,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
@@ -19,6 +19,7 @@ import { tasksApi } from '../lib/api-client';
 import CreateTaskWizard from './CreateTaskWizard';
 import Toggle from './Toggle';
 import { KanbanBoard, type Split } from './kanban';
+import { TableView } from './table';
 
 interface ProjectTasksTabProps {
   projectId: string;
@@ -33,6 +34,25 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
   const [showWizard, setShowWizard] = useState(false);
   const [includeArchived, setIncludeArchived] = useState(false);
   const [preSelectedSplit, setPreSelectedSplit] = useState<Split | undefined>(undefined);
+
+  // View state - load from localStorage
+  const [view, setView] = useState<'table' | 'kanban'>(() => {
+    try {
+      const stored = localStorage.getItem(`projectTasksView-${projectId}`);
+      return (stored as 'table' | 'kanban') || 'table';
+    } catch {
+      return 'table';
+    }
+  });
+
+  // Save view preference to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(`projectTasksView-${projectId}`, view);
+    } catch (err) {
+      console.error('Failed to save view preference:', err);
+    }
+  }, [view, projectId]);
 
   // Permission checks based on user role
   const canCreate = userRole === 'owner' || userRole === 'maintainer';
@@ -83,6 +103,31 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
     });
   }, []);
 
+  const handleAssigneeChange = useCallback(async (taskId: number, assigneeId: string | null) => {
+    // Optimistic update
+    setTasks(prev => {
+      const originalTasks = [...prev];
+      const updatedTasks = prev.map(t =>
+        t.id === taskId ? { ...t, assignee_id: assigneeId } : t
+      );
+
+      // Start the async update
+      (async () => {
+        try {
+          await tasksApi.assign(taskId, assigneeId);
+          toast.success(assigneeId ? 'Assignee updated' : 'Task unassigned');
+        } catch (err) {
+          // Revert on error
+          setTasks(originalTasks);
+          console.error('Failed to update assignee:', err);
+          toast.error('Failed to update assignee');
+        }
+      })();
+
+      return updatedTasks;
+    });
+  }, []);
+
   const handleCreateTask = useCallback((split: Split) => {
     setPreSelectedSplit(split);
     setShowWizard(true);
@@ -120,6 +165,39 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
                 size="sm"
               />
             </div>
+            {/* View Toggle */}
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-0.5 mr-2">
+              <button
+                onClick={() => setView('table')}
+                className={`
+                  px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5
+                  ${
+                    view === 'table'
+                      ? 'bg-white text-emerald-700 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }
+                `}
+                title="Table view"
+              >
+                <Table2 className="w-4 h-4" />
+                Table
+              </button>
+              <button
+                onClick={() => setView('kanban')}
+                className={`
+                  px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5
+                  ${
+                    view === 'kanban'
+                      ? 'bg-white text-emerald-700 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }
+                `}
+                title="Kanban view"
+              >
+                <LayoutGrid className="w-4 h-4" />
+                Kanban
+              </button>
+            </div>
             <button
               onClick={loadTasks}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
@@ -140,7 +218,7 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
         </div>
       </div>
 
-      {/* Kanban Board */}
+      {/* Table or Kanban View */}
       {tasks.length === 0 ? (
         <div className="glass-strong rounded-2xl shadow-lg p-6">
           <div className="text-center py-12">
@@ -164,6 +242,16 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
             )}
           </div>
         </div>
+      ) : view === 'table' ? (
+        <TableView
+          projectId={projectId}
+          tasks={tasks}
+          userRole={userRole}
+          onSplitChange={handleSplitChange}
+          onAssigneeChange={handleAssigneeChange}
+          onTaskClick={handleTaskClick}
+          onCreateTask={handleCreateTask}
+        />
       ) : (
         <KanbanBoard
           projectId={projectId}

@@ -126,7 +126,7 @@ export default function JobsPage() {
 
   const handleJobClick = (jobId: string) => {
     // Navigate to annotation page with job context
-    navigate({ to: '/annotate', search: { jobId } });
+    navigate({ to: '/annotation', search: { jobId } });
   };
 
   const handleAssigneeChange = async (jobId: string, assigneeId: string | null) => {

@@ -160,7 +160,7 @@ export default function AssigneeDropdown({
     return name.includes(search.toLowerCase());
   });
 
-  const handleSelect = (userId: string) => {
+  const handleSelect = (userId: string | null) => {
     onChange(userId);
     setIsOpen(false);
     setSearch('');
@@ -199,8 +199,14 @@ export default function AssigneeDropdown({
               <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-xs font-medium flex-shrink-0">
                 {getMemberInitials(selectedMember)}
               </div>
-              <span className="text-gray-900 truncate">
-                {getMemberDisplayName(selectedMember)}
+              <span
+                className="text-gray-900 truncate"
+                title={getMemberDisplayName(selectedMember)}
+              >
+                {(() => {
+                  const name = getMemberDisplayName(selectedMember);
+                  return name.length > 10 ? getMemberInitials(selectedMember) : name;
+                })()}
               </span>
 
             </>
@@ -266,43 +272,70 @@ export default function AssigneeDropdown({
                 <Loader2 className="w-6 h-6 text-emerald-600 animate-spin mx-auto" />
                 <p className="text-sm text-gray-500 mt-2">Loading members...</p>
               </div>
-            ) : filteredMembers.length === 0 ? (
+            ) : filteredMembers.length === 0 && search ? (
               <div className="py-8 text-center">
                 <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">
-                  {search ? 'No members found' : 'No members in project'}
-                </p>
+                <p className="text-sm text-gray-500">No members found</p>
               </div>
             ) : (
               <div className="py-1">
-                {filteredMembers.map((member) => (
-                  <button
-                    key={member.id}
-                    onClick={() => handleSelect(member.user_id)}
-                    className={`
-                      w-full px-3 py-2.5 flex items-center gap-3
-                      hover:bg-emerald-50 transition-colors text-left
-                      ${value === member.user_id ? 'bg-emerald-50' : ''}
-                    `}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
-                      {getMemberInitials(member)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {getMemberDisplayName(member)}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {member.user?.email || `ID: ${member.user_id.slice(0, 8)}...`}
-                      </p>
-                    </div>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${getRoleColor(member.role)}`}>
-                      {member.role}
-                    </span>
-                    {value === member.user_id && (
-                      <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    )}
-                  </button>
+                {/* Unassign Option */}
+                <button
+                  onClick={() => handleSelect(null)}
+                  className={`
+                    w-full px-3 py-2.5 flex items-center gap-3
+                    hover:bg-gray-50 transition-colors text-left
+                    border-b border-gray-100
+                    ${!value ? 'bg-gray-50' : ''}
+                  `}
+                >
+                  <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                    <UserCircle className="w-5 h-5 text-gray-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-700">Unassigned</p>
+                    <p className="text-xs text-gray-500">No assignee</p>
+                  </div>
+                  {!value && (
+                    <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                  )}
+                </button>
+
+                {/* Member List */}
+                {filteredMembers.length === 0 && !search ? (
+                  <div className="py-8 text-center">
+                    <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No members in project</p>
+                  </div>
+                ) : (
+                  filteredMembers.map((member) => (
+                    <button
+                      key={member.id}
+                      onClick={() => handleSelect(member.user_id)}
+                      className={`
+                        w-full px-3 py-2.5 flex items-center gap-3
+                        hover:bg-emerald-50 transition-colors text-left
+                        ${value === member.user_id ? 'bg-emerald-50' : ''}
+                      `}
+                    >
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-sm font-medium flex-shrink-0">
+                        {getMemberInitials(member)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {getMemberDisplayName(member)}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {member.user?.email || `ID: ${member.user_id.slice(0, 8)}...`}
+                        </p>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${getRoleColor(member.role)}`}>
+                        {member.role}
+                      </span>
+                      {value === member.user_id && (
+                        <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      )}
+                    </button>
                 ))}
               </div>
             )}
