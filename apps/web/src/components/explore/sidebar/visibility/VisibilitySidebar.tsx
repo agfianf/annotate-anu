@@ -236,11 +236,11 @@ export function VisibilitySidebar({
                   onColorClick={handleMetadataColorClick('filepath')}
                 />
                 <VisibilityItem
-                  name="imageUids"
-                  checked={visibility.isMetadataVisible('imageUids')}
-                  color={visibility.getMetadataColor('imageUids')}
-                  onToggle={() => visibility.toggleMetadata('imageUids')}
-                  onColorClick={handleMetadataColorClick('imageUids')}
+                  name="imageId"
+                  checked={visibility.isMetadataVisible('imageId')}
+                  color={visibility.getMetadataColor('imageId')}
+                  onToggle={() => visibility.toggleMetadata('imageId')}
+                  onColorClick={handleMetadataColorClick('imageId')}
                 />
                 <VisibilityItem
                   name="width"

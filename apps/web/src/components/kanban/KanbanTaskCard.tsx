@@ -234,7 +234,7 @@ export const KanbanTaskCard = memo(function KanbanTaskCard({
         {task.assignee && (
           <div className="flex items-center gap-1.5">
             <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-medium text-emerald-700">
-              {task.assignee.full_name?.charAt(0) || task.assignee.email.charAt(0).toUpperCase()}
+              {task.assignee.full_name?.charAt(0) || task.assignee.username?.charAt(0)?.toUpperCase() || '?'}
             </div>
           </div>
         )}

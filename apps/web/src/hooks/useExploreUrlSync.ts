@@ -62,7 +62,7 @@ function convertFilterSnapshotToExploreFilters(
 
   // Image UIDs
   if (snapshot.image_uids?.length) {
-    result.imageUids = snapshot.image_uids;
+    result.imageId = snapshot.image_uids;
   }
 
   return result;
@@ -244,7 +244,7 @@ export function useExploreUrlSync(
         heightRange: urlFilters.heightRange,
         sizeRange: urlFilters.sizeRange,
         filepathPaths: urlFilters.filepathPaths,
-        imageUids: urlFilters.imageUids,
+        imageId: urlFilters.imageId,
       });
     }
     // Only run on mount

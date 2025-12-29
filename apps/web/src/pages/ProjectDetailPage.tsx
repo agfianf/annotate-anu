@@ -60,7 +60,7 @@ export default function ProjectDetailPage() {
   const editorRef = useRef<ProjectReadmeEditorHandle>(null);
 
   // Get active tab from URL or default to 'readme'
-  const activeTab = search.tab || 'readme';
+  const activeTab = (search.tab || 'readme') as ProjectTabId;
 
   // Full-view mode for explore tab (must be at top to satisfy Rules of Hooks)
   const { isFullView } = useExploreView();
@@ -69,7 +69,7 @@ export default function ProjectDetailPage() {
   const needsFullHeight = activeTab === 'explore';
 
   const handleTabChange = (tab: ProjectTabId) => {
-    navigate({ search: { tab } });
+    navigate({ search: { tab } as any } as any);
     // Cancel editing when switching tabs
     if (isEditing && tab !== 'readme') {
       setIsEditing(false);
@@ -85,7 +85,7 @@ export default function ProjectDetailPage() {
     if (!projectId) return;
 
     try {
-      const data = await projectsApi.get(projectId);
+      const data = await projectsApi.get(Number(projectId));
       setProject(data);
       setEditedReadme(data.readme || '');
     } catch (err: unknown) {

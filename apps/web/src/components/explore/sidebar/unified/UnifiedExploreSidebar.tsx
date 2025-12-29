@@ -23,7 +23,7 @@ interface UnifiedExploreSidebarProps {
   setExcludeMatchMode: (mode: 'AND' | 'OR') => void;
   visibility: UseExploreVisibilityReturn;
   // Metadata filter handlers
-  onImageUidsChange: (imageUids: string[]) => void;
+  onImageUidsChange: (imageId: string[]) => void;
   onWidthRangeChange: (min: number, max: number) => void;
   onHeightRangeChange: (min: number, max: number) => void;
   onSizeRangeChange: (min: number, max: number) => void;
@@ -333,12 +333,12 @@ export function UnifiedExploreSidebar({
     const modes = tags.map(tag => filters.tagFilters[tag.id] || 'idle');
     const allInclude = modes.every(m => m === 'include');
     const allExclude = modes.every(m => m === 'exclude');
-    const allIdle = modes.every(m => m === 'idle');
+    const allIdle = tags.every(tag => !filters.tagFilters[tag.id] || filters.tagFilters[tag.id] === undefined);
 
     if (allInclude) return 'include';
     if (allExclude) return 'exclude';
     if (allIdle) return 'idle';
-    return 'mixed';
+    return 'mixed' as any;
   };
 
   // Toggle all tags in a category (tri-state cycle)
@@ -546,7 +546,7 @@ export function UnifiedExploreSidebar({
                           color={category.color}
                           onColorChange={(color) => updateCategoryMutation.mutate({ categoryId, color })}
                           count={category.tags?.length}
-                          filterMode={getTagFilterMode(category.tags)}
+                          filterMode={getTagFilterMode(category.tags) as any}
                           isVisible={visibility.isCategoryVisible(categoryId)}
                           onToggleFilter={() => handleToggleCategoryFilter(category.tags)}
                           onToggleVisibility={() => visibility.toggleCategory(categoryId)}
@@ -648,12 +648,12 @@ export function UnifiedExploreSidebar({
                 {/* Image UID Selector */}
                 <ImageUidSelector
                   projectId={projectId}
-                  selectedImageIds={filters.imageUids || []}
+                  selectedImageIds={filters.imageId || []}
                   onSelectionChange={onImageUidsChange}
-                  isVisible={visibility.isMetadataVisible('imageUids')}
-                  onToggleVisibility={() => visibility.toggleMetadata('imageUids')}
-                  displayColor={visibility.getMetadataColor('imageUids')}
-                  onColorChange={(color) => visibility.setMetadataColor('imageUids', color)}
+                  isVisible={visibility.isMetadataVisible('imageId')}
+                  onToggleVisibility={() => visibility.toggleMetadata('imageId')}
+                  displayColor={visibility.getMetadataColor('imageId')}
+                  onColorChange={(color) => visibility.setMetadataColor('imageId', color)}
                 />
 
                 {/* Width Filter */}

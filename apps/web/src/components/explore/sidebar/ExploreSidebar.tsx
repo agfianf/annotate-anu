@@ -106,7 +106,7 @@ export function ExploreSidebar({
             {/* Tags Filter */}
             <TagFilterSection
               tags={aggregations.tags}
-              selectedTagIds={filters.selectedTagIds}
+              selectedTagIds={(filters as any).selectedTagIds || []}
               onToggleTag={onToggleTag}
             />
 

@@ -149,7 +149,7 @@ export function ModelSelector({
           {/* Model List */}
           <div className="max-h-80 overflow-y-auto">
             {allModels.map((model) => {
-              const isSelected = model.id === selectedModel.id
+              const isSelected = model.id === selectedModel?.id
               const isBuiltin = model.type === 'builtin'
 
               return (

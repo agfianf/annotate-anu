@@ -339,6 +339,8 @@ export function LeftSidebar({
           disabled={!onAutofit}
         />
 
+        <div className="w-full h-px bg-gray-300 my-2" />
+
         {/* History Controls */}
         <ToolButton
           icon={<Undo className="w-5 h-5" />}

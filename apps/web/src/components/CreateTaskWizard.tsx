@@ -249,7 +249,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
           distribution_order: distributionOrder,
           images: uploadedImages,
         };
-        const result = await tasksApi.createWithImages(projectId, payload);
+        const result = await tasksApi.createWithImages(Number(projectId), payload);
         toast.success(`Task created with ${result.jobs.length} job(s)!`);
       }
       onSuccess();

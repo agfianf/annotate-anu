@@ -14,7 +14,7 @@ export interface ExploreFiltersState {
   sizeRange?: { min: number; max: number };
   filepathPattern?: string; // Deprecated - use filepathPaths
   filepathPaths?: string[]; // Filter by specific directory paths
-  imageUids?: string[]; // Filter by specific image UIDs
+  imageId?: string[]; // Filter by specific image UIDs
 }
 
 const defaultFilters: ExploreFiltersState = {
@@ -167,8 +167,8 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     setFilters((prev) => ({ ...prev, filepathPaths: paths }));
   }, []);
 
-  const setImageUids = useCallback((imageUids: string[]) => {
-    setFilters((prev) => ({ ...prev, imageUids }));
+  const setImageUids = useCallback((imageId: string[]) => {
+    setFilters((prev) => ({ ...prev, imageId }));
   }, []);
 
   const clearFilters = useCallback(() => {
@@ -185,7 +185,7 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     filters.sizeRange !== undefined ||
     filters.filepathPattern !== undefined ||
     (filters.filepathPaths && filters.filepathPaths.length > 0) ||
-    (filters.imageUids && filters.imageUids.length > 0);
+    (filters.imageId && filters.imageId.length > 0);
 
   return {
     filters,
@@ -207,7 +207,7 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     sizeRange: filters.sizeRange,
     filepathPattern: filters.filepathPattern,
     filepathPaths: filters.filepathPaths,
-    imageUids: filters.imageUids,
+    imageId: filters.imageId,
     setWidthRange,
     setHeightRange,
     setSizeRange,

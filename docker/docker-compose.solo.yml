@@ -36,12 +36,15 @@ services:
       context: ../apps/web
       dockerfile: Dockerfile
       target: production
+      args:
+        - VITE_SAM3_API_URL=http://10.8.0.106:8000
+        - VITE_CORE_API_URL=http://10.8.0.106:8001
+        - VITE_ENV=production
     container_name: anu-frontend-solo
     ports:
       - "3000:80"
     environment:
       - VITE_MODE=solo
-      - VITE_API_URL=http://localhost:8000
       - VITE_STORAGE=indexeddb
     depends_on:
       - backend

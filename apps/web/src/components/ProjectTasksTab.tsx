@@ -60,7 +60,7 @@ export default function ProjectTasksTab({ projectId, projectName, userRole }: Pr
   const loadTasks = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await tasksApi.list(projectId, undefined, includeArchived);
+      const data = await tasksApi.list(Number(projectId), undefined, includeArchived);
       setTasks(data);
     } catch (err) {
       console.error('Failed to load tasks:', err);

@@ -135,7 +135,7 @@ export function FadeIn({
     return {
       duration,
       delay,
-      ease: [0, 0, 0.2, 1], // easeOut
+      ease: [0, 0, 0.2, 1] as [number, number, number, number], // easeOut
     };
   }, [prefersReducedMotion, spring, duration, delay]);
 

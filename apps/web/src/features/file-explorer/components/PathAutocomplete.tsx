@@ -9,7 +9,7 @@ interface PathAutocompleteProps {
   placeholder?: string
   disabled?: boolean
   className?: string
-  mode?: 'select' | 'create' // 'select' for UploadModal, 'create' for folder creation
+  _mode?: 'select' | 'create' // 'select' for UploadModal, 'create' for folder creation
 }
 
 export function PathAutocomplete({
@@ -18,7 +18,7 @@ export function PathAutocomplete({
   placeholder = '/ (root)',
   disabled = false,
   className = '',
-  mode = 'select',
+  _mode = 'select',
 }: PathAutocompleteProps) {
   const [showDropdown, setShowDropdown] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(0)

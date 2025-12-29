@@ -45,7 +45,7 @@ type AnnotationType = 'bbox' | 'polygon'
 export function BboxPromptPanel({
   labels,
   currentImage,
-  images,
+  // images, // Unused parameter
   promptMode,
   setPromptMode,
   onAnnotationsCreated,
@@ -128,13 +128,13 @@ export function BboxPromptPanel({
 
       // Call API separately for each unique label
       for (const [labelId, bboxes] of bboxesByLabel) {
-        // Convert bboxes to API format: [[x1, y1, x2, y2, 1], ...]
-        const bboxesForAPI: Array<[number, number, number, number, number]> = bboxes.map((bbox) => {
+        // Convert bboxes to API format: [[x1, y1, x2, y2, '1'], ...]
+        const bboxesForAPI: Array<[number, number, number, number, string]> = bboxes.map((bbox) => {
           const x1 = bbox.x
           const y1 = bbox.y
           const x2 = bbox.x + bbox.width
           const y2 = bbox.y + bbox.height
-          return [x1, y1, x2, y2, 1] // Using 1 as the class ID
+          return [x1, y1, x2, y2, '1'] // Using '1' as the class ID (string)
         })
 
         // Call bbox prompt API using unified inference client

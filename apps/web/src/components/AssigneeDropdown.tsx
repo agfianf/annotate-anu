@@ -117,7 +117,7 @@ export default function AssigneeDropdown({
   const loadMembers = async () => {
     setIsLoading(true);
     try {
-      const data = await membersApi.list(projectId);
+      const data = await membersApi.list(Number(projectId));
       setMembers(data);
     } catch (err) {
       console.error('Failed to load members:', err);
@@ -133,7 +133,7 @@ export default function AssigneeDropdown({
      selectedMember = {
          id: 'temp',
          user_id: assignedUser.id,
-         project_id: projectId,
+         project_id: Number(projectId),
          role: 'annotator', // fallback role, mainly for color
          allowed_task_ids: null,
          allowed_job_ids: null,

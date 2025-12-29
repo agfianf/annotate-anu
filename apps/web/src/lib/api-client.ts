@@ -243,8 +243,11 @@ export const refreshTokenIfNeeded = async (): Promise<boolean> => {
     const formData = new FormData();
     formData.append('refresh_token', refreshToken);
 
+    const coreApiUrl = import.meta.env.VITE_CORE_API_URL !== undefined
+      ? import.meta.env.VITE_CORE_API_URL
+      : 'http://localhost:8001';
     const response = await axios.post<ApiResponse<TokenOnlyResponse>>(
-      `${import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001'}/api/v1/auth/refresh`,
+      `${coreApiUrl}/api/v1/auth/refresh`,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } }
     );
@@ -263,7 +266,11 @@ export const refreshTokenIfNeeded = async (): Promise<boolean> => {
 };
 
 // API Base URL - Uses VITE_CORE_API_URL for management APIs (auth, projects, admin, etc.)
-const API_BASE_URL = import.meta.env.VITE_CORE_API_URL || 'http://localhost:8001';
+// In production, this should be empty string since nginx proxies /api/v1/* to the backend
+// In development, this should be http://localhost:8001
+const API_BASE_URL = import.meta.env.VITE_CORE_API_URL !== undefined
+  ? import.meta.env.VITE_CORE_API_URL
+  : 'http://localhost:8001';
 
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({

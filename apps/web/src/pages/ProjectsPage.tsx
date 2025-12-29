@@ -191,7 +191,8 @@ export default function ProjectsPage() {
           {projects.map((project) => (
             <Link
               key={project.id}
-              to={`/dashboard/projects/${project.id}`}
+              to="/dashboard/projects/$projectId"
+              params={{ projectId: String(project.id) }}
               className={`glass rounded-2xl p-6 shadow-lg shadow-emerald-500/5 border border-gray-100 hover:border-emerald-200 hover:shadow-emerald-500/10 transition-all group relative ${project.is_archived ? 'opacity-75 bg-gray-50' : ''}`}
             >
               <div className="flex items-start justify-between mb-4">

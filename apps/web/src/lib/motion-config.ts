@@ -63,12 +63,13 @@ export const SPRING_CONFIGS = {
 
 /**
  * Easing function presets
+ * These are cubic bezier curves for smooth animations
  */
 export const EASINGS = {
-  easeIn: [0.4, 0, 1, 1],
-  easeOut: [0, 0, 0.2, 1],
-  easeInOut: [0.4, 0, 0.2, 1],
-  smooth: [0.25, 0.1, 0.25, 1],
+  easeIn: [0.4, 0, 1, 1] as [number, number, number, number],
+  easeOut: [0, 0, 0.2, 1] as [number, number, number, number],
+  easeInOut: [0.4, 0, 0.2, 1] as [number, number, number, number],
+  smooth: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
 } as const;
 
 /**

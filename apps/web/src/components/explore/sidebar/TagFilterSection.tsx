@@ -40,7 +40,6 @@ export function TagFilterSection({
                 type="checkbox"
                 checked={isSelected}
                 onChange={() => onToggleTag(tag.id)}
-                onChange={() => onToggleTag(tag.id)}
                 className="rounded border-emerald-200 bg-white text-emerald-500 focus:ring-emerald-500/50"
               />
               <span

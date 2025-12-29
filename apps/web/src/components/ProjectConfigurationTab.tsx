@@ -28,7 +28,7 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
   const [isAddingLabel, setIsAddingLabel] = useState(false);
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [newLabelName, setNewLabelName] = useState('');
-  const [newLabelColor, setNewLabelColor] = useState(DEFAULT_LABEL_COLOR);
+  const [newLabelColor, setNewLabelColor] = useState<string>(DEFAULT_LABEL_COLOR);
   const [editLabelName, setEditLabelName] = useState('');
   const [editLabelColor, setEditLabelColor] = useState('');
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -696,7 +696,7 @@ function ProjectMembersSection({ projectId, canEdit }: { projectId: number; canE
 
   const loadMembers = async () => {
     try {
-      const data = await membersApi.list(String(projectId));
+      const data = await membersApi.list(Number(projectId));
       setMembers(data);
     } catch (err) {
       console.error('Failed to load members:', err);
@@ -708,7 +708,7 @@ function ProjectMembersSection({ projectId, canEdit }: { projectId: number; canE
   const loadAvailableUsers = async () => {
     setIsLoadingUsers(true);
     try {
-      const users = await membersApi.listAvailable(String(projectId));
+      const users = await membersApi.listAvailable(Number(projectId));
       setAvailableUsers(users);
     } catch (err) {
       console.error('Failed to load available users:', err);
@@ -733,7 +733,7 @@ function ProjectMembersSection({ projectId, canEdit }: { projectId: number; canE
 
     setIsAdding(true);
     try {
-      await membersApi.add(String(projectId), {
+      await membersApi.add(Number(projectId), {
         user_id: selectedUserId,
         role: newMemberRole,
       });
@@ -751,9 +751,9 @@ function ProjectMembersSection({ projectId, canEdit }: { projectId: number; canE
 
   const handleRemoveMember = async (memberId: string, memberName: string) => {
     if (!confirm(`Remove ${memberName} from the project?`)) return;
-    
+
     try {
-      await membersApi.remove(String(projectId), memberId);
+      await membersApi.remove(Number(projectId), memberId);
       toast.success('Member removed');
       loadMembers();
     } catch (err) {

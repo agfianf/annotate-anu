@@ -137,7 +137,7 @@ export const FileExplorerToolbar = memo(function FileExplorerToolbar({
                   setValidationError(validation.valid ? '' : validation.error || '')
                 }}
                 placeholder="folder-name or path/to/folder"
-                mode="create"
+                _mode="create"
                 disabled={createDirectory.isPending}
                 className={`px-2 py-1 text-sm border rounded bg-white ${
                   validationError

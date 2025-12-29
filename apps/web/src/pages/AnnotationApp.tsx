@@ -23,6 +23,16 @@ import { annotationStorage } from '../lib/storage'
 import type { Annotation, ImageData, Label, PolygonAnnotation, PromptMode, RectangleAnnotation, Tool } from '../types/annotations'
 import type { DirtyImageInfo } from '../hooks/useAutoSave'
 
+const DEFAULT_APPEARANCE_SETTINGS = {
+  fillOpacity: 0,        // 0-100% default 0% (no fill when unselected)
+  selectedOpacity: 30,   // 0-100% default 30% (fill shown when selected)
+  strokeWidth: 2,        // Stroke/border width in pixels
+  showLabels: false,     // default: hide labels
+  showPolygons: true,
+  showRectangles: true,
+  showHoverTooltips: true,
+}
+
 // Thumbnail component to prevent re-creating blob URLs on every render
 interface ImageThumbnailProps {
   image: ImageData
@@ -163,6 +173,7 @@ function AnnotationApp() {
   // BYOM model registry - initialized after storage to get allowedModelIds
   // (actual call moved after useJobStorage)
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false)
+  const [isGalleryCollapsed, setIsGalleryCollapsed] = useState(true) // Hidden by default
   const [promptBboxes, setPromptBboxes] = useState<Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>>([])
   const [isBboxPromptMode, setIsBboxPromptMode] = useState(false)
   const [isAIPanelActive, setIsAIPanelActive] = useState(false)
@@ -191,6 +202,20 @@ function AnnotationApp() {
   // Zoom and pan state
   const [zoomLevel, setZoomLevel] = useState(1)
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 })
+
+  // Appearance settings for annotations (persisted to localStorage)
+  const [appearanceSettings, setAppearanceSettings] = useState(() => {
+    const saved = localStorage.getItem('annotationAppearanceSettings')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        return { ...DEFAULT_APPEARANCE_SETTINGS, ...parsed }
+      } catch {
+        // Invalid JSON, use defaults
+      }
+    }
+    return DEFAULT_APPEARANCE_SETTINGS
+  })
 
   // Use job-aware storage (falls back to local storage if no jobId)
   const storage = useJobStorage(jobId)
@@ -226,7 +251,7 @@ function AnnotationApp() {
     syncNow,
     dirtyImageIds, // Legacy
     dirtyImageInfo, // Enhanced
-    syncHistory, // Sync history
+    // syncHistory, // Sync history
     allowedModelIds, // BYOM - project allowed models
   } = storage
 
@@ -268,12 +293,12 @@ function AnnotationApp() {
     if (isJobMode && currentImageId && jobId && imagesInitializedRef.current) {
       if (search.imageId !== currentImageId) {
         navigate({
-          search: (prev: Record<string, unknown>) => ({
+          search: (prev: any) => ({
             ...prev,
             imageId: currentImageId,
           }),
           replace: true,
-        })
+        } as any)
       }
     }
   }, [isJobMode, currentImageId, jobId, search.imageId, navigate])
@@ -282,6 +307,11 @@ function AnnotationApp() {
   useEffect(() => {
     localStorage.setItem('promptMode', promptMode)
   }, [promptMode])
+
+  // Persist appearance settings to localStorage
+  useEffect(() => {
+    localStorage.setItem('annotationAppearanceSettings', JSON.stringify(appearanceSettings))
+  }, [appearanceSettings])
 
   // Detect orphaned annotations on load
   useEffect(() => {
@@ -1134,6 +1164,13 @@ function AnnotationApp() {
                 onStagePositionChange={setStagePosition}
                 pendingChanges={currentImageId ? (dirtyImageInfo?.get(currentImageId)?.count || 0) : 0}
                 hasError={currentImageId ? (dirtyImageInfo?.get(currentImageId)?.hasError || false) : false}
+                fillOpacity={appearanceSettings.fillOpacity / 100}
+                selectedOpacity={appearanceSettings.selectedOpacity / 100}
+                strokeWidth={appearanceSettings.strokeWidth}
+                showLabels={appearanceSettings.showLabels}
+                showPolygons={appearanceSettings.showPolygons}
+                showRectangles={appearanceSettings.showRectangles}
+                showHoverTooltips={appearanceSettings.showHoverTooltips}
               />
               {/* Auto-apply loading overlay */}
               {isAutoApplyLoading && (
@@ -1162,129 +1199,167 @@ function AnnotationApp() {
             onBulkToggleVisibility={handleBulkToggleVisibility}
             isCollapsed={isRightSidebarCollapsed}
             onToggleCollapse={() => setIsRightSidebarCollapsed(prev => !prev)}
+            appearanceSettings={appearanceSettings}
+            onAppearanceChange={setAppearanceSettings}
+            appearanceDefaults={DEFAULT_APPEARANCE_SETTINGS}
           />
         </div>
 
-        {/* Image Gallery - Bottom strip */}
-        <div className="h-28 glass border-t border-gray-200 flex items-center px-4 gap-3">
-          {/* Previous button */}
+        {/* Image Gallery - Collapsible Bottom strip */}
+        <div className={`glass border-t border-gray-200 transition-all duration-200 ${isGalleryCollapsed ? 'h-8' : 'h-28'}`}>
+          {/* Gallery Header - Always visible */}
           <button
-            onClick={() => {
-              const prevIndex = currentImageIndex - 1
-              if (prevIndex >= 0) {
-                setCurrentImageId(images[prevIndex].id)
-              }
-            }}
-            disabled={currentImageIndex <= 0 || images.length === 0}
-            className="p-2 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 rounded transition-colors border border-gray-300"
-            title="Previous image (D)"
+            onClick={() => setIsGalleryCollapsed(prev => !prev)}
+            className="w-full h-8 px-4 flex items-center justify-between hover:bg-gray-100/50 transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <div className="flex items-center gap-2">
+              <svg
+                className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isGalleryCollapsed ? '' : 'rotate-180'}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+              <span className="text-xs font-medium text-gray-600">
+                Image Gallery
+              </span>
+              <span className="text-xs text-gray-400">
+                ({images.length} images)
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {currentImage && (
+                <span className="text-xs text-emerald-600 font-medium">
+                  {currentImageNumber} / {images.length}
+                </span>
+              )}
+            </div>
           </button>
 
-          {/* Thumbnails */}
-          <div className="flex-1 flex gap-2 overflow-x-auto py-2">
-            {/* Upload buttons container - hidden in job mode */}
-            {!isJobMode && (
-              <div className="flex-shrink-0 flex gap-2">
-                {/* Upload Files Button */}
-                <label className="cursor-pointer group" title="Upload image files">
-                  <div className="h-20 w-20 border-2 border-dashed border-gray-300 hover:border-emerald-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-emerald-50">
-                    <Upload className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 transition-colors" />
-                    <span className="text-xs text-gray-500 group-hover:text-emerald-600 transition-colors">Files</span>
-                  </div>
-                  <input
-                    type="file"
-                    accept=".jpg,.jpeg,.png,.webp,.bmp"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files) {
-                        handleImageUpload(e.target.files)
-                      }
-                    }}
-                  />
-                </label>
+          {/* Gallery Content - Collapsible */}
+          {!isGalleryCollapsed && (
+            <div className="h-20 flex items-center px-4 gap-3">
+              {/* Previous button */}
+              <button
+                onClick={() => {
+                  const prevIndex = currentImageIndex - 1
+                  if (prevIndex >= 0) {
+                    setCurrentImageId(images[prevIndex].id)
+                  }
+                }}
+                disabled={currentImageIndex <= 0 || images.length === 0}
+                className="p-2 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 rounded transition-colors border border-gray-300"
+                title="Previous image (D)"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
 
-                {/* Upload Folder Button */}
-                {folderUploadSupported && (
-                  <label className="cursor-pointer group" title="Upload entire folder of images">
-                    <div className="h-20 w-20 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-blue-50">
-                      <svg
-                        className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                      </svg>
-                      <span className="text-xs text-gray-500 group-hover:text-blue-600 transition-colors">Folder</span>
-                    </div>
-                    <input
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.webp,.bmp"
-                      {...({ webkitdirectory: "", mozdirectory: "", directory: "" } as any)}
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files) {
-                          handleImageUpload(e.target.files)
+              {/* Thumbnails */}
+              <div className="flex-1 flex gap-2 overflow-x-auto py-2">
+                {/* Upload buttons container - hidden in job mode */}
+                {!isJobMode && (
+                  <div className="flex-shrink-0 flex gap-2">
+                    {/* Upload Files Button */}
+                    <label className="cursor-pointer group" title="Upload image files">
+                      <div className="h-20 w-20 border-2 border-dashed border-gray-300 hover:border-emerald-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-emerald-50">
+                        <Upload className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 transition-colors" />
+                        <span className="text-xs text-gray-500 group-hover:text-emerald-600 transition-colors">Files</span>
+                      </div>
+                      <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png,.webp,.bmp"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files) {
+                            handleImageUpload(e.target.files)
+                          }
+                        }}
+                      />
+                    </label>
+
+                    {/* Upload Folder Button */}
+                    {folderUploadSupported && (
+                      <label className="cursor-pointer group" title="Upload entire folder of images">
+                        <div className="h-20 w-20 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-blue-50">
+                          <svg
+                            className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                          </svg>
+                          <span className="text-xs text-gray-500 group-hover:text-blue-600 transition-colors">Folder</span>
+                        </div>
+                        <input
+                          type="file"
+                          accept=".jpg,.jpeg,.png,.webp,.bmp"
+                          {...({ webkitdirectory: "", mozdirectory: "", directory: "" } as any)}
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files) {
+                              handleImageUpload(e.target.files)
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                {images.map((image) => {
+                  // Count annotations for this specific image
+                  const imageAnnotationCount = annotations.filter(a => a.imageId === image.id).length
+
+                  return (
+                    <ImageThumbnail
+                      key={image.id}
+                      image={image}
+                      isActive={currentImageId === image.id}
+                      annotationCount={imageAnnotationCount}
+                      onClick={() => setCurrentImageId(image.id)}
+                      isJobMode={isJobMode}
+                      s3Key={image.s3Key}
+                      dirtyInfo={dirtyImageInfo?.get(image.id)}
+                      isDirty={dirtyImageIds?.has(image.id)}
+                      onDelete={(e) => {
+                        e.stopPropagation()
+                        // Don't allow deleting job images
+                        if (isJobMode) {
+                          toast.error('Cannot delete images in job mode')
+                          return
+                        }
+                        if (window.confirm(`Delete "${image.name}"? This will also remove all associated annotations.`)) {
+                          removeImage(image.id)
                         }
                       }}
                     />
-                  </label>
-                )}
+                  )
+                })}
               </div>
-            )}
 
-            {images.map((image) => {
-              // Count annotations for this specific image
-              const imageAnnotationCount = annotations.filter(a => a.imageId === image.id).length
-
-              return (
-                <ImageThumbnail
-                  key={image.id}
-                  image={image}
-                  isActive={currentImageId === image.id}
-                  annotationCount={imageAnnotationCount}
-                  onClick={() => setCurrentImageId(image.id)}
-                  isJobMode={isJobMode}
-                  s3Key={image.s3Key}
-                  dirtyInfo={dirtyImageInfo?.get(image.id)}
-                  isDirty={dirtyImageIds?.has(image.id)}
-                  onDelete={(e) => {
-                    e.stopPropagation()
-                    // Don't allow deleting job images
-                    if (isJobMode) {
-                      toast.error('Cannot delete images in job mode')
-                      return
-                    }
-                    if (window.confirm(`Delete "${image.name}"? This will also remove all associated annotations.`)) {
-                      removeImage(image.id)
-                    }
-                  }}
-                />
-              )
-            })}
+              {/* Next button */}
+              <button
+                onClick={() => {
+                  const nextIndex = currentImageIndex + 1
+                  if (nextIndex < images.length) {
+                    setCurrentImageId(images[nextIndex].id)
+                  }
+                }}
+                disabled={currentImageIndex >= images.length - 1 || images.length === 0}
+                className="p-2 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 rounded transition-colors border border-gray-300"
+                title="Next image (F)"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
-
-            {/* Next button */}
-            <button
-              onClick={() => {
-                const nextIndex = currentImageIndex + 1
-                if (nextIndex < images.length) {
-                  setCurrentImageId(images[nextIndex].id)
-                }
-              }}
-              disabled={currentImageIndex >= images.length - 1 || images.length === 0}
-              className="p-2 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 rounded transition-colors border border-gray-300"
-              title="Next image (F)"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+          )}
         </div>
       </div>
 

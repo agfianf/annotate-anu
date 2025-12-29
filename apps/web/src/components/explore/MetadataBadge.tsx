@@ -5,7 +5,7 @@
 
 import { memo, useMemo } from 'react';
 
-export type MetadataField = 'filename' | 'width' | 'height' | 'fileSize' | 'imageId';
+export type MetadataField = 'filename' | 'width' | 'height' | 'fileSize' | 'imageId' | 'filepath';
 
 interface MetadataBadgeProps {
   field: MetadataField;

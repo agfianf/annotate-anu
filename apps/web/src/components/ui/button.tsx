@@ -74,25 +74,48 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     // If both ripple and magnetic are enabled
     if (ripple && magnetic && !prefersReducedMotion) {
+      const { children, ...restProps } = props;
       return (
-        <MagneticButton className={baseClassName} ref={ref} strength={0.25}>
-          <RippleEffect color={finalRippleColor} {...props} className="w-full h-full" />
+        <MagneticButton className={baseClassName} strength={0.25} {...restProps}>
+          <RippleEffect color={finalRippleColor} className="w-full h-full" {...restProps}>
+            {children}
+          </RippleEffect>
         </MagneticButton>
       );
     }
 
     // If only ripple is enabled
     if (ripple && !prefersReducedMotion) {
-      return <RippleEffect color={finalRippleColor} className={baseClassName} ref={ref} {...props} />;
+      const { children, ...restProps } = props;
+      return (
+        <RippleEffect color={finalRippleColor} className={baseClassName} {...restProps}>
+          {children}
+        </RippleEffect>
+      );
     }
 
     // If only magnetic is enabled
     if (magnetic && !prefersReducedMotion) {
-      return <MagneticButton className={baseClassName} ref={ref} {...props} />;
+      const { children, ...restProps } = props;
+      return (
+        <MagneticButton className={baseClassName} {...restProps}>
+          {children}
+        </MagneticButton>
+      );
     }
 
     // Standard button with subtle hover/tap animations
     if (!prefersReducedMotion) {
+      const {
+        children,
+        onAnimationStart,
+        onAnimationEnd,
+        onAnimationIteration,
+        onDragStart,
+        onDragEnd,
+        onDrag,
+        ...motionProps
+      } = props;
       return (
         <motion.button
           className={baseClassName}
@@ -100,8 +123,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
           transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-          {...props}
-        />
+          {...motionProps}
+        >
+          {children}
+        </motion.button>
       );
     }
 

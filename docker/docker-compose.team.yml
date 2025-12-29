@@ -168,11 +168,13 @@ services:
       context: ../apps/web
       dockerfile: Dockerfile
       target: production
+      args:
+        - VITE_SAM3_API_URL=http://10.8.0.106:8000
+        - VITE_CORE_API_URL=http://10.8.0.106:8001
+        - VITE_ENV=production
     container_name: anu-frontend-team
     environment:
       - VITE_MODE=team
-      - VITE_API_INFERENCE_URL=http://localhost/api/v1/inference
-      - VITE_API_CORE_URL=http://localhost/api/v1
       - VITE_STORAGE=hybrid
     depends_on:
       - api-inference

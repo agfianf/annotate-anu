@@ -22,20 +22,20 @@ export function ExploreViewProvider({ children }: { children: ReactNode }) {
 
   const toggleFullView = () => {
     navigate({
-      search: (prev: Record<string, unknown>) => ({
+      search: (prev: any) => ({
         ...prev,
         fullview: isFullView ? undefined : true,
       }),
-    });
+    } as any);
   };
 
   const exitFullView = () => {
     navigate({
-      search: (prev: Record<string, unknown>) => {
+      search: (prev: any) => {
         const { fullview: _, ...rest } = prev;
         return rest;
       },
-    });
+    } as any);
   };
 
   return (

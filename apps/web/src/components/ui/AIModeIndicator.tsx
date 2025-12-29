@@ -42,7 +42,7 @@ export function AIModeIndicator({ mode, isActive, textPrompt = '', isProcessing 
         {textPrompt && <span className="text-emerald-600"> | "{textPrompt}"</span>}
         {getStatusLabel() && <span className="text-emerald-600"> | {getStatusLabel()}</span>}
       </span>
-      <style jsx>{`
+      <style>{`
         .pulse-container::before {
           content: '';
           position: absolute;

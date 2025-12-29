@@ -176,7 +176,7 @@ export const AnnotationCanvasGL = memo(function AnnotationCanvasGL({
         // Create invisible hit area for click detection
         if (onAnnotationClick) {
           const hitArea = new PIXI.Graphics();
-          hitArea.rect(x + stagePosition.x, y + stagePosition.y, w, h);
+          hitArea.rect(x, y, w, h); // FIXED: Don't double-offset (parent already has stagePosition)
           hitArea.fill({ color: 0x000000, alpha: 0.001 });
           hitArea.eventMode = 'static';
           hitArea.cursor = 'pointer';
@@ -206,7 +206,7 @@ export const AnnotationCanvasGL = memo(function AnnotationCanvasGL({
         // Create invisible hit area for click detection
         if (onAnnotationClick) {
           const hitArea = new PIXI.Graphics();
-          hitArea.poly(scaledPoints.flatMap(p => [p.x + stagePosition.x, p.y + stagePosition.y]), true);
+          hitArea.poly(scaledPoints.flatMap(p => [p.x, p.y]), true); // FIXED: Don't double-offset
           hitArea.fill({ color: 0x000000, alpha: 0.001 });
           hitArea.eventMode = 'static';
           hitArea.cursor = 'pointer';

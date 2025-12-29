@@ -11,7 +11,7 @@ export interface MetadataFieldState {
 /**
  * All supported metadata field keys
  */
-export type MetadataFieldKey = 'filename' | 'width' | 'height' | 'fileSize' | 'imageUids' | 'filepath';
+export type MetadataFieldKey = 'filename' | 'width' | 'height' | 'fileSize' | 'imageId' | 'filepath';
 
 /**
  * Stroke width levels for annotation overlay
@@ -59,7 +59,7 @@ const defaultMetadataState: Record<MetadataFieldKey, MetadataFieldState> = {
   width: { visible: false, color: DEFAULT_METADATA_COLOR },
   height: { visible: false, color: DEFAULT_METADATA_COLOR },
   fileSize: { visible: false, color: DEFAULT_METADATA_COLOR },
-  imageUids: { visible: false, color: DEFAULT_METADATA_COLOR },
+  imageId: { visible: false, color: DEFAULT_METADATA_COLOR },
   filepath: { visible: false, color: DEFAULT_METADATA_COLOR },
 };
 
@@ -297,7 +297,7 @@ export function useExploreVisibility(projectId: string) {
         width: { visible: true, color: prev.metadata.width?.color || DEFAULT_METADATA_COLOR },
         height: { visible: true, color: prev.metadata.height?.color || DEFAULT_METADATA_COLOR },
         fileSize: { visible: true, color: prev.metadata.fileSize?.color || DEFAULT_METADATA_COLOR },
-        imageUids: { visible: true, color: prev.metadata.imageUids?.color || DEFAULT_METADATA_COLOR },
+        imageId: { visible: true, color: prev.metadata.imageId?.color || DEFAULT_METADATA_COLOR },
         filepath: { visible: true, color: prev.metadata.filepath?.color || DEFAULT_METADATA_COLOR },
       },
       labels: {},
@@ -338,7 +338,7 @@ export function useExploreVisibility(projectId: string) {
           width: { visible: false, color: prev.metadata.width?.color || DEFAULT_METADATA_COLOR },
           height: { visible: false, color: prev.metadata.height?.color || DEFAULT_METADATA_COLOR },
           fileSize: { visible: false, color: prev.metadata.fileSize?.color || DEFAULT_METADATA_COLOR },
-          imageUids: { visible: false, color: prev.metadata.imageUids?.color || DEFAULT_METADATA_COLOR },
+          imageId: { visible: false, color: prev.metadata.imageId?.color || DEFAULT_METADATA_COLOR },
           filepath: { visible: false, color: prev.metadata.filepath?.color || DEFAULT_METADATA_COLOR },
         },
         labels: hiddenLabels,

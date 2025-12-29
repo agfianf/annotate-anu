@@ -95,7 +95,7 @@ function backendLabelToLabel(backendLabel: BackendLabel): Label {
  * Convert API ImageResponse to frontend ImageData format
  * Uses shared_image_id as the primary ID to match with SharedImage from explore tab
  */
-function apiImageToImageData(apiImage: ImageResponse, jobId: string): ImageData {
+function apiImageToImageData(apiImage: ImageResponse, _jobId: string): ImageData {
   // Use shared_image_id as the primary ID if available, fallback to job image id
   const primaryId = apiImage.shared_image_id || apiImage.id
   return {

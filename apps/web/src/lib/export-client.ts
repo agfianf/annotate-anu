@@ -286,7 +286,9 @@ export function getOutputFormatLabel(format: string): string {
  * This URL requires authentication to access.
  */
 export function getExportDownloadUrl(projectId: string | number, exportId: string): string {
-  const baseUrl = import.meta.env.VITE_API_CORE_URL || '';
+  const baseUrl = import.meta.env.VITE_CORE_API_URL !== undefined
+    ? import.meta.env.VITE_CORE_API_URL
+    : '';
   return `${baseUrl}/api/v1/projects/${projectId}/exports/${exportId}/download`;
 }
 

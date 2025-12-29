@@ -190,7 +190,9 @@ export default function JobsPage() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link
-          to={`/dashboard/projects/${projectId || task?.project_id}?tab=tasks`}
+          to="/dashboard/projects/$projectId"
+          params={{ projectId: String(projectId || task?.project_id || '') }}
+          search={{ tab: 'tasks' }}
           className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
         >
           <ArrowLeft className="w-5 h-5" />

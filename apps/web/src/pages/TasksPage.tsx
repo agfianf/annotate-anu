@@ -60,8 +60,8 @@ export default function TasksPage() {
     setIsLoading(true);
     try {
       const [projectData, tasksData] = await Promise.all([
-        projectsApi.get(projectId!),
-        tasksApi.list(projectId!, undefined, includeArchived),
+        projectsApi.get(Number(projectId!)),
+        tasksApi.list(Number(projectId!), undefined, includeArchived),
       ]);
       setProject(projectData);
       setTasks(tasksData);
@@ -132,7 +132,7 @@ export default function TasksPage() {
 
     setIsCreating(true);
     try {
-      const created = await tasksApi.create(projectId!, {
+      const created = await tasksApi.create(Number(projectId!), {
         name: newTask.name,
         description: newTask.description || undefined,
       });
@@ -228,7 +228,8 @@ export default function TasksPage() {
           {tasks.map((task) => (
             <Link
               key={task.id}
-              to={`/dashboard/tasks/${task.id}/jobs`}
+              to="/dashboard/tasks/$taskId/jobs"
+              params={{ taskId: String(task.id) }}
               className={`glass rounded-xl p-5 shadow-lg shadow-emerald-500/5 border border-gray-100 hover:border-emerald-200 transition-all flex items-center justify-between group ${task.is_archived ? 'opacity-75 bg-gray-50' : ''}`}
             >
               <div className="flex items-center gap-4">

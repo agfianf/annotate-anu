@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { EASINGS } from '@/lib/motion-config';
 
 interface ShakeErrorProps {
   /**
@@ -45,7 +46,7 @@ export function ShakeError({ trigger = false, children, className = '' }: ShakeE
       x: [-4, 4, -4, 4, 0],
       transition: {
         duration: 0.4,
-        ease: 'easeInOut',
+        ease: EASINGS.easeInOut,
       },
     },
     static: {

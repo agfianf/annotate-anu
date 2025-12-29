@@ -2,7 +2,7 @@ import { X } from 'lucide-react';
 import { type ReactNode, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { ANIMATION_TIMINGS, SPRING_CONFIGS } from '@/lib/motion-config';
+import { ANIMATION_TIMINGS, SPRING_CONFIGS, EASINGS } from '@/lib/motion-config';
 
 interface ModalProps {
   isOpen: boolean
@@ -100,7 +100,7 @@ export function Modal({
 
   const backdropTransition = {
     duration: prefersReducedMotion ? 0.01 : ANIMATION_TIMINGS.quick,
-    ease: 'easeOut',
+    ease: EASINGS.easeOut,
   };
 
   const modalTransition = prefersReducedMotion

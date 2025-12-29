@@ -2,7 +2,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from '@tanstack/react-router';
 import { type ReactNode } from 'react';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { ANIMATION_TIMINGS } from '@/lib/motion-config';
+import { ANIMATION_TIMINGS, EASINGS } from '@/lib/motion-config';
 
 interface PageTransitionProps {
   /**
@@ -69,7 +69,7 @@ export function PageTransition({ children, mode = 'fade', className = '' }: Page
 
   const transition = {
     duration: prefersReducedMotion ? 0.01 : ANIMATION_TIMINGS.standard,
-    ease: 'easeInOut',
+    ease: EASINGS.easeInOut,
   };
 
   return (

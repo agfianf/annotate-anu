@@ -3,7 +3,8 @@
         core-install core-run core-test core-format core-lint \
         frontend-install frontend-dev frontend-build \
         docker-up docker-down docker-logs docker-build docker-rebuild docker-restart docker-shell \
-        docker-up-solo docker-down-solo docker-up-team docker-down-team
+        docker-up-solo docker-down-solo docker-up-team docker-down-team \
+        docker-up-prod docker-down-prod docker-rebuild-prod
 
 help:
 	@echo "SAM3 Annotation Platform - Monorepo"
@@ -36,6 +37,8 @@ help:
 	@echo "Docker Commands:"
 	@echo "  docker-up        - Start development environment (hot-reload)"
 	@echo "  docker-down      - Stop development services"
+	@echo "  docker-up-prod   - Start production environment (optimized build)"
+	@echo "  docker-down-prod - Stop production services"
 	@echo "  docker-up-solo   - Start SOLO mode (minimal, IndexedDB storage)"
 	@echo "  docker-down-solo - Stop SOLO mode services"
 	@echo "  docker-up-team   - Start TEAM mode (full stack: Postgres, MinIO, Redis, Workers)"
@@ -43,6 +46,7 @@ help:
 	@echo "  docker-logs      - View logs (usage: make docker-logs service=backend|api-core|frontend)"
 	@echo "  docker-build     - Rebuild all Docker images"
 	@echo "  docker-rebuild   - Rebuild images, stop, and restart services (build -> down -> up)"
+	@echo "  docker-rebuild-prod - Rebuild production images (build -> down -> up)"
 	@echo "  docker-restart   - Restart services (usage: make docker-restart service=backend|api-core|frontend)"
 	@echo "  docker-shell     - Open shell in container (usage: make docker-shell service=backend|api-core|frontend)"
 
@@ -137,7 +141,7 @@ frontend-build:
 
 docker-up:
 	@echo "Starting Docker services (development mode)..."
-	docker-compose -f docker/docker-compose.dev.yml up -d
+	docker-compose -f docker/docker-compose.dev.yml --profile dev up -d
 	@echo ""
 	@echo "✓ Services started:"
 	@echo "  Backend API (SAM3): http://localhost:8000"
@@ -149,7 +153,23 @@ docker-up:
 
 docker-down:
 	@echo "Stopping Docker services..."
-	docker-compose -f docker/docker-compose.dev.yml down
+	docker-compose -f docker/docker-compose.dev.yml --profile dev down
+
+docker-up-prod:
+	@echo "Starting Docker services (production mode)..."
+	docker-compose -f docker/docker-compose.dev.yml --profile prod up -d
+	@echo ""
+	@echo "✓ Production services started:"
+	@echo "  Backend API (SAM3): http://localhost:8000"
+	@echo "  Backend Docs: http://localhost:8000/docs"
+	@echo "  API Core (BYOM): http://localhost:8001"
+	@echo "  API Core Docs: http://localhost:8001/docs"
+	@echo "  Frontend (Production): http://localhost:3000"
+	@echo "  Redis: localhost:6379 (internal)"
+
+docker-down-prod:
+	@echo "Stopping production services..."
+	docker-compose -f docker/docker-compose.dev.yml --profile prod down
 
 docker-up-solo:
 	@echo "Starting Docker services (SOLO mode - minimal)..."
@@ -196,13 +216,13 @@ docker-build:
 docker-rebuild:
 	@echo "Rebuilding Docker services (build -> down -> up)..."
 	@echo "Step 1/3: Building images..."
-	@docker-compose -f docker/docker-compose.dev.yml build
+	@docker-compose -f docker/docker-compose.dev.yml --profile dev build
 	@echo ""
 	@echo "Step 2/3: Stopping services..."
-	@docker-compose -f docker/docker-compose.dev.yml down
+	@docker-compose -f docker/docker-compose.dev.yml --profile dev down
 	@echo ""
 	@echo "Step 3/3: Starting services..."
-	@docker-compose -f docker/docker-compose.dev.yml up -d
+	@docker-compose -f docker/docker-compose.dev.yml --profile dev up -d
 	@echo ""
 	@echo "✓ Services rebuilt and restarted:"
 	@echo "  Backend API (SAM3): http://localhost:8000"
@@ -210,6 +230,25 @@ docker-rebuild:
 	@echo "  API Core (BYOM): http://localhost:8001"
 	@echo "  API Core Docs: http://localhost:8001/docs"
 	@echo "  Frontend: http://localhost:5173"
+	@echo "  Redis: localhost:6379 (internal)"
+
+docker-rebuild-prod:
+	@echo "Rebuilding production Docker services (build -> down -> up)..."
+	@echo "Step 1/3: Building production images..."
+	@docker-compose -f docker/docker-compose.dev.yml --profile prod build
+	@echo ""
+	@echo "Step 2/3: Stopping services..."
+	@docker-compose -f docker/docker-compose.dev.yml --profile prod down
+	@echo ""
+	@echo "Step 3/3: Starting services..."
+	@docker-compose -f docker/docker-compose.dev.yml --profile prod up -d
+	@echo ""
+	@echo "✓ Production services rebuilt and restarted:"
+	@echo "  Backend API (SAM3): http://localhost:8000"
+	@echo "  Backend Docs: http://localhost:8000/docs"
+	@echo "  API Core (BYOM): http://localhost:8001"
+	@echo "  API Core Docs: http://localhost:8001/docs"
+	@echo "  Frontend (Production): http://localhost:3000"
 	@echo "  Redis: localhost:6379 (internal)"
 
 docker-restart:

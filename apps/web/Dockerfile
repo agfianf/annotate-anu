@@ -27,6 +27,17 @@ FROM node:20 AS builder
 
 WORKDIR /app
 
+# Build arguments for environment variables
+# These defaults can be overridden via docker-compose build args
+ARG VITE_SAM3_API_URL=http://10.8.0.106:8000
+ARG VITE_CORE_API_URL=http://10.8.0.106:8001
+ARG VITE_ENV=production
+
+# Set environment variables from build args
+ENV VITE_SAM3_API_URL=$VITE_SAM3_API_URL
+ENV VITE_CORE_API_URL=$VITE_CORE_API_URL
+ENV VITE_ENV=$VITE_ENV
+
 # Copy package files
 COPY package*.json ./
 
@@ -45,8 +56,8 @@ FROM nginx:alpine AS production
 # Copy built files from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration (if it exists)
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Expose port 80
 EXPOSE 80

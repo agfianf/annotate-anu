@@ -85,7 +85,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
   // Filter metadata based on visibility state
   const visibleMetadata = useMemo(() => {
     if (!visibility) return [];
-    const fields: Array<{ field: 'filename' | 'width' | 'height' | 'fileSize' | 'filepath' | 'imageUids'; color: string }> = [];
+    const fields: Array<{ field: 'filename' | 'width' | 'height' | 'fileSize' | 'filepath' | 'imageId'; color: string }> = [];
 
     // Handle both old (boolean) and new (object) visibility formats
     const getVisibility = (field: keyof typeof visibility.metadata) => {
@@ -105,20 +105,20 @@ export const ImageThumbnail = memo(function ImageThumbnail({
     const height = getVisibility('height');
     const fileSize = getVisibility('fileSize');
     const filepath = getVisibility('filepath');
-    const imageUids = getVisibility('imageUids');
+    const imageIds = getVisibility('imageId');
 
     if (filename.visible) fields.push({ field: 'filename', color: filename.color });
     if (width.visible) fields.push({ field: 'width', color: width.color });
     if (height.visible) fields.push({ field: 'height', color: height.color });
     if (fileSize.visible) fields.push({ field: 'fileSize', color: fileSize.color });
     if (filepath.visible) fields.push({ field: 'filepath', color: filepath.color });
-    if (imageUids.visible) fields.push({ field: 'imageUids', color: imageUids.color });
+    if (imageIds.visible) fields.push({ field: 'imageId', color: imageIds.color });
 
     return fields;
   }, [visibility]);
 
   // Format metadata values for display
-  const getMetadataValue = (image: SharedImage, field: 'filename' | 'width' | 'height' | 'fileSize' | 'filepath' | 'imageUids'): string => {
+  const getMetadataValue = (image: SharedImage, field: 'filename' | 'width' | 'height' | 'fileSize' | 'filepath' | 'imageId'): string => {
     switch (field) {
       case 'filename':
         return image.filename;
@@ -132,7 +132,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
           : 'N/A';
       case 'filepath':
         return image.file_path || 'N/A';
-      case 'imageUids':
+      case 'imageId':
         return image.id.slice(0, 8) + '...';
       default:
         return '';

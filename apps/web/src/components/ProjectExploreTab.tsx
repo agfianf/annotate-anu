@@ -181,7 +181,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         file_size_max: sidebarFilters.sizeRange?.max,
         filepath_pattern: sidebarFilters.filepathPattern,
         filepath_paths: sidebarFilters.filepathPaths && sidebarFilters.filepathPaths.length > 0 ? sidebarFilters.filepathPaths : undefined,
-        image_uids: sidebarFilters.imageUids && sidebarFilters.imageUids.length > 0 ? sidebarFilters.imageUids : undefined,
+        image_uids: sidebarFilters.imageId && sidebarFilters.imageId.length > 0 ? sidebarFilters.imageId : undefined,
       };
     },
     [debouncedSearch, sidebarFilters, selectedTaskIds, selectedJobId, isAnnotatedFilter, getIncludedTagIds, getExcludedTagIds]
@@ -207,7 +207,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       file_size_min: sidebarFilters.sizeRange?.min,
       file_size_max: sidebarFilters.sizeRange?.max,
       filepath_paths: sidebarFilters.filepathPaths && sidebarFilters.filepathPaths.length > 0 ? sidebarFilters.filepathPaths : undefined,
-      image_uids: sidebarFilters.imageUids && sidebarFilters.imageUids.length > 0 ? sidebarFilters.imageUids : undefined,
+      image_uids: sidebarFilters.imageId && sidebarFilters.imageId.length > 0 ? sidebarFilters.imageId : undefined,
     };
   }, [sidebarFilters, selectedTaskIds, selectedJobId, isAnnotatedFilter, getIncludedTagIds, getExcludedTagIds]);
 
@@ -257,7 +257,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   // Fetch tasks for filter dropdown
   const { data: tasks = [] } = useQuery({
     queryKey: ['tasks', projectId],
-    queryFn: () => tasksApi.list(projectId),
+    queryFn: () => tasksApi.list(Number(projectId)),
     enabled: !!projectId,
   });
 
@@ -559,7 +559,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
     if (targetJobId) {
       // Include imageId in URL for direct navigation to the specific image
-      navigate(`/annotation?jobId=${targetJobId}&imageId=${showImageModal.id}`);
+      navigate({ to: '/annotation', search: { jobId: targetJobId, imageId: showImageModal.id } as any } as any);
       setShowImageModal(null);
     }
   }, [jobsData, selectedJobIdForAnnotation, navigate, showImageModal]);
@@ -1182,11 +1182,11 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
           )}
 
           {/* Image UIDs filter */}
-          {sidebarFilters.imageUids && sidebarFilters.imageUids.length > 0 && (
+          {sidebarFilters.imageId && sidebarFilters.imageId.length > 0 && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-50 text-violet-700 rounded-full text-xs border border-violet-200">
               <ImageIcon className="w-3 h-3" />
               <span className="font-medium">
-                Images: {sidebarFilters.imageUids.length} selected
+                Images: {sidebarFilters.imageId.length} selected
               </span>
               <button
                 onClick={() => setImageUids([])}

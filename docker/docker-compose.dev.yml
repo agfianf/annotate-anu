@@ -120,7 +120,7 @@ services:
       timeout: 3s
       retries: 3
 
-  # Frontend - React Annotation Platform
+  # Frontend - React Annotation Platform (Development)
   frontend:
     build:
       context: ../apps/web
@@ -140,6 +140,30 @@ services:
     networks:
       - anu-network
     command: npm run dev -- --host 0.0.0.0
+    profiles:
+      - dev
+
+  # Frontend - Production (Nginx)
+  frontend-prod:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+      target: production
+      args:
+        - VITE_SAM3_API_URL=http://10.8.0.106:8000
+        - VITE_CORE_API_URL=http://10.8.0.106:8001
+        - VITE_ENV=production
+    container_name: anu-frontend-prod
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+      - api-core
+    networks:
+      - anu-network
+    restart: unless-stopped
+    profiles:
+      - prod
 
 volumes:
   huggingface_cache:
