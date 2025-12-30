@@ -128,13 +128,14 @@ export function BboxPromptPanel({
 
       // Call API separately for each unique label
       for (const [labelId, bboxes] of bboxesByLabel) {
-        // Convert bboxes to API format: [[x1, y1, x2, y2, '1'], ...]
-        const bboxesForAPI: Array<[number, number, number, number, string]> = bboxes.map((bbox) => {
+        // Convert bboxes to API format: [[x1, y1, x2, y2, label], ...]
+        // Label: 1 = positive (include), 0 = negative (exclude)
+        const bboxesForAPI: Array<[number, number, number, number, number]> = bboxes.map((bbox) => {
           const x1 = bbox.x
           const y1 = bbox.y
           const x2 = bbox.x + bbox.width
           const y2 = bbox.y + bbox.height
-          return [x1, y1, x2, y2, '1'] // Using '1' as the class ID (string)
+          return [x1, y1, x2, y2, 1] // Using 1 as positive label (integer)
         })
 
         // Call bbox prompt API using unified inference client

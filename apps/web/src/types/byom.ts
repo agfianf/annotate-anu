@@ -103,7 +103,8 @@ export interface TextPromptParams extends BaseInferenceParams {
 }
 
 export interface BboxPromptParams extends BaseInferenceParams {
-  bounding_boxes: Array<[number, number, number, number, string]>
+  /** Bounding boxes: [x1, y1, x2, y2, label] where label is 1=positive, 0=negative */
+  bounding_boxes: Array<[number, number, number, number, number]>
 }
 
 export interface AutoDetectParams extends BaseInferenceParams {
