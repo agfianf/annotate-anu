@@ -22,6 +22,7 @@ import { imagesApi } from '../lib/api-client'
 import { DEFAULT_LABEL_COLOR } from '../lib/colors'
 import { ALLOWED_IMAGE_EXTENSIONS, getDisplayName, getRelativePath, isAllowedImageFile, isFolderUploadSupported } from '../lib/file-utils'
 import { annotationStorage } from '../lib/storage'
+import { generateUUID } from '../lib/utils'
 import type { Annotation, ImageData, Label, PolygonAnnotation, PromptMode, RectangleAnnotation, Tool } from '../types/annotations'
 import type { DirtyImageInfo } from '../hooks/useAutoSave'
 
@@ -682,7 +683,7 @@ function AnnotationApp() {
         const height = y2 - y1
 
         const annotation: RectangleAnnotation = {
-          id: crypto.randomUUID(),
+          id: generateUUID(),
           imageId: targetImageId,
           labelId: labelToUse,
           type: 'rectangle',
@@ -711,7 +712,7 @@ function AnnotationApp() {
           const points = polygonCoords.map(([x, y]) => ({ x, y }))
 
           const annotation: PolygonAnnotation = {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             imageId: targetImageId,
             labelId: labelToUse,
             type: 'polygon',
