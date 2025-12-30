@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, ChevronRight, Cloud, CloudOff, Copy, Download, Link as LinkIcon, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Cloud, CloudOff, Copy, Download, Link as LinkIcon, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
@@ -1057,19 +1057,45 @@ function AnnotationApp() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link
-            to="/"
-            className="flex items-center gap-2 hover:opacity-90 transition-opacity group"
-            title="Return to home"
-            aria-label="AnnotateANU - Return to home"
-          >
-            <img
-              src="/logo.png"
-              alt="AnnotateANU"
-              className="h-10 w-10 transition-transform group-hover:scale-105"
-            />
-            <span className="text-xl font-bold text-emerald-600">AnnotateANU</span>
-          </Link>
+          {isJobMode ? (
+            // Job mode: Back button - swaps logo for back arrow on hover
+            <button
+              onClick={() => window.history.back()}
+              className="relative h-10 min-w-[180px] flex items-center group"
+              title="Back to job list"
+              aria-label="Back to job list"
+            >
+              {/* Default state: Logo + AnnotateANU */}
+              <div className="absolute inset-0 flex items-center gap-2 group-hover:opacity-0 transition-opacity duration-150">
+                <img
+                  src="/logo.png"
+                  alt="AnnotateANU"
+                  className="h-10 w-10"
+                />
+                <span className="text-xl font-bold text-emerald-600">AnnotateANU</span>
+              </div>
+              {/* Hover state: Back arrow + text */}
+              <div className="absolute inset-0 flex items-center gap-2 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+                <ArrowLeft className="w-5 h-5" />
+                <span className="text-lg font-semibold">Back</span>
+              </div>
+            </button>
+          ) : (
+            // Solo mode: Link to home page
+            <Link
+              to="/"
+              className="flex items-center gap-2 hover:opacity-90 transition-opacity group"
+              title="Return to home"
+              aria-label="AnnotateANU - Return to home"
+            >
+              <img
+                src="/logo.png"
+                alt="AnnotateANU"
+                className="h-10 w-10 transition-transform group-hover:scale-105"
+              />
+              <span className="text-xl font-bold text-emerald-600">AnnotateANU</span>
+            </Link>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {images.length > 0 && (
