@@ -258,11 +258,16 @@ const Canvas = React.memo(function Canvas({
   const zoomRef = useRef(zoomLevel)
   const stagePositionRef = useRef(stagePosition)
   const wheelCommitTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const zoomIdleTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const wheelRafRef = useRef<number | null>(null)
+  const wheelDeltaRef = useRef(0)
+  const wheelPointerRef = useRef<{ x: number; y: number } | null>(null)
   const selectionCommitRef = useRef<number | null>(null)
   const panCommitTimerRef = useRef<NodeJS.Timeout | null>(null)
   const selectionPendingRef = useRef<string[] | null>(null)
   const isZoomingRef = useRef(false)
   const isPanningRef = useRef(false)
+  const frozenVisibleRef = useRef<Annotation[]>([])
   // Node reference cache for O(1) lookup instead of findOne() O(n) traversal
   const nodeRefMapRef = useRef<Map<string, Konva.Node>>(new Map())
   const [konvaImage, setKonvaImage] = useState<HTMLImageElement | null>(null)
@@ -313,9 +318,11 @@ const Canvas = React.memo(function Canvas({
   const isMouseOverTooltipRef = useRef(false)
   // Cache container bounds to avoid getBoundingClientRect() on every hover (performance optimization)
   const containerBoundsRef = useRef<DOMRect | null>(null)
+  const freezeVisibilityRef = useRef(false)
 
   const SNAP_DISTANCE = 10 // pixels in original image coordinates
-  const hoverEnabled = showHoverTooltips && selectedTool === 'select' && annotations.length <= HOVER_DISABLE_THRESHOLD
+  const hoverEnabled = showHoverTooltips && selectedTool === 'select' &&
+    annotations.length <= HOVER_DISABLE_THRESHOLD
   const [localSelectedAnnotations, setLocalSelectedAnnotations] = useState<string[]>(selectedAnnotations)
   const selectedIds = localSelectedAnnotations
   const renderZoomLevel = isZoomingRef.current ? zoomRef.current : zoomLevel
@@ -471,8 +478,14 @@ const Canvas = React.memo(function Canvas({
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current)
       }
+      if (wheelRafRef.current !== null) {
+        cancelAnimationFrame(wheelRafRef.current)
+      }
       if (wheelCommitTimerRef.current) {
         clearTimeout(wheelCommitTimerRef.current)
+      }
+      if (zoomIdleTimerRef.current) {
+        clearTimeout(zoomIdleTimerRef.current)
       }
       if (selectionCommitRef.current !== null) {
         cancelAnimationFrame(selectionCommitRef.current)
@@ -484,10 +497,6 @@ const Canvas = React.memo(function Canvas({
   }, [])
 
   useEffect(() => {
-    const zoomDelta = Math.abs(zoomLevel - zoomRef.current)
-    if (isZoomingRef.current && zoomDelta < 0.0001) {
-      isZoomingRef.current = false
-    }
     if (!isZoomingRef.current) {
       zoomRef.current = zoomLevel
     }
@@ -498,6 +507,16 @@ const Canvas = React.memo(function Canvas({
       stagePositionRef.current = stagePosition
     }
   }, [stagePosition.x, stagePosition.y])
+
+  useLayoutEffect(() => {
+    if (!stageRef.current || !backgroundStageRef.current) return
+    stageRef.current.scale({ x: zoomLevel, y: zoomLevel })
+    stageRef.current.position(stagePosition)
+    stageRef.current.batchDraw()
+    backgroundStageRef.current.scale({ x: zoomLevel, y: zoomLevel })
+    backgroundStageRef.current.position(stagePosition)
+    backgroundStageRef.current.batchDraw()
+  }, [zoomLevel, stagePosition.x, stagePosition.y])
 
   useEffect(() => {
     const currentSet = new Set(localSelectedAnnotations)
@@ -694,57 +713,88 @@ const Canvas = React.memo(function Canvas({
 
     if (!onZoomChange || !stageRef.current) return
 
+    freezeVisibilityRef.current = true
+
+    if (hoveredAnnotation) {
+      setHoveredAnnotation(null)
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current)
+        hoverTimeoutRef.current = null
+      }
+      isMouseOverTooltipRef.current = false
+    }
+
     const stage = stageRef.current
-    const oldScale = zoomRef.current
     const pointer = stage.getPointerPosition()
+    if (pointer) {
+      wheelPointerRef.current = pointer
+    }
 
-    if (!pointer) return
-
-    // CVAT-style smooth zoom: clamp delta and use exponential scaling
     const LIMIT_DELTA_Y = 8
-    const deltaY = Math.max(-LIMIT_DELTA_Y, Math.min(LIMIT_DELTA_Y, e.evt.deltaY))
-    const basicZoomCoef = 6 / 5
-    const adjustCoef = 1 / 10
-    const scaleFactor = basicZoomCoef ** (-deltaY * adjustCoef)
-    const newScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldScale * scaleFactor))
+    const clampedDelta = Math.max(-LIMIT_DELTA_Y, Math.min(LIMIT_DELTA_Y, e.evt.deltaY))
+    wheelDeltaRef.current += clampedDelta
 
-    if (newScale === oldScale) return
+    if (wheelRafRef.current !== null) return
 
-    // Calculate new position to zoom toward mouse cursor
-    const mousePointTo = {
-      x: (pointer.x - stagePositionRef.current.x) / oldScale,
-      y: (pointer.y - stagePositionRef.current.y) / oldScale,
-    }
+    wheelRafRef.current = requestAnimationFrame(() => {
+      wheelRafRef.current = null
+      const deltaY = Math.max(-LIMIT_DELTA_Y * 3, Math.min(LIMIT_DELTA_Y * 3, wheelDeltaRef.current))
+      wheelDeltaRef.current = 0
 
-    const newPos = {
-      x: pointer.x - mousePointTo.x * newScale,
-      y: pointer.y - mousePointTo.y * newScale,
-    }
+      const currentPointer = wheelPointerRef.current ?? stage.getPointerPosition()
+      if (!currentPointer) return
 
-    isZoomingRef.current = true
-    zoomRef.current = newScale
-    stagePositionRef.current = newPos
+      const oldScale = zoomRef.current
+      const basicZoomCoef = 6 / 5
+      const adjustCoef = 1 / 10
+      const scaleFactor = basicZoomCoef ** (-deltaY * adjustCoef)
+      const newScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, oldScale * scaleFactor))
 
-    stage.scale({ x: newScale, y: newScale })
-    stage.position(newPos)
-    stage.batchDraw()
-    const backgroundStage = backgroundStageRef.current
-    if (backgroundStage) {
-      backgroundStage.scale({ x: newScale, y: newScale })
-      backgroundStage.position(newPos)
-      backgroundStage.batchDraw()
-    }
+      if (newScale === oldScale) return
 
-    if (wheelCommitTimerRef.current) {
-      clearTimeout(wheelCommitTimerRef.current)
-    }
+      const mousePointTo = {
+        x: (currentPointer.x - stagePositionRef.current.x) / oldScale,
+        y: (currentPointer.y - stagePositionRef.current.y) / oldScale,
+      }
 
-    wheelCommitTimerRef.current = setTimeout(() => {
-      startTransition(() => {
-        onZoomChange(newScale)
-        onStagePositionChange?.(newPos)
-      })
-    }, 80)
+      const newPos = {
+        x: currentPointer.x - mousePointTo.x * newScale,
+        y: currentPointer.y - mousePointTo.y * newScale,
+      }
+
+      isZoomingRef.current = true
+      if (zoomIdleTimerRef.current) {
+        clearTimeout(zoomIdleTimerRef.current)
+      }
+      zoomIdleTimerRef.current = setTimeout(() => {
+      isZoomingRef.current = false
+      freezeVisibilityRef.current = false
+      zoomIdleTimerRef.current = null
+    }, 150)
+      zoomRef.current = newScale
+      stagePositionRef.current = newPos
+
+      stage.scale({ x: newScale, y: newScale })
+      stage.position(newPos)
+      stage.batchDraw()
+      const backgroundStage = backgroundStageRef.current
+      if (backgroundStage) {
+        backgroundStage.scale({ x: newScale, y: newScale })
+        backgroundStage.position(newPos)
+        backgroundStage.batchDraw()
+      }
+
+      if (wheelCommitTimerRef.current) {
+        clearTimeout(wheelCommitTimerRef.current)
+      }
+
+      wheelCommitTimerRef.current = setTimeout(() => {
+        startTransition(() => {
+          onZoomChange(newScale)
+          onStagePositionChange?.(newPos)
+        })
+      }, 80)
+    })
   }
 
   const handleMouseDown = (e: any) => {
@@ -1494,6 +1544,7 @@ const Canvas = React.memo(function Canvas({
   // Handle annotation hover for tooltip (optimized - uses cached bounds)
   const handleAnnotationMouseEnter = useCallback((annotation: Annotation, _e: any) => {
     if (!hoverEnabled) return
+    if (isZoomingRef.current) return
     console.log('[Canvas] Hover annotation:', annotation.id, 'draggingId:', draggingAnnotationId)
     // Don't show tooltip while dragging
     if (draggingAnnotationId) return
@@ -2129,8 +2180,18 @@ const Canvas = React.memo(function Canvas({
   }
 
   const visibleInViewport = useMemo(() => {
+    if (freezeVisibilityRef.current && frozenVisibleRef.current.length > 0) {
+      return frozenVisibleRef.current
+    }
+
     const visible = annotations.filter(isAnnotationVisible)
-    return visible.filter(isInViewport)
+    const inView = visible.filter(isInViewport)
+
+    if (!freezeVisibilityRef.current || frozenVisibleRef.current.length === 0) {
+      frozenVisibleRef.current = inView
+    }
+
+    return inView
   }, [annotations, isAnnotationVisible, isInViewport])
 
   // Selected annotations are always rendered regardless of viewport.
@@ -2159,7 +2220,6 @@ const Canvas = React.memo(function Canvas({
   // This is especially important in basic mode (< 100 annotations) where all are in Konva
   // NOTE: Hover no longer moves annotations between layers (was causing FPS drops)
   const { staticAnnotations, interactiveAnnotations } = useMemo(() => {
-    console.time('[Canvas] Layer split calculation')
     const selectedSet = new Set(selectedIds)
     const staticAnns: Annotation[] = []
     const interactiveAnns: Annotation[] = []
@@ -2173,8 +2233,6 @@ const Canvas = React.memo(function Canvas({
       }
     }
 
-    console.log('[Canvas] Layer split - static:', staticAnns.length, 'interactive:', interactiveAnns.length)
-    console.timeEnd('[Canvas] Layer split calculation')
     return { staticAnnotations: staticAnns, interactiveAnnotations: interactiveAnns }
   }, [konvaAnnotations, selectedIds])
 
@@ -2214,10 +2272,6 @@ const Canvas = React.memo(function Canvas({
         ref={backgroundStageRef}
         width={dimensions.width}
         height={dimensions.height}
-        scaleX={renderZoomLevel}
-        scaleY={renderZoomLevel}
-        x={renderStagePosition.x}
-        y={renderStagePosition.y}
         style={{ position: 'absolute', zIndex: 0, pointerEvents: 'none' }}
         listening={false}
       >
@@ -2255,10 +2309,6 @@ const Canvas = React.memo(function Canvas({
         ref={stageRef}
         width={dimensions.width}
         height={dimensions.height}
-        scaleX={renderZoomLevel}
-        scaleY={renderZoomLevel}
-        x={renderStagePosition.x}
-        y={renderStagePosition.y}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
