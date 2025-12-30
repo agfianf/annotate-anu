@@ -1,4 +1,4 @@
-import { Check, Cloud, CloudOff, Copy, Download, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Cloud, CloudOff, Copy, Download, Link as LinkIcon, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
@@ -10,9 +10,11 @@ import { ModelSelector } from '../components/ModelSelector'
 import { AnnotationsSidebar } from '../components/sidebar'
 import { AIModeIndicator } from '../components/ui/AIModeIndicator'
 import { ColorPickerPopup } from '../components/ui/ColorPickerPopup'
+import { LoadingScreen } from '../components/ui/LoadingScreen'
 import { Modal } from '../components/ui/Modal'
 import ShortcutsHelpModal from '../components/ui/ShortcutsHelpModal'
 import { useHistory } from '../hooks/useHistory'
+import { useImagePreloader } from '../hooks/useImagePreloader'
 import { useJobStorage } from '../hooks/useJobStorage'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useModelRegistry } from '../hooks/useModelRegistry'
@@ -44,6 +46,7 @@ interface ImageThumbnailProps {
   s3Key?: string
   dirtyInfo?: DirtyImageInfo // Enhanced dirty state with count and error info
   isDirty?: boolean // Legacy compatibility
+  thumbnailRef?: (el: HTMLDivElement | null) => void
 }
 
 const ImageThumbnail = ({
@@ -56,6 +59,7 @@ const ImageThumbnail = ({
   s3Key,
   dirtyInfo,
   isDirty = false,
+  thumbnailRef,
 }: ImageThumbnailProps) => {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
 
@@ -85,11 +89,12 @@ const ImageThumbnail = ({
 
   return (
     <div
+      ref={thumbnailRef}
       onClick={onClick}
       title={image.displayName}
-      className={`group relative flex-shrink-0 cursor-pointer rounded overflow-hidden border-2 transition-all ${
+      className={`group relative flex-shrink-0 cursor-pointer rounded overflow-hidden border-3 transition-all ${
         isActive
-          ? 'border-emerald-500 ring-2 ring-emerald-500/50'
+          ? 'border-emerald-400 ring-2 ring-emerald-500/60 shadow-md shadow-emerald-500/30 scale-110'
           : 'border-gray-600 hover:border-gray-500'
       }`}
     >
@@ -173,7 +178,7 @@ function AnnotationApp() {
   // BYOM model registry - initialized after storage to get allowedModelIds
   // (actual call moved after useJobStorage)
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false)
-  const [isGalleryCollapsed, setIsGalleryCollapsed] = useState(true) // Hidden by default
+  const [isGalleryCollapsed, setIsGalleryCollapsed] = useState(false) // Open by default
   const [promptBboxes, setPromptBboxes] = useState<Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>>([])
   const [isBboxPromptMode, setIsBboxPromptMode] = useState(false)
   const [isAIPanelActive, setIsAIPanelActive] = useState(false)
@@ -188,6 +193,8 @@ function AnnotationApp() {
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null)
   const [showColorPicker, setShowColorPicker] = useState(false)
   const colorButtonRef = useRef<HTMLButtonElement>(null)
+  const thumbnailRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const thumbnailsContainerRef = useRef<HTMLDivElement>(null)
 
   // Orphan recovery modal state
   const [showOrphanRecoveryModal, setShowOrphanRecoveryModal] = useState(false)
@@ -253,10 +260,19 @@ function AnnotationApp() {
     dirtyImageInfo, // Enhanced
     // syncHistory, // Sync history
     allowedModelIds, // BYOM - project allowed models
+    // Lazy loading state
+    loadingProgress,
+    annotationsLoadedFor,
   } = storage
 
   // BYOM model registry - filter by project's allowed models in job mode
   const { allModels, selectedModel, selectModel, refreshModels, isNotConfigured } = useModelRegistry(allowedModelIds)
+
+  // Image preloader for smooth navigation
+  const { preloadWindow, getCachedImage } = useImagePreloader(images, {
+    windowSize: 2,
+    priorityLoad: true
+  })
 
   // History for undo/redo
   const { recordChange, undo, redo, canUndo, canRedo } = useHistory(currentImageId)
@@ -287,6 +303,20 @@ function AnnotationApp() {
       }
     }
   }, [imageIdParam, images, isJobMode, loading, setCurrentImageId])
+
+  // Preload images when current image changes (for smooth navigation)
+  useEffect(() => {
+    if (currentImageId && images.length > 0) {
+      const currentIndex = images.findIndex(img => img.id === currentImageId)
+      if (currentIndex !== -1) {
+        // Preload window around current image (non-blocking)
+        preloadWindow(currentIndex, images).catch(err => {
+          console.error('[AnnotationApp] Preload failed:', err)
+        })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentImageId, images])
 
   // Sync URL when current image changes (for navigation)
   useEffect(() => {
@@ -652,7 +682,7 @@ function AnnotationApp() {
         const height = y2 - y1
 
         const annotation: RectangleAnnotation = {
-          id: `${Date.now()}-${i}`,
+          id: crypto.randomUUID(),
           imageId: targetImageId,
           labelId: labelToUse,
           type: 'rectangle',
@@ -681,7 +711,7 @@ function AnnotationApp() {
           const points = polygonCoords.map(([x, y]) => ({ x, y }))
 
           const annotation: PolygonAnnotation = {
-            id: `${Date.now()}-${i}`,
+            id: crypto.randomUUID(),
             imageId: targetImageId,
             labelId: labelToUse,
             type: 'polygon',
@@ -747,6 +777,36 @@ function AnnotationApp() {
   useEffect(() => {
     setSelectedAnnotations([])
   }, [currentImageId])
+
+  // Auto-scroll to center the current image in gallery
+  useEffect(() => {
+    if (currentImageId && !isGalleryCollapsed) {
+      // Small delay to ensure DOM has updated and refs are set
+      const timer = setTimeout(() => {
+        const thumbnailElement = thumbnailRefs.current.get(currentImageId)
+        const container = thumbnailsContainerRef.current
+
+        if (thumbnailElement && container) {
+          // Calculate the position to center the thumbnail in the container
+          const thumbnailRect = thumbnailElement.getBoundingClientRect()
+          const containerRect = container.getBoundingClientRect()
+
+          // Calculate scroll position to center the thumbnail
+          const thumbnailCenter = thumbnailElement.offsetLeft + (thumbnailRect.width / 2)
+          const containerCenter = containerRect.width / 2
+          const scrollPosition = thumbnailCenter - containerCenter
+
+          // Smooth scroll to the calculated position
+          container.scrollTo({
+            left: scrollPosition,
+            behavior: 'smooth'
+          })
+        }
+      }, 100)
+
+      return () => clearTimeout(timer)
+    }
+  }, [currentImageId, isGalleryCollapsed])
 
   // Clear prompt bboxes when changing images to avoid confusion
   useEffect(() => {
@@ -895,34 +955,48 @@ function AnnotationApp() {
     }
   }, [currentImageId]) // Only on image change, not on every annotation change
 
-  // Copy filename to clipboard
-  const copyFilenameToClipboard = async () => {
-    if (currentImage) {
-      try {
-        // Check if clipboard API is available
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(currentImage.name)
-          toast.success('Filename copied to clipboard!')
-        } else {
-          // Fallback for browsers without clipboard API
-          const textArea = document.createElement('textarea')
-          textArea.value = currentImage.name
-          textArea.style.position = 'fixed'
-          textArea.style.left = '-999999px'
-          document.body.appendChild(textArea)
-          textArea.select()
-          try {
-            document.execCommand('copy')
-            toast.success('Filename copied to clipboard!')
-          } catch (err) {
-            toast.error('Failed to copy to clipboard')
-          }
-          document.body.removeChild(textArea)
-        }
-      } catch (error) {
-        toast.error('Failed to copy to clipboard')
-        console.error('Clipboard error:', error)
+  // Copy annotation link to clipboard
+  const copyAnnotationLinkToClipboard = async () => {
+    if (!currentImageId) {
+      toast.error('No image selected')
+      return
+    }
+
+    try {
+      // Build full URL with domain and quoted parameters
+      const params: string[] = []
+
+      if (jobId) {
+        params.push(`jobId="${jobId}"`)
       }
+      params.push(`imageId="${currentImageId}"`)
+
+      const queryString = params.length > 0 ? '?' + params.join('&') : ''
+      const fullUrl = `${window.location.origin}/annotation${queryString}`
+
+      // Check if clipboard API is available
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(fullUrl)
+        toast.success('Annotation link copied to clipboard!')
+      } else {
+        // Fallback for browsers without clipboard API
+        const textArea = document.createElement('textarea')
+        textArea.value = fullUrl
+        textArea.style.position = 'fixed'
+        textArea.style.left = '-999999px'
+        document.body.appendChild(textArea)
+        textArea.select()
+        try {
+          document.execCommand('copy')
+          toast.success('Annotation link copied to clipboard!')
+        } catch (err) {
+          toast.error('Failed to copy to clipboard')
+        }
+        document.body.removeChild(textArea)
+      }
+    } catch (error) {
+      toast.error('Failed to copy to clipboard')
+      console.error('Clipboard error:', error)
     }
   }
 
@@ -958,15 +1032,26 @@ function AnnotationApp() {
     onToggleSidebar: () => setIsRightSidebarCollapsed(prev => !prev),
   })
 
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-900">
-        <div className="text-white text-lg">Loading...</div>
-      </div>
-    )
-  }
+  // Get preloaded image for current image
+  const preloadedImage = currentImage
+    ? getCachedImage(currentImage.id)
+    : null
+
+  // Show LoadingScreen during critical loading phase
+  const showLoadingScreen = loading || loadingProgress.phase === 'loading-critical'
 
   return (
+    <>
+      <LoadingScreen
+        isVisible={showLoadingScreen}
+        message={loadingProgress.currentStep}
+        current={loadingProgress.current}
+        total={loadingProgress.total}
+        percentage={loadingProgress.percentage}
+        subProgress={loadingProgress.subProgress}
+      />
+
+      {!showLoadingScreen && (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
@@ -1099,10 +1184,9 @@ function AnnotationApp() {
       </header>
 
       {/* Main Layout */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left Sidebar */}
-          <LeftSidebar
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar */}
+        <LeftSidebar
             selectedTool={selectedTool}
             onToolChange={setSelectedTool}
             labels={labels}
@@ -1136,24 +1220,47 @@ function AnnotationApp() {
             {/* Image Viewer Header */}
             {currentImage && (
               <div className="glass border-b border-gray-200 px-4 py-2 flex items-center justify-between">
+                {/* Left: Image info */}
                 <div className="flex items-center gap-3">
                   <span className="text-emerald-600 font-semibold">
                     {currentImageNumber} / {images.length}
                   </span>
                   <span className="text-gray-400 text-sm">|</span>
-                  <span className="text-gray-900 text-sm font-mono">{currentImage.displayName}</span>
-                  <button
-                    onClick={copyFilenameToClipboard}
-                    className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600 hover:text-gray-900"
-                    title="Copy filename to clipboard"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="flex flex-col items-end gap-1">
                   <div className="text-gray-600 text-xs">
                     {currentImage.width} × {currentImage.height} px
                   </div>
+                </div>
+
+                {/* Center: Navigation with filename */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={goToPreviousImage}
+                    disabled={currentImageIndex === 0}
+                    className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    title="Previous image (Left Arrow)"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-gray-900 text-sm font-mono">{currentImage.displayName}</span>
+                  <button
+                    onClick={copyAnnotationLinkToClipboard}
+                    className="p-1 hover:bg-gray-100 rounded transition-colors text-gray-600 hover:text-gray-900"
+                    title="Copy annotation link"
+                  >
+                    <LinkIcon className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={goToNextImage}
+                    disabled={currentImageIndex === images.length - 1}
+                    className="p-1.5 hover:bg-gray-100 rounded transition-colors text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                    title="Next image (Right Arrow)"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Right: AI Mode Indicator */}
+                <div>
                   <AIModeIndicator
                     mode={promptMode}
                     isActive={isAIPanelActive}
@@ -1167,6 +1274,7 @@ function AnnotationApp() {
             <div className="flex-1 overflow-hidden relative">
               <Canvas
                 image={currentImageUrl}
+                preloadedImage={preloadedImage || undefined}
                 selectedTool={selectedTool}
                 annotations={currentAnnotations}
                 labels={labels}
@@ -1201,6 +1309,180 @@ function AnnotationApp() {
                 </div>
               )}
             </div>
+
+            {/* Image Gallery - Collapsible Bottom strip */}
+            <div className={`glass border-t border-gray-200 transition-all duration-200 ${isGalleryCollapsed ? 'h-8' : 'h-32'}`}>
+              {/* Gallery Header - Always visible */}
+              <button
+                onClick={() => setIsGalleryCollapsed(prev => !prev)}
+                className="w-full h-8 px-4 flex items-center justify-between hover:bg-gray-100/50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <svg
+                    className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isGalleryCollapsed ? '' : 'rotate-180'}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                  <span className="text-xs font-medium text-gray-600">
+                    Image Gallery
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    ({images.length} images)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {currentImage && (
+                    <span className="text-xs text-emerald-600 font-medium">
+                      {currentImageNumber} / {images.length}
+                    </span>
+                  )}
+                </div>
+              </button>
+
+              {/* Gallery Content - Collapsible */}
+              {!isGalleryCollapsed && (
+                <div className="h-24 flex items-center px-4 gap-3">
+                  {/* Previous button */}
+                  <button
+                    onClick={() => {
+                      const prevIndex = currentImageIndex - 1
+                      if (prevIndex >= 0) {
+                        setCurrentImageId(images[prevIndex].id)
+                      }
+                    }}
+                    disabled={currentImageIndex <= 0 || images.length === 0}
+                    className="p-2 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 rounded transition-colors border border-gray-300"
+                    title="Previous image (D)"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Thumbnails */}
+                  <div
+                    ref={thumbnailsContainerRef}
+                    className="flex-1 flex gap-3 overflow-x-auto py-3 px-2"
+                    style={{ scrollPaddingInline: '50%' }}
+                  >
+                    {/* Left spacer for centering */}
+                    <div className="flex-shrink-0" style={{ width: 'calc(50% - 50px)' }} />
+
+                    {/* Upload buttons container - hidden in job mode */}
+                    {!isJobMode && (
+                      <div className="flex-shrink-0 flex gap-2">
+                        {/* Upload Files Button */}
+                        <label className="cursor-pointer group" title="Upload image files">
+                          <div className="h-20 w-20 border-2 border-dashed border-gray-300 hover:border-emerald-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-emerald-50">
+                            <Upload className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 transition-colors" />
+                            <span className="text-xs text-gray-500 group-hover:text-emerald-600 transition-colors">Files</span>
+                          </div>
+                          <input
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.webp,.bmp"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => {
+                              if (e.target.files) {
+                                handleImageUpload(e.target.files)
+                              }
+                            }}
+                          />
+                        </label>
+
+                        {/* Upload Folder Button */}
+                        {folderUploadSupported && (
+                          <label className="cursor-pointer group" title="Upload entire folder of images">
+                            <div className="h-20 w-20 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-blue-50">
+                              <svg
+                                className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                              </svg>
+                              <span className="text-xs text-gray-500 group-hover:text-blue-600 transition-colors">Folder</span>
+                            </div>
+                            <input
+                              type="file"
+                              accept=".jpg,.jpeg,.png,.webp,.bmp"
+                              {...({ webkitdirectory: "", mozdirectory: "", directory: "" } as any)}
+                              className="hidden"
+                              onChange={(e) => {
+                                if (e.target.files) {
+                                  handleImageUpload(e.target.files)
+                                }
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    )}
+
+                    {images.map((image) => {
+                      // Count annotations for this specific image
+                      const imageAnnotationCount = annotations.filter(a => a.imageId === image.id).length
+
+                      return (
+                        <ImageThumbnail
+                          key={image.id}
+                          image={image}
+                          isActive={currentImageId === image.id}
+                          annotationCount={imageAnnotationCount}
+                          onClick={() => setCurrentImageId(image.id)}
+                          isJobMode={isJobMode}
+                          s3Key={image.s3Key}
+                          dirtyInfo={dirtyImageInfo?.get(image.id)}
+                          isDirty={dirtyImageIds?.has(image.id)}
+                          thumbnailRef={(el) => {
+                            if (el) {
+                              thumbnailRefs.current.set(image.id, el)
+                            } else {
+                              thumbnailRefs.current.delete(image.id)
+                            }
+                          }}
+                          onDelete={(e) => {
+                            e.stopPropagation()
+                            // Don't allow deleting job images
+                            if (isJobMode) {
+                              toast.error('Cannot delete images in job mode')
+                              return
+                            }
+                            if (window.confirm(`Delete "${image.name}"? This will also remove all associated annotations.`)) {
+                              removeImage(image.id)
+                            }
+                          }}
+                        />
+                      )
+                    })}
+
+                    {/* Right spacer for centering */}
+                    <div className="flex-shrink-0" style={{ width: 'calc(50% - 50px)' }} />
+                  </div>
+
+                  {/* Next button */}
+                  <button
+                    onClick={() => {
+                      const nextIndex = currentImageIndex + 1
+                      if (nextIndex < images.length) {
+                        setCurrentImageId(images[nextIndex].id)
+                      }
+                    }}
+                    disabled={currentImageIndex >= images.length - 1 || images.length === 0}
+                    className="p-2 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 rounded transition-colors border border-gray-300"
+                    title="Next image (F)"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Sidebar */}
@@ -1223,164 +1505,6 @@ function AnnotationApp() {
             onAppearanceChange={setAppearanceSettings}
             appearanceDefaults={DEFAULT_APPEARANCE_SETTINGS}
           />
-        </div>
-
-        {/* Image Gallery - Collapsible Bottom strip */}
-        <div className={`glass border-t border-gray-200 transition-all duration-200 ${isGalleryCollapsed ? 'h-8' : 'h-28'}`}>
-          {/* Gallery Header - Always visible */}
-          <button
-            onClick={() => setIsGalleryCollapsed(prev => !prev)}
-            className="w-full h-8 px-4 flex items-center justify-between hover:bg-gray-100/50 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <svg
-                className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${isGalleryCollapsed ? '' : 'rotate-180'}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
-              <span className="text-xs font-medium text-gray-600">
-                Image Gallery
-              </span>
-              <span className="text-xs text-gray-400">
-                ({images.length} images)
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {currentImage && (
-                <span className="text-xs text-emerald-600 font-medium">
-                  {currentImageNumber} / {images.length}
-                </span>
-              )}
-            </div>
-          </button>
-
-          {/* Gallery Content - Collapsible */}
-          {!isGalleryCollapsed && (
-            <div className="h-20 flex items-center px-4 gap-3">
-              {/* Previous button */}
-              <button
-                onClick={() => {
-                  const prevIndex = currentImageIndex - 1
-                  if (prevIndex >= 0) {
-                    setCurrentImageId(images[prevIndex].id)
-                  }
-                }}
-                disabled={currentImageIndex <= 0 || images.length === 0}
-                className="p-2 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 rounded transition-colors border border-gray-300"
-                title="Previous image (D)"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-
-              {/* Thumbnails */}
-              <div className="flex-1 flex gap-2 overflow-x-auto py-2">
-                {/* Upload buttons container - hidden in job mode */}
-                {!isJobMode && (
-                  <div className="flex-shrink-0 flex gap-2">
-                    {/* Upload Files Button */}
-                    <label className="cursor-pointer group" title="Upload image files">
-                      <div className="h-20 w-20 border-2 border-dashed border-gray-300 hover:border-emerald-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-emerald-50">
-                        <Upload className="w-5 h-5 text-gray-400 group-hover:text-emerald-600 transition-colors" />
-                        <span className="text-xs text-gray-500 group-hover:text-emerald-600 transition-colors">Files</span>
-                      </div>
-                      <input
-                        type="file"
-                        accept=".jpg,.jpeg,.png,.webp,.bmp"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files) {
-                            handleImageUpload(e.target.files)
-                          }
-                        }}
-                      />
-                    </label>
-
-                    {/* Upload Folder Button */}
-                    {folderUploadSupported && (
-                      <label className="cursor-pointer group" title="Upload entire folder of images">
-                        <div className="h-20 w-20 border-2 border-dashed border-blue-300 hover:border-blue-500 rounded flex flex-col items-center justify-center gap-1 transition-colors bg-white hover:bg-blue-50">
-                          <svg
-                            className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                          </svg>
-                          <span className="text-xs text-gray-500 group-hover:text-blue-600 transition-colors">Folder</span>
-                        </div>
-                        <input
-                          type="file"
-                          accept=".jpg,.jpeg,.png,.webp,.bmp"
-                          {...({ webkitdirectory: "", mozdirectory: "", directory: "" } as any)}
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files) {
-                              handleImageUpload(e.target.files)
-                            }
-                          }}
-                        />
-                      </label>
-                    )}
-                  </div>
-                )}
-
-                {images.map((image) => {
-                  // Count annotations for this specific image
-                  const imageAnnotationCount = annotations.filter(a => a.imageId === image.id).length
-
-                  return (
-                    <ImageThumbnail
-                      key={image.id}
-                      image={image}
-                      isActive={currentImageId === image.id}
-                      annotationCount={imageAnnotationCount}
-                      onClick={() => setCurrentImageId(image.id)}
-                      isJobMode={isJobMode}
-                      s3Key={image.s3Key}
-                      dirtyInfo={dirtyImageInfo?.get(image.id)}
-                      isDirty={dirtyImageIds?.has(image.id)}
-                      onDelete={(e) => {
-                        e.stopPropagation()
-                        // Don't allow deleting job images
-                        if (isJobMode) {
-                          toast.error('Cannot delete images in job mode')
-                          return
-                        }
-                        if (window.confirm(`Delete "${image.name}"? This will also remove all associated annotations.`)) {
-                          removeImage(image.id)
-                        }
-                      }}
-                    />
-                  )
-                })}
-              </div>
-
-              {/* Next button */}
-              <button
-                onClick={() => {
-                  const nextIndex = currentImageIndex + 1
-                  if (nextIndex < images.length) {
-                    setCurrentImageId(images[nextIndex].id)
-                  }
-                }}
-                disabled={currentImageIndex >= images.length - 1 || images.length === 0}
-                className="p-2 bg-white hover:bg-gray-100 disabled:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 rounded transition-colors border border-gray-300"
-                title="Next image (F)"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Label Manager Modal */}
@@ -2033,6 +2157,8 @@ function AnnotationApp() {
         }}
       />
     </div>
+      )}
+    </>
   )
 }
 

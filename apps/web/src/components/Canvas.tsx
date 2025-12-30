@@ -194,6 +194,7 @@ const StaticPolygonAnnotation = React.memo(function StaticPolygonAnnotation({
 
 interface CanvasProps {
   image: string | null
+  preloadedImage?: HTMLImageElement
   selectedTool: Tool
   annotations: Annotation[]
   labels: Label[]
@@ -223,6 +224,7 @@ interface CanvasProps {
 
 const Canvas = React.memo(function Canvas({
   image,
+  preloadedImage,
   selectedTool,
   annotations,
   labels,
@@ -408,9 +410,28 @@ const Canvas = React.memo(function Canvas({
     ? labels.find(l => l.id === selectedLabelId)?.color || '#f97316'
     : '#f97316'
 
-  // Load image
+  // Load image (use preloaded image if available to avoid re-fetching)
   useEffect(() => {
-    if (image) {
+    if (preloadedImage) {
+      // Use preloaded image directly (skip re-fetch)
+      konvaImageRef.current = preloadedImage
+      setKonvaImage(preloadedImage)
+
+      // Calculate dimensions
+      if (containerRef.current) {
+        const containerWidth = containerRef.current.offsetWidth
+        const containerHeight = containerRef.current.offsetHeight
+        const scaleX = containerWidth / preloadedImage.width
+        const scaleY = containerHeight / preloadedImage.height
+        const newScale = Math.min(scaleX, scaleY)
+        setScale(newScale)
+        setDimensions({
+          width: preloadedImage.width * newScale,
+          height: preloadedImage.height * newScale,
+        })
+      }
+    } else if (image) {
+      // Fallback: original loading logic (for non-preloaded images)
       const img = new window.Image()
       img.src = image
       img.onload = () => {
@@ -432,7 +453,7 @@ const Canvas = React.memo(function Canvas({
         }
       }
     }
-  }, [image])
+  }, [image, preloadedImage])
 
   // Resize on container size change using ResizeObserver
   // This detects both window resize AND flexbox layout changes (sidebar expand/collapse)
@@ -2245,7 +2266,18 @@ const Canvas = React.memo(function Canvas({
     const staticAnns: Annotation[] = []
     const interactiveAnns: Annotation[] = []
 
-    for (const ann of konvaAnnotations) {
+    // Deduplicate annotations by ID (handles legacy duplicate IDs from old timestamp system)
+    const seenIds = new Set<string>()
+    const dedupedAnnotations = konvaAnnotations.filter(ann => {
+      if (seenIds.has(ann.id)) {
+        console.warn(`Duplicate annotation ID detected: ${ann.id}. Skipping duplicate.`)
+        return false
+      }
+      seenIds.add(ann.id)
+      return true
+    })
+
+    for (const ann of dedupedAnnotations) {
       // Only selected annotations go to interactive layer (not hovered - for performance)
       if (selectedSet.has(ann.id)) {
         interactiveAnns.push(ann)

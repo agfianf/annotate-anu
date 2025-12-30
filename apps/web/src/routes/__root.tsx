@@ -70,6 +70,7 @@ const projectDetailSearchSchema = z.object({
 // Annotation app
 const annotateSearchSchema = z.object({
   jobId: z.coerce.string().optional(),
+  imageId: z.string().optional(),
 })
 
 // ============================================================================

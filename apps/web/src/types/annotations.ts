@@ -187,3 +187,24 @@ export interface APIResponse<T> {
 export type SAM3Response = APIResponse<InferenceResult>
 export type SAM3BatchResponse = APIResponse<BatchInferenceResult>
 export type SAM3Mask = MaskPolygon
+
+// Loading state types
+export type LoadingPhase =
+  | 'initial'
+  | 'loading-critical'
+  | 'ready'
+  | 'background-loading'
+  | 'complete'
+
+export interface LoadingProgress {
+  phase: LoadingPhase
+  current: number
+  total: number
+  percentage: number
+  currentStep: string
+  subProgress?: {
+    message: string
+    current: number
+    total: number
+  }
+}

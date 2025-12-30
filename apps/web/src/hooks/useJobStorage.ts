@@ -10,7 +10,7 @@ import {
 } from '../lib/annotation-converter'
 import { annotationsApi, imagesApi, type Label as BackendLabel, type ImageResponse } from '../lib/api-client'
 import { annotationStorage } from '../lib/storage'
-import type { Annotation, ImageData, Label } from '../types/annotations'
+import type { Annotation, ImageData, Label, LoadingProgress } from '../types/annotations'
 import { useAutoSave, type AutoSaveConfig, type DirtyImageInfo, type SyncHistoryEntry } from './useAutoSave'
 import { useJobContext } from './useJobContext'
 import { useStorage } from './useStorage'
@@ -49,6 +49,10 @@ export interface JobStorageState {
   dirtyImageIds: Set<string> // Legacy
   dirtyImageInfo: Map<string, DirtyImageInfo> // Enhanced
   syncHistory: SyncHistoryEntry[] // Sync history
+
+  // Lazy loading state
+  loadingProgress: LoadingProgress
+  annotationsLoadedFor: Set<string> // Image IDs with annotations loaded
 }
 
 export interface JobStorageActions {
@@ -158,157 +162,183 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
   // Track which annotations have been synced (frontendId -> backendId)
   const [syncedAnnotations, setSyncedAnnotations] = useState<Map<string, string>>(new Map())
 
+  // Lazy loading state
+  const [annotationsLoadedFor, setAnnotationsLoadedFor] = useState<Set<string>>(new Set())
+  const [loadingProgress, setLoadingProgress] = useState<LoadingProgress>({
+    phase: 'initial',
+    current: 0,
+    total: 0,
+    percentage: 0,
+    currentStep: ''
+  })
+
   // Use ref for synchronous access to avoid stale closure issues
   const syncedAnnotationsRef = useRef(syncedAnnotations)
   useEffect(() => {
     syncedAnnotationsRef.current = syncedAnnotations
   }, [syncedAnnotations])
 
+  // Ref for annotationsLoadedFor to avoid dependency cycle
+  const annotationsLoadedForRef = useRef(annotationsLoadedFor)
+  useEffect(() => {
+    annotationsLoadedForRef.current = annotationsLoadedFor
+  }, [annotationsLoadedFor])
+
   /**
-   * Load annotations for all job images from backend
+   * Helper to get image ID mapping (job image ID -> shared/primary ID)
+   */
+  const getImageIdMapping = useCallback((): Map<string, string> => {
+    const mapping = new Map<string, string>()
+    for (const img of jobContext.images) {
+      const primaryId = img.shared_image_id || img.id
+      mapping.set(img.id, primaryId)
+    }
+    return mapping
+  }, [jobContext.images])
+
+  /**
+   * Load annotations for a specific image (priority load)
+   * @param imageId - Job image ID to load annotations for
+   */
+  const loadAnnotationsForImage = useCallback(async (imageId: string) => {
+    if (annotationsLoadedForRef.current.has(imageId)) {
+      console.log('[loadAnnotationsForImage] Already loaded:', imageId)
+      return
+    }
+
+    try {
+      const img = jobContext.images.find(i => i.id === imageId)
+      if (!img) {
+        console.warn('[loadAnnotationsForImage] Image not found:', imageId)
+        return
+      }
+
+      const response = await annotationsApi.getForImage(imageId)
+
+      console.log('[loadAnnotationsForImage] Image', img.id, 'detections:', response.detections.length, 'segmentations:', response.segmentations.length)
+
+      // Prepare raw annotations
+      type RawAnnotation = {
+        type: 'detection' | 'segmentation'
+        data: any
+        imageWidth: number
+        imageHeight: number
+      }
+      const rawAnnotations: RawAnnotation[] = []
+
+      for (const det of response.detections) {
+        rawAnnotations.push({ type: 'detection', data: det, imageWidth: img.width, imageHeight: img.height })
+      }
+      for (const seg of response.segmentations) {
+        rawAnnotations.push({ type: 'segmentation', data: seg, imageWidth: img.width, imageHeight: img.height })
+      }
+
+      // Convert to frontend format
+      const converted: Annotation[] = []
+      const newSyncMap = new Map<string, string>()
+
+      for (const rawAnn of rawAnnotations) {
+        if (rawAnn.type === 'detection') {
+          const annots = convertBackendAnnotations([rawAnn.data], [], rawAnn.imageWidth, rawAnn.imageHeight)
+          converted.push(...annots)
+        } else {
+          const annots = convertBackendAnnotations([], [rawAnn.data], rawAnn.imageWidth, rawAnn.imageHeight)
+          converted.push(...annots)
+        }
+
+        // Track synced annotations
+        const frontendId = rawAnn.data.attributes?.frontendId
+        if (frontendId) {
+          newSyncMap.set(frontendId, rawAnn.data.id)
+        }
+      }
+
+      // Remap imageIds to shared image ID
+      const imageIdMapping = getImageIdMapping()
+      const remapped = converted.map(ann => {
+        const mappedImageId = imageIdMapping.get(ann.imageId)
+        if (mappedImageId && mappedImageId !== ann.imageId) {
+          return { ...ann, imageId: mappedImageId }
+        }
+        return ann
+      })
+
+      // Update state atomically
+      setJobAnnotations(prev => {
+        // Remove any existing annotations for this image to prevent duplicates
+        const filtered = prev.filter(a => a.imageId !== (img.shared_image_id || img.id))
+        return [...filtered, ...remapped]
+      })
+
+      setSyncedAnnotations(prev => {
+        const updated = new Map(prev)
+        newSyncMap.forEach((backendId, frontendId) => {
+          updated.set(frontendId, backendId)
+        })
+        return updated
+      })
+
+      setAnnotationsLoadedFor(prev => new Set([...prev, imageId]))
+
+      console.log('[loadAnnotationsForImage] Loaded', remapped.length, 'annotations for image', imageId)
+    } catch (err) {
+      console.error(`[loadAnnotationsForImage] Failed to load annotations for image ${imageId}:`, err)
+    }
+  }, [jobContext.images, getImageIdMapping])
+
+  /**
+   * Background load remaining annotations in chunks
+   * Throttled to avoid overwhelming the API
+   */
+  const loadRemainingAnnotations = useCallback(async (
+    targetImageId: string,
+    onProgress?: (current: number, total: number) => void
+  ) => {
+    const allImageIds = jobContext.images.map(img => img.id)
+    const remainingIds = allImageIds.filter(id =>
+      id !== targetImageId && !annotationsLoadedForRef.current.has(id)
+    )
+
+    console.log('[loadRemainingAnnotations] Loading', remainingIds.length, 'remaining images')
+
+    // Load in chunks of 5 with 200ms delay between chunks
+    const CHUNK_SIZE = 5
+    const CHUNK_DELAY_MS = 200
+
+    for (let i = 0; i < remainingIds.length; i += CHUNK_SIZE) {
+      const chunk = remainingIds.slice(i, i + CHUNK_SIZE)
+
+      // Load chunk in parallel
+      await Promise.all(chunk.map(id => loadAnnotationsForImage(id)))
+
+      // Report progress
+      if (onProgress) {
+        onProgress(i + chunk.length, remainingIds.length)
+      }
+
+      // Throttle to avoid API overload
+      if (i + CHUNK_SIZE < remainingIds.length) {
+        await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY_MS))
+      }
+    }
+
+    console.log('[loadRemainingAnnotations] Complete')
+  }, [jobContext.images, loadAnnotationsForImage])
+
+  /**
+   * Legacy function for backward compatibility with auto-save reload
+   * Loads all annotations (used by onSyncSuccess callback)
    */
   const loadJobAnnotations = useCallback(async () => {
     if (!jobContext.images.length) return
 
-    console.log('[loadJobAnnotations] Starting load for', jobContext.images.length, 'images')
-    const newSyncedMap = new Map<string, string>()
+    console.log('[loadJobAnnotations] (Legacy) Loading all annotations for', jobContext.images.length, 'images')
 
-    // Create mapping from job image ID to shared image ID (or fallback to job image ID)
-    const imageIdMapping = new Map<string, string>()
+    // Load all images sequentially
     for (const img of jobContext.images) {
-      const primaryId = img.shared_image_id || img.id
-      imageIdMapping.set(img.id, primaryId)
+      await loadAnnotationsForImage(img.id)
     }
-
-    // Collect all raw responses first, then deduplicate
-    type RawAnnotation = {
-      type: 'detection' | 'segmentation'
-      data: any
-      imageWidth: number
-      imageHeight: number
-    }
-    const allRawAnnotations: RawAnnotation[] = []
-
-    for (const img of jobContext.images) {
-      try {
-        const response = await annotationsApi.getForImage(img.id)
-
-        // Log fetched annotations
-        console.log('[loadJobAnnotations] Image', img.id, 'detections:', response.detections.map(d => ({
-          backendId: d.id,
-          frontendId: d.attributes?.frontendId,
-          updatedAt: d.updated_at
-        })))
-        console.log('[loadJobAnnotations] Image', img.id, 'segmentations:', response.segmentations.map(s => ({
-          backendId: s.id,
-          frontendId: s.attributes?.frontendId,
-          updatedAt: s.updated_at
-        })))
-
-        // Add all to raw collection
-        for (const det of response.detections) {
-          allRawAnnotations.push({ type: 'detection', data: det, imageWidth: img.width, imageHeight: img.height })
-        }
-        for (const seg of response.segmentations) {
-          allRawAnnotations.push({ type: 'segmentation', data: seg, imageWidth: img.width, imageHeight: img.height })
-        }
-      } catch (err) {
-        console.error(`Failed to load annotations for image ${img.id}:`, err)
-      }
-    }
-
-    // Deduplicate: keep the latest annotation for each frontendId
-    const dedupedByFrontendId = new Map<string, RawAnnotation>()
-    const annotationsWithoutFrontendId: RawAnnotation[] = []
-
-    for (const rawAnn of allRawAnnotations) {
-      const frontendId = rawAnn.data.attributes?.frontendId as string | undefined
-
-      if (!frontendId) {
-        // No frontendId, keep it (assign a generated key to prevent duplicates)
-        annotationsWithoutFrontendId.push(rawAnn)
-        continue
-      }
-
-      const existing = dedupedByFrontendId.get(frontendId)
-      if (existing) {
-        // Duplicate found - compare updated_at and keep the latest
-        const existingTime = new Date(existing.data.updated_at).getTime()
-        const newTime = new Date(rawAnn.data.updated_at).getTime()
-
-        if (newTime > existingTime) {
-          console.warn('[loadJobAnnotations] DUPLICATE - keeping newer:', {
-            frontendId,
-            droppingBackendId: existing.data.id,
-            keepingBackendId: rawAnn.data.id,
-            existingUpdatedAt: existing.data.updated_at,
-            newUpdatedAt: rawAnn.data.updated_at
-          })
-          dedupedByFrontendId.set(frontendId, rawAnn)
-        } else {
-          console.warn('[loadJobAnnotations] DUPLICATE - dropping older:', {
-            frontendId,
-            keepingBackendId: existing.data.id,
-            droppingBackendId: rawAnn.data.id,
-            existingUpdatedAt: existing.data.updated_at,
-            newUpdatedAt: rawAnn.data.updated_at
-          })
-          // Keep existing (newer or same), skip this one
-        }
-      } else {
-        dedupedByFrontendId.set(frontendId, rawAnn)
-      }
-    }
-
-    // Convert deduped annotations to frontend format
-    const allAnnotations: Annotation[] = []
-
-    // Process annotations with frontendId
-    for (const [frontendId, rawAnn] of dedupedByFrontendId) {
-      if (rawAnn.type === 'detection') {
-        const converted = convertBackendAnnotations([rawAnn.data], [], rawAnn.imageWidth, rawAnn.imageHeight)
-        allAnnotations.push(...converted)
-        newSyncedMap.set(frontendId, rawAnn.data.id)
-      } else {
-        const converted = convertBackendAnnotations([], [rawAnn.data], rawAnn.imageWidth, rawAnn.imageHeight)
-        allAnnotations.push(...converted)
-        newSyncedMap.set(frontendId, rawAnn.data.id)
-      }
-    }
-
-    // Process annotations without frontendId
-    for (const rawAnn of annotationsWithoutFrontendId) {
-      if (rawAnn.type === 'detection') {
-        const converted = convertBackendAnnotations([rawAnn.data], [], rawAnn.imageWidth, rawAnn.imageHeight)
-        allAnnotations.push(...converted)
-      } else {
-        const converted = convertBackendAnnotations([], [rawAnn.data], rawAnn.imageWidth, rawAnn.imageHeight)
-        allAnnotations.push(...converted)
-      }
-    }
-
-    // Remap annotation imageIds from job image ID to shared image ID
-    const remappedAnnotations = allAnnotations.map(ann => {
-      const mappedImageId = imageIdMapping.get(ann.imageId)
-      if (mappedImageId && mappedImageId !== ann.imageId) {
-        return { ...ann, imageId: mappedImageId }
-      }
-      return ann
-    })
-
-    console.log('[loadJobAnnotations] syncedAnnotations Map:', Array.from(newSyncedMap.entries()))
-    console.log('[loadJobAnnotations] Final annotations (after dedup and remap):', remappedAnnotations.map(a => ({
-      id: a.id,
-      backendId: a.backendId,
-      type: a.type,
-      imageId: a.imageId
-    })))
-    console.log('[loadJobAnnotations] Dropped', allRawAnnotations.length - remappedAnnotations.length, 'duplicates')
-
-    // Single state update for both
-    setSyncedAnnotations(newSyncedMap)
-    setJobAnnotations(remappedAnnotations)
-  }, [jobContext.images])
+  }, [jobContext.images, loadAnnotationsForImage])
 
   // Auto-save hook with callback to reload annotations after sync
   const autoSaveConfigWithCallback = useMemo(() => ({
@@ -321,34 +351,121 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
 
   const autoSave = useAutoSave(jobId, autoSaveConfigWithCallback)
 
+  // Track initialization to prevent duplicate runs
+  const initializationRef = useRef<{ jobId: string | null; imagesCount: number }>({ jobId: null, imagesCount: 0 })
+
   /**
-   * Initialize job mode when job context is ready
+   * Initialize job mode when job context is ready (with lazy loading)
    */
   useEffect(() => {
     if (!jobId || jobContext.loading) return
 
+    // Prevent duplicate initialization for the same job with same images
+    if (initializationRef.current.jobId === jobId &&
+        initializationRef.current.imagesCount === jobContext.images.length &&
+        jobContext.images.length > 0) {
+      return
+    }
+
     const initJobMode = async () => {
+      initializationRef.current = { jobId, imagesCount: jobContext.images.length }
       setJobLoading(true)
+      setLoadingProgress({
+        phase: 'loading-critical',
+        current: 0,
+        total: jobContext.images.length,
+        percentage: 0,
+        currentStep: 'Initializing job...'
+      })
 
       try {
-        // Convert API images to frontend format
+        // Step 1: Convert images
+        setLoadingProgress(prev => ({ ...prev, currentStep: 'Loading images...', percentage: 5 }))
         const imageData = jobContext.images.map(img => apiImageToImageData(img, jobId))
         setJobImages(imageData)
 
-        // Set first image as current
-        if (imageData.length > 0 && !currentImageId) {
-          setCurrentImageId(imageData[0].id)
-        }
+        // Step 2: Find targeted image from URL parameter
+        const urlParams = new URLSearchParams(window.location.search)
+        const targetImageIdParam = urlParams.get('imageId')
 
-        // Load annotations from backend
-        await loadJobAnnotations()
-      } finally {
+        const targetImage = targetImageIdParam
+          ? imageData.find(img => img.id === targetImageIdParam || img.jobImageId === targetImageIdParam)
+          : imageData[0]
+
+        if (targetImage) {
+          setCurrentImageId(targetImage.id)
+
+          // Step 3: Load ONLY targeted image annotations (blocking)
+          setLoadingProgress(prev => ({
+            ...prev,
+            currentStep: 'Loading annotations for current image...',
+            current: 1,
+            percentage: 10
+          }))
+
+          // Use job image ID for API call
+          const jobImageId = targetImage.jobImageId || targetImage.id
+          await loadAnnotationsForImage(jobImageId)
+
+          // Step 4: Mark as ready - hide loading screen
+          setLoadingProgress({
+            phase: 'ready',
+            current: 1,
+            total: imageData.length,
+            percentage: Math.round((1 / imageData.length) * 100),
+            currentStep: 'Ready'
+          })
+
+          setJobLoading(false)
+
+          // Step 5: Background load remaining annotations (non-blocking)
+          setTimeout(() => {
+            loadRemainingAnnotations(jobImageId, (current, total) => {
+              setLoadingProgress({
+                phase: 'background-loading',
+                current: current + 1, // +1 for targeted image already loaded
+                total: imageData.length,
+                percentage: Math.round(((current + 1) / imageData.length) * 100),
+                currentStep: `Loading annotations (${current + 1}/${imageData.length})...`
+              })
+            }).then(() => {
+              setLoadingProgress({
+                phase: 'complete',
+                current: imageData.length,
+                total: imageData.length,
+                percentage: 100,
+                currentStep: 'Complete'
+              })
+            }).catch(err => {
+              console.error('[initJobMode] Background loading error:', err)
+            })
+          }, 100) // Small delay to ensure UI is ready
+        } else {
+          // No images, just mark as ready
+          setJobLoading(false)
+          setLoadingProgress({
+            phase: 'ready',
+            current: 0,
+            total: 0,
+            percentage: 100,
+            currentStep: 'No images'
+          })
+        }
+      } catch (err) {
+        console.error('[initJobMode] Error:', err)
         setJobLoading(false)
+        setLoadingProgress({
+          phase: 'ready',
+          current: 0,
+          total: 0,
+          percentage: 0,
+          currentStep: 'Error loading'
+        })
       }
     }
 
     initJobMode()
-  }, [jobId, jobContext.loading, jobContext.images, loadJobAnnotations])
+  }, [jobId, jobContext.loading, jobContext.images, loadAnnotationsForImage, loadRemainingAnnotations])
 
   // ============================================================================
   // Job Mode Operations (with auto-save integration)
@@ -616,6 +733,15 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
       dirtyImageIds: new Set(),
       dirtyImageInfo: new Map(),
       syncHistory: [],
+      // Lazy loading state (not used in solo mode)
+      loadingProgress: {
+        phase: 'complete' as const,
+        current: 0,
+        total: 0,
+        percentage: 100,
+        currentStep: ''
+      },
+      annotationsLoadedFor: new Set<string>(),
     }
   }
 
@@ -648,6 +774,10 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
     dirtyImageIds: autoSave.dirtyImageIds, // Legacy
     dirtyImageInfo: autoSave.dirtyImageInfo, // Enhanced
     syncHistory: autoSave.syncHistory, // Sync history
+
+    // Lazy loading state
+    loadingProgress,
+    annotationsLoadedFor,
 
     // Actions - use job-specific operations
     setCurrentImageId,
