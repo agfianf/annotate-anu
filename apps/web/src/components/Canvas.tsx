@@ -319,6 +319,9 @@ const Canvas = React.memo(function Canvas({
   // Cache container bounds to avoid getBoundingClientRect() on every hover (performance optimization)
   const containerBoundsRef = useRef<DOMRect | null>(null)
   const freezeVisibilityRef = useRef(false)
+  // State trigger to force visibility recalculation after zoom ends
+  // (refs don't trigger useMemo recalculation, so we need a state variable)
+  const [visibilityVersion, setVisibilityVersion] = useState(0)
 
   const SNAP_DISTANCE = 10 // pixels in original image coordinates
   const hoverEnabled = showHoverTooltips && selectedTool === 'select' &&
@@ -510,6 +513,10 @@ const Canvas = React.memo(function Canvas({
 
   useLayoutEffect(() => {
     if (!stageRef.current || !backgroundStageRef.current) return
+    // Skip during active zooming - handleWheel already applied transforms directly
+    // This prevents redundant batchDraw() calls that cause flickering
+    if (isZoomingRef.current || isPanningRef.current) return
+
     stageRef.current.scale({ x: zoomLevel, y: zoomLevel })
     stageRef.current.position(stagePosition)
     stageRef.current.batchDraw()
@@ -763,14 +770,27 @@ const Canvas = React.memo(function Canvas({
       }
 
       isZoomingRef.current = true
+
+      // Disable static layer event listening during zoom for better performance
+      if (staticLayerRef.current) {
+        staticLayerRef.current.listening(false)
+      }
+
       if (zoomIdleTimerRef.current) {
         clearTimeout(zoomIdleTimerRef.current)
       }
       zoomIdleTimerRef.current = setTimeout(() => {
-      isZoomingRef.current = false
-      freezeVisibilityRef.current = false
-      zoomIdleTimerRef.current = null
-    }, 150)
+        isZoomingRef.current = false
+        freezeVisibilityRef.current = false
+        zoomIdleTimerRef.current = null
+        // Re-enable static layer event listening after zoom ends
+        if (staticLayerRef.current) {
+          staticLayerRef.current.listening(true)
+        }
+        // Trigger visibility recalculation to show annotations in new viewport
+        setVisibilityVersion(v => v + 1)
+      }, 200) // Extended from 150ms to better handle rapid zoom sequences
+
       zoomRef.current = newScale
       stagePositionRef.current = newPos
 
@@ -793,7 +813,7 @@ const Canvas = React.memo(function Canvas({
           onZoomChange(newScale)
           onStagePositionChange?.(newPos)
         })
-      }, 80)
+      }, 100) // Increased from 80ms for better batching of rapid wheel events
     })
   }
 
@@ -2192,7 +2212,8 @@ const Canvas = React.memo(function Canvas({
     }
 
     return inView
-  }, [annotations, isAnnotationVisible, isInViewport])
+    // visibilityVersion forces recalculation when zoom ends (refs don't trigger useMemo)
+  }, [annotations, isAnnotationVisible, isInViewport, visibilityVersion])
 
   // Selected annotations are always rendered regardless of viewport.
   const visibleAnnotations = useMemo(() => {

@@ -7,7 +7,7 @@ import Canvas from '../components/Canvas'
 import { ExportModal } from '../components/ExportModal'
 import { LeftSidebar } from '../components/LeftSidebar'
 import { ModelSelector } from '../components/ModelSelector'
-import Sidebar from '../components/Sidebar'
+import { AnnotationsSidebar } from '../components/sidebar'
 import { AIModeIndicator } from '../components/ui/AIModeIndicator'
 import { ColorPickerPopup } from '../components/ui/ColorPickerPopup'
 import { Modal } from '../components/ui/Modal'
@@ -570,6 +570,25 @@ function AnnotationApp() {
     } catch (error) {
       console.error('Failed to change labels:', error)
       toast.error('Failed to change labels')
+    }
+  }
+
+  // Single annotation label change handler (for inline editing in table)
+  const handleLabelChange = async (annotationId: string, newLabelId: string) => {
+    try {
+      const annotation = annotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      const updatedAnnotation = {
+        ...annotation,
+        labelId: newLabelId,
+        updatedAt: Date.now(),
+      }
+
+      await updateAnnotation(updatedAnnotation)
+    } catch (error) {
+      console.error('Failed to change label:', error)
+      toast.error('Failed to change label')
     }
   }
 
@@ -1185,7 +1204,7 @@ function AnnotationApp() {
           </div>
 
           {/* Sidebar */}
-          <Sidebar
+          <AnnotationsSidebar
             annotations={currentAnnotations}
             labels={labels}
             selectedAnnotations={selectedAnnotations}
@@ -1195,6 +1214,7 @@ function AnnotationApp() {
             onDeleteAnnotation={handleDeleteAnnotation}
             onBulkDeleteAnnotations={handleBulkDeleteAnnotations}
             onBulkChangeLabel={handleBulkChangeLabel}
+            onLabelChange={handleLabelChange}
             onToggleAnnotationVisibility={handleToggleAnnotationVisibility}
             onBulkToggleVisibility={handleBulkToggleVisibility}
             isCollapsed={isRightSidebarCollapsed}
