@@ -1217,10 +1217,10 @@ function AnnotationApp() {
           />
 
           {/* Canvas */}
-          <div className="flex-1 bg-white overflow-hidden flex flex-col border-x border-gray-200">
+          <div className="flex-1 bg-white flex flex-col border-x border-gray-200 overflow-visible">
             {/* Image Viewer Header */}
             {currentImage && (
-              <div className="glass border-b border-gray-200 px-4 py-2 flex items-center justify-between">
+              <div className="glass border-b border-gray-200 px-4 py-2 flex items-center justify-between overflow-visible">
                 {/* Left: Image info */}
                 <div className="flex items-center gap-3">
                   <span className="text-emerald-600 font-semibold">
@@ -1261,7 +1261,7 @@ function AnnotationApp() {
                 </div>
 
                 {/* Right: AI Mode Indicator */}
-                <div>
+                <div className="overflow-visible">
                   <AIModeIndicator
                     mode={promptMode}
                     isActive={isAIPanelActive}
