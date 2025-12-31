@@ -13,6 +13,8 @@ import {
     FolderOpen,
     Grid3X3,
     Image as ImageIcon,
+    LayoutGrid,
+    LayoutPanelTop,
     Loader2,
     Maximize2,
     Minimize2,
@@ -52,6 +54,10 @@ import TagSelectorDropdown from './TagSelectorDropdown';
 import { getTextColorForBackground } from '@/lib/colors';
 import { ExportWizardModal } from './export';
 import type { FilterSnapshot } from '@/types/export';
+// Analytics Panel System
+import { AnalyticsPanelProvider } from '@/contexts/AnalyticsPanelContext';
+import { AnalyticsPanelContainer, PanelLibrary } from './analytics';
+import { useAnalyticsPanels } from '@/hooks/useAnalyticsPanels';
 
 interface ProjectExploreTabProps {
   projectId: string;
@@ -937,8 +943,36 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     );
   };
 
-  return (
-    <div className="h-full flex flex-col min-h-0">
+  // Handler for panel filter updates
+  const handlePanelFilterUpdate = useCallback((panelFilters: Partial<ExploreFilters>) => {
+    // Merge panel filters with existing filters
+    // Panel filters can update: tag_ids, task_ids, job_id, etc.
+    if (panelFilters.tag_ids !== undefined) {
+      // Update sidebar included tags
+      setSidebarFilters(prev => ({
+        ...prev,
+        includeTags: panelFilters.tag_ids || [],
+      }));
+    }
+    if (panelFilters.task_ids !== undefined) {
+      setSelectedTaskIds(panelFilters.task_ids || []);
+    }
+    if (panelFilters.job_id !== undefined) {
+      setSelectedJobId(panelFilters.job_id || null);
+    }
+  }, []);
+
+  // Inner component to access analytics panel context
+  const ProjectExploreContent = () => {
+    const {
+      isVisible: isPanelsVisible,
+      layoutMode,
+      setLayoutMode,
+      panelCount
+    } = useAnalyticsPanels();
+
+    return (
+      <div className="h-full flex flex-col min-h-0">
       {/* Top Bar - Filters */}
       <div className="glass-strong rounded-2xl shadow-lg p-3 mb-3 relative z-20">
         <div className="flex flex-wrap items-center gap-4">
@@ -1004,6 +1038,54 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               <span>Export</span>
               <span className="text-base">🚀</span>
             </button>
+          </div>
+
+          {/* Analytics Panel Controls */}
+          <div className="flex items-center gap-2">
+            <PanelLibrary />
+
+            {/* Layout Mode Toggle - only shown when multiple panels */}
+            {isPanelsVisible && panelCount > 1 && (
+              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setLayoutMode('tabs')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    layoutMode === 'tabs'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  aria-label="Tab layout"
+                  title="Tab layout"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <LayoutPanelTop className="w-3.5 h-3.5" />
+                    <span>Tabs</span>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setLayoutMode('stacked')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    layoutMode === 'stacked'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  aria-label="Stacked layout"
+                  title="Stacked layout"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span>Stacked</span>
+                  </div>
+                </button>
+              </div>
+            )}
+
+            {/* Panel Count - only shown when panels exist */}
+            {isPanelsVisible && (
+              <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                {panelCount} {panelCount === 1 ? 'panel' : 'panels'}
+              </div>
+            )}
           </div>
 
           {/* Zoom Control */}
@@ -1269,34 +1351,40 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       )}
 
       {/* Main Content Area - with Sidebar in fullscreen */}
-      <div className="flex-1 flex overflow-hidden min-h-0">
+      <div
+        className="flex-1 grid gap-3 overflow-hidden min-h-0"
+        style={{
+          gridTemplateColumns:
+            isFullView && isPanelsVisible ? '300px 1fr 1fr' :
+            isFullView && !isPanelsVisible ? '300px 1fr' :
+            !isFullView && isPanelsVisible ? '1fr 1fr' :
+            '1fr'
+        }}
+      >
         {/* Sidebar - only visible in fullscreen mode */}
         {isFullView && (
-          <>
-            {/* Unified Sidebar - filtering, visibility, and tag/category creation */}
-            <UnifiedExploreSidebar
-              projectId={projectId}
-              filters={sidebarFilters}
-              onToggleTag={toggleSidebarTag}
-              setIncludeMatchMode={setIncludeMatchMode}
-              setExcludeMatchMode={setExcludeMatchMode}
-              visibility={visibilityState}
-              // Metadata filter handlers
-              onImageUidsChange={setImageUids}
-              onWidthRangeChange={setSidebarWidthRange}
-              onHeightRangeChange={setSidebarHeightRange}
-              onSizeRangeChange={setSidebarSizeRange}
-              onFilepathPathsChange={setSidebarFilepathPaths}
-              // Metadata aggregations
-              widthAggregation={widthAggregation}
-              heightAggregation={heightAggregation}
-              sizeAggregation={sizeAggregation}
-            />
-          </>
+          <UnifiedExploreSidebar
+            projectId={projectId}
+            filters={sidebarFilters}
+            onToggleTag={toggleSidebarTag}
+            setIncludeMatchMode={setIncludeMatchMode}
+            setExcludeMatchMode={setExcludeMatchMode}
+            visibility={visibilityState}
+            // Metadata filter handlers
+            onImageUidsChange={setImageUids}
+            onWidthRangeChange={setSidebarWidthRange}
+            onHeightRangeChange={setSidebarHeightRange}
+            onSizeRangeChange={setSidebarSizeRange}
+            onFilepathPathsChange={setSidebarFilepathPaths}
+            // Metadata aggregations
+            widthAggregation={widthAggregation}
+            heightAggregation={heightAggregation}
+            sizeAggregation={sizeAggregation}
+          />
         )}
 
-        {/* Main Content */}
-      <div className="flex-1 glass-strong rounded-2xl shadow-lg overflow-hidden flex flex-col min-h-0 relative z-10">
+        {/* Gallery */}
+      <div className="glass-strong rounded-2xl shadow-lg overflow-hidden flex flex-col min-h-0 relative z-10">
         {/* Gallery Header */}
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center gap-3">
@@ -1360,6 +1448,13 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
           />
         )}
       </div>
+
+      {/* Analytics Panels */}
+      <AnalyticsPanelContainer
+        projectId={projectId}
+        filters={filters}
+        onFilterUpdate={handlePanelFilterUpdate}
+      />
       </div>
 
       {/* Create Tag Modal */}
@@ -1728,6 +1823,13 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
           </div>
         </div>
       )}
-    </div>
+      </div>
+    );
+  };
+
+  return (
+    <AnalyticsPanelProvider projectId={projectId} onFilterUpdate={handlePanelFilterUpdate}>
+      <ProjectExploreContent />
+    </AnalyticsPanelProvider>
   );
 }

@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ============================================================================
@@ -282,12 +282,20 @@ class ExploreFilter(BaseModel):
 class BboxPreview(BaseModel):
     """Minimal bbox for thumbnail overlay."""
 
-    x_min: float = Field(..., ge=0, le=1, description="Normalized x_min (0-1)")
-    y_min: float = Field(..., ge=0, le=1, description="Normalized y_min (0-1)")
-    x_max: float = Field(..., ge=0, le=1, description="Normalized x_max (0-1)")
-    y_max: float = Field(..., ge=0, le=1, description="Normalized y_max (0-1)")
+    x_min: float = Field(..., description="Normalized x_min (0-1)")
+    y_min: float = Field(..., description="Normalized y_min (0-1)")
+    x_max: float = Field(..., description="Normalized x_max (0-1)")
+    y_max: float = Field(..., description="Normalized y_max (0-1)")
     label_color: str = Field(default="#10B981", description="Label color for rendering")
     label_name: str | None = Field(None, description="Label name for display")
+
+    @field_validator('x_min', 'y_min', 'x_max', 'y_max', mode='before')
+    @classmethod
+    def clamp_coordinates(cls, v: float) -> float:
+        """Clamp bbox coordinates to [0, 1] to handle floating point precision errors."""
+        if v is None:
+            return v
+        return max(0.0, min(1.0, float(v)))
 
 
 class PolygonPreview(BaseModel):
