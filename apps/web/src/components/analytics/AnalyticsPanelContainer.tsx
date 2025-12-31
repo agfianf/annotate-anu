@@ -84,13 +84,13 @@ export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
         animate={{ opacity: 1, x: 0 }}
         exit={prefersReducedMotion ? {} : { opacity: 0, x: -20 }}
         transition={{ duration: prefersReducedMotion ? 0.01 : 0.25 }}
-        className="w-full min-w-0 flex flex-col h-full glass-strong rounded-2xl overflow-hidden"
+        className="w-full min-w-0 flex flex-col h-full glass-strong rounded-xl overflow-hidden"
         role="region"
         aria-label="Analytics panels"
       >
-        {/* Tab Bar */}
+        {/* Tab Bar - compact style matching gallery header */}
         <div
-          className="flex items-center gap-1 px-4 py-2 border-b border-gray-200 bg-white overflow-x-auto"
+          className="flex items-center gap-0.5 px-2 py-1.5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white overflow-x-auto scrollbar-none"
           role="tablist"
           aria-label="Analytics panel tabs"
         >
@@ -99,38 +99,33 @@ export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
             const Icon = definition.icon;
             const isActive = panel.id === activePanelId;
             return (
-              <div
+              <button
                 key={panel.id}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                onClick={() => setActiveTab(panel.id)}
+                className={`group flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${
                   isActive
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    ? 'bg-emerald-100/80 text-emerald-700'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
                 }`}
                 role="tab"
                 aria-selected={isActive}
                 aria-controls={`panel-${panel.id}`}
+                title={definition.name}
               >
-                <button
-                  onClick={() => setActiveTab(panel.id)}
-                  className="flex items-center gap-2 flex-1"
-                  aria-label={`View ${definition.name} panel`}
-                  tabIndex={isActive ? 0 : -1}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span className="hidden sm:inline">{definition.name}</span>
-                </button>
-                <button
+                <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="truncate max-w-[80px]">{definition.name}</span>
+                <span
                   onClick={(e) => {
                     e.stopPropagation();
                     removePanel(panel.id);
                   }}
-                  className="p-0.5 hover:bg-gray-200 rounded transition-colors"
-                  aria-label={`Close ${definition.name} panel`}
-                  title={`Close ${definition.name}`}
+                  className="ml-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-gray-200/80 transition-opacity"
+                  role="button"
+                  aria-label={`Close ${definition.name}`}
                 >
                   <X className="w-3 h-3" />
-                </button>
-              </div>
+                </span>
+              </button>
             );
           })}
         </div>

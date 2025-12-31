@@ -235,10 +235,10 @@ export default function DatasetStatsPanel({
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full min-h-[400px]">
+      <div className="flex items-center justify-center h-full min-h-[200px]">
         <div className="text-center">
-          <Loader2 className="w-12 h-12 text-emerald-600 animate-spin mx-auto mb-3" />
-          <p className="text-sm text-gray-500">Loading dataset statistics...</p>
+          <Loader2 className="w-6 h-6 text-emerald-600 animate-spin mx-auto mb-2" />
+          <p className="text-xs text-gray-500">Loading statistics...</p>
         </div>
       </div>
     );
@@ -247,13 +247,13 @@ export default function DatasetStatsPanel({
   // Error state
   if (error) {
     return (
-      <div className="flex items-center justify-center h-full min-h-[400px]">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <BarChart3 className="w-8 h-8 text-red-600" />
+      <div className="flex items-center justify-center h-full min-h-[200px] p-4">
+        <div className="text-center">
+          <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-2">
+            <BarChart3 className="w-5 h-5 text-red-600" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Failed to load statistics</h3>
-          <p className="text-sm text-gray-500">{(error as Error).message}</p>
+          <h3 className="text-sm font-semibold text-gray-900 mb-1">Failed to load</h3>
+          <p className="text-xs text-gray-500">{(error as Error).message}</p>
         </div>
       </div>
     );
@@ -262,191 +262,147 @@ export default function DatasetStatsPanel({
   // Empty state
   if (!data || (tagChartData.length === 0 && dimensionChartData.length === 0)) {
     return (
-      <div className="flex items-center justify-center h-full min-h-[400px]">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <BarChart3 className="w-8 h-8 text-gray-400" />
+      <div className="flex items-center justify-center h-full min-h-[200px] p-4">
+        <div className="text-center">
+          <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
+            <BarChart3 className="w-5 h-5 text-gray-400" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No data available</h3>
-          <p className="text-sm text-gray-500">
-            No statistics to display. Try adjusting your filters or adding images to the project.
-          </p>
+          <h3 className="text-sm font-semibold text-gray-900 mb-1">No data</h3>
+          <p className="text-xs text-gray-500">Adjust filters or add images</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto p-6 space-y-6">
-      {/* Header Stats Cards */}
+    <div className="h-full overflow-y-auto p-3 space-y-3">
+      {/* Header Stats Cards - Compact 2x2 Grid */}
       <motion.div
-        initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
+        initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: prefersReducedMotion ? 0.01 : 0.3 }}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+        transition={{ duration: prefersReducedMotion ? 0.01 : 0.2 }}
+        className="grid grid-cols-2 gap-2"
       >
         {/* File Size Stats */}
         <div
-          className="p-4 rounded-xl border border-emerald-200/50"
+          className="p-2.5 rounded-lg border border-emerald-200/50"
           style={{
             background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(5, 150, 105, 0.08) 100%)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
           }}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <HardDrive className="w-4 h-4 text-emerald-600" />
-            <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">File Size</span>
+          <div className="flex items-center gap-1.5 mb-1">
+            <HardDrive className="w-3 h-3 text-emerald-600" />
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">File Size</span>
           </div>
-          <div className="space-y-1">
-            <div className="text-2xl font-bold text-gray-900">
-              {formatFileSize(data.file_size_stats.avg)}
-            </div>
-            <div className="text-xs text-gray-500">
-              Range: {formatFileSize(data.file_size_stats.min)} - {formatFileSize(data.file_size_stats.max)}
-            </div>
-            {data.file_size_stats.median && (
-              <div className="text-xs text-gray-500">
-                Median: {formatFileSize(data.file_size_stats.median)}
-              </div>
-            )}
+          <div className="text-base font-bold text-gray-900">
+            {formatFileSize(data.file_size_stats.avg)}
+          </div>
+          <div className="text-[10px] text-gray-500 leading-tight">
+            {formatFileSize(data.file_size_stats.min)} - {formatFileSize(data.file_size_stats.max)}
           </div>
         </div>
 
         {/* Tag Count */}
         <div
-          className="p-4 rounded-xl border border-blue-200/50"
+          className="p-2.5 rounded-lg border border-blue-200/50"
           style={{
             background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(37, 99, 235, 0.08) 100%)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
           }}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <TagIcon className="w-4 h-4 text-blue-600" />
-            <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Tags</span>
+          <div className="flex items-center gap-1.5 mb-1">
+            <TagIcon className="w-3 h-3 text-blue-600" />
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Tags</span>
           </div>
-          <div className="space-y-1">
-            <div className="text-2xl font-bold text-gray-900">
-              {statsInsights?.totalTags || tagChartData.length}
-            </div>
-            <div className="text-xs text-gray-500">
-              Unique tags in dataset
-            </div>
-            {statsInsights && statsInsights.tagOutliers > 0 && (
-              <div className="flex items-center gap-1 text-xs text-orange-600">
-                <AlertTriangle className="w-3 h-3" />
-                <span>{statsInsights.tagOutliers} outlier{statsInsights.tagOutliers > 1 ? 's' : ''}</span>
-              </div>
+          <div className="text-base font-bold text-gray-900">
+            {statsInsights?.totalTags || tagChartData.length}
+          </div>
+          <div className="text-[10px] text-gray-500">
+            {statsInsights && statsInsights.tagOutliers > 0 ? (
+              <span className="text-orange-600">{statsInsights.tagOutliers} outlier{statsInsights.tagOutliers > 1 ? 's' : ''}</span>
+            ) : (
+              'Unique tags'
             )}
           </div>
         </div>
 
         {/* Dimension Buckets */}
         <div
-          className="p-4 rounded-xl border border-purple-200/50"
+          className="p-2.5 rounded-lg border border-purple-200/50"
           style={{
             background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.05) 0%, rgba(124, 58, 237, 0.08) 100%)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
           }}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <Ruler className="w-4 h-4 text-purple-600" />
-            <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Size Groups</span>
+          <div className="flex items-center gap-1.5 mb-1">
+            <Ruler className="w-3 h-3 text-purple-600" />
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Sizes</span>
           </div>
-          <div className="space-y-1">
-            <div className="text-2xl font-bold text-gray-900">
-              {dimensionChartData.length}
-            </div>
-            <div className="text-xs text-gray-500">
-              Image size categories
-            </div>
-            {statsInsights && statsInsights.dimensionOutliers > 0 && (
-              <div className="flex items-center gap-1 text-xs text-orange-600">
-                <AlertTriangle className="w-3 h-3" />
-                <span>{statsInsights.dimensionOutliers} outlier{statsInsights.dimensionOutliers > 1 ? 's' : ''}</span>
-              </div>
+          <div className="text-base font-bold text-gray-900">
+            {dimensionChartData.length}
+          </div>
+          <div className="text-[10px] text-gray-500">
+            {statsInsights && statsInsights.dimensionOutliers > 0 ? (
+              <span className="text-orange-600">{statsInsights.dimensionOutliers} outlier{statsInsights.dimensionOutliers > 1 ? 's' : ''}</span>
+            ) : (
+              'Categories'
             )}
           </div>
         </div>
 
         {/* Distribution Balance */}
         <div
-          className="p-4 rounded-xl border border-orange-200/50"
+          className="p-2.5 rounded-lg border border-orange-200/50"
           style={{
             background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.05) 0%, rgba(234, 88, 12, 0.08) 100%)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
           }}
         >
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="w-4 h-4 text-orange-600" />
-            <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Balance</span>
+          <div className="flex items-center gap-1.5 mb-1">
+            <TrendingUp className="w-3 h-3 text-orange-600" />
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Balance</span>
           </div>
-          <div className="space-y-1">
-            <div className="text-2xl font-bold text-gray-900">
-              {statsInsights ? `${((1 - statsInsights.tagStats.stdDev / statsInsights.tagStats.mean) * 100).toFixed(0)}%` : 'N/A'}
-            </div>
-            <div className="text-xs text-gray-500">
-              Tag distribution score
-            </div>
-            <div className="flex items-center gap-1 text-xs text-blue-600">
-              <Info className="w-3 h-3" />
-              <span>Higher is better</span>
-            </div>
+          <div className="text-base font-bold text-gray-900">
+            {statsInsights ? `${((1 - statsInsights.tagStats.stdDev / statsInsights.tagStats.mean) * 100).toFixed(0)}%` : 'N/A'}
           </div>
+          <div className="text-[10px] text-gray-500">Distribution score</div>
         </div>
       </motion.div>
 
       {/* Tag Distribution Chart */}
       {tagChartData.length > 0 && (
         <motion.div
-          initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: prefersReducedMotion ? 0.01 : 0.4, delay: prefersReducedMotion ? 0 : 0.1 }}
-          className="p-6 rounded-2xl border border-emerald-200/50"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-          }}
+          transition={{ duration: prefersReducedMotion ? 0.01 : 0.2, delay: prefersReducedMotion ? 0 : 0.05 }}
+          className="p-3 rounded-lg border border-emerald-200/50 bg-white/80"
         >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <TagIcon className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900">Tag Distribution</h3>
-              <p className="text-sm text-gray-500">
-                Click any bar to filter images by that tag •
-                <span className="text-orange-600 ml-1">Orange borders = statistical outliers</span>
-              </p>
-            </div>
+          <div className="flex items-center gap-2 mb-2">
+            <TagIcon className="w-3.5 h-3.5 text-emerald-600" />
+            <h3 className="text-xs font-semibold text-gray-700">Tag Distribution</h3>
+            <span className="text-[10px] text-gray-400 ml-auto">Click to filter</span>
           </div>
 
-          <div style={{ width: '100%', height: 400, minHeight: 400 }}>
+          <div style={{ width: '100%', height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={tagChartData}
-                margin={{ top: 10, right: 30, left: 0, bottom: 100 }}
+                margin={{ top: 5, right: 10, left: -10, bottom: 60 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis
                   dataKey="name"
                   angle={-45}
                   textAnchor="end"
-                  height={100}
-                  tick={{ fill: '#6B7280', fontSize: 12 }}
+                  height={60}
+                  tick={{ fill: '#6B7280', fontSize: 9 }}
+                  interval={0}
                 />
-                <YAxis tick={{ fill: '#6B7280', fontSize: 12 }} />
+                <YAxis tick={{ fill: '#6B7280', fontSize: 9 }} width={30} />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(16, 185, 129, 0.1)' }} />
                 <Bar
                   dataKey="count"
                   onClick={handleTagClick}
-                  radius={[8, 8, 0, 0]}
+                  radius={[4, 4, 0, 0]}
                   cursor="pointer"
-                  animationDuration={prefersReducedMotion ? 0 : 800}
+                  animationDuration={prefersReducedMotion ? 0 : 500}
                   style={{ outline: 'none' }}
                 >
                   {tagChartData.map((entry, index) => (
@@ -454,7 +410,7 @@ export default function DatasetStatsPanel({
                       key={`cell-${index}`}
                       fill={entry.color}
                       stroke={entry.isOutlier ? '#F97316' : 'none'}
-                      strokeWidth={entry.isOutlier ? 3 : 0}
+                      strokeWidth={entry.isOutlier ? 2 : 0}
                       className="hover:opacity-80 transition-opacity"
                       style={{ outline: 'none' }}
                     />
@@ -469,51 +425,39 @@ export default function DatasetStatsPanel({
       {/* Dimension Histogram */}
       {dimensionChartData.length > 0 && (
         <motion.div
-          initial={prefersReducedMotion ? {} : { opacity: 0, y: 20 }}
+          initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: prefersReducedMotion ? 0.01 : 0.4, delay: prefersReducedMotion ? 0 : 0.2 }}
-          className="p-6 rounded-2xl border border-purple-200/50"
-          style={{
-            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-          }}
+          transition={{ duration: prefersReducedMotion ? 0.01 : 0.2, delay: prefersReducedMotion ? 0 : 0.1 }}
+          className="p-3 rounded-lg border border-purple-200/50 bg-white/80"
         >
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <Ruler className="w-5 h-5 text-purple-600" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900">Dimension Distribution</h3>
-              <p className="text-sm text-gray-500">
-                Click any bar to filter by image size range •
-                <span className="text-orange-600 ml-1">Orange borders = statistical outliers</span>
-              </p>
-            </div>
+          <div className="flex items-center gap-2 mb-2">
+            <Ruler className="w-3.5 h-3.5 text-purple-600" />
+            <h3 className="text-xs font-semibold text-gray-700">Dimension Distribution</h3>
+            <span className="text-[10px] text-gray-400 ml-auto">Click to filter</span>
           </div>
 
-          <div style={{ width: '100%', height: 300, minHeight: 300 }}>
+          <div style={{ width: '100%', height: 160 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={dimensionChartData}
-                margin={{ top: 10, right: 30, left: 0, bottom: 60 }}
+                margin={{ top: 5, right: 10, left: -10, bottom: 40 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis
                   dataKey="name"
                   angle={-30}
                   textAnchor="end"
-                  height={60}
-                  tick={{ fill: '#6B7280', fontSize: 12 }}
+                  height={40}
+                  tick={{ fill: '#6B7280', fontSize: 9 }}
                 />
-                <YAxis tick={{ fill: '#6B7280', fontSize: 12 }} />
+                <YAxis tick={{ fill: '#6B7280', fontSize: 9 }} width={30} />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(139, 92, 246, 0.1)' }} />
                 <Bar
                   dataKey="count"
                   onClick={handleDimensionClick}
-                  radius={[8, 8, 0, 0]}
+                  radius={[4, 4, 0, 0]}
                   cursor="pointer"
-                  animationDuration={prefersReducedMotion ? 0 : 800}
+                  animationDuration={prefersReducedMotion ? 0 : 500}
                   style={{ outline: 'none' }}
                 >
                   {dimensionChartData.map((entry, index) => (
@@ -521,7 +465,7 @@ export default function DatasetStatsPanel({
                       key={`cell-${index}`}
                       fill="url(#purpleGradient)"
                       stroke={entry.isOutlier ? '#F97316' : 'none'}
-                      strokeWidth={entry.isOutlier ? 3 : 0}
+                      strokeWidth={entry.isOutlier ? 2 : 0}
                       style={{ outline: 'none' }}
                     />
                   ))}
