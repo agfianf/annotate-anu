@@ -3,153 +3,154 @@
 
   # AnnotateANU
 
-  ### Annotate at the Speed of AI. 100% Private.
+  **Local-first image annotation with SAM3-powered segmentation.**
 
-  <p>
-    AnnotateANU combines the power of Meta's SAM3 for instant segmentation with a strictly local-first architecture.<br/>
-    Your images never leave your browser. Free, open-source, and built for high-performance computer vision workflows.
-  </p>
+  AnnotateANU combines SAM3 prompts with a fast React canvas UI. Run everything locally,
+  keep data in your browser or your own stack, and export in standard ML formats.
 
   [![Open Source](https://img.shields.io/badge/Open%20Source-100%25-brightgreen)](https://github.com/agfianf/annotate-anu.git)
-  [![Privacy](https://img.shields.io/badge/Privacy-No%20Server%20Uploads-blue)](https://github.com/agfianf/annotate-anu.git)
+  [![Privacy](https://img.shields.io/badge/Privacy-Local%20First-blue)](https://github.com/agfianf/annotate-anu.git)
   [![Powered by SAM3](https://img.shields.io/badge/Powered%20by-Meta%20SAM3-0467DF)](https://huggingface.co/facebook/sam3)
 
-  [Get Started](#quick-start) · [Report Bug](https://github.com/agfianf/annotate-anu/issues)
-
+  [Get Started](#quick-start) · [Docs](#docs) · [Report Bug](https://github.com/agfianf/annotate-anu/issues)
 </div>
 
 ---
 
-## 📚 Table of Contents
+## Table of Contents
 
-- [Why Choose AnnotateANU?](#why-choose-annotatanu)
-- [Features](#-features)
-- [Quick Start](#quick-start)
+- [Overview](#overview)
+- [Demo Gallery](#demo-gallery)
+- [Features](#features)
 - [Architecture](#architecture)
-- [Roadmap](#-roadmap---coming-soon)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#-contributing)
+- [Quick Start](#quick-start)
+- [Local Development](#local-development)
+- [Configuration](#configuration)
+- [Docs](#docs)
+- [License](#license)
 
----
+## Overview
 
-## ✨ Features
+AnnotateANU is a full-stack annotation platform for computer vision datasets. It pairs
+SAM3 segmentation with a Konva-powered canvas for fast editing, and supports local-first
+storage or a team stack with Postgres, MinIO, and Redis.
 
-- **⚡ Automated Segmentation**: SAM3 inference runs locally or via optimized endpoints to auto-segment objects instantly. Use text prompts or bounding boxes to get pixel-perfect masks in milliseconds.
+## Demo Gallery
 
-- **🎯 Manual Precision**: Need to tweak the AI's work? Use our pixel-perfect pen, rectangle, and polygon tools for fine-tuning your annotations with complete control.
+| Demo | GIF | Description |
+| --- | --- | --- |
+| Landing flow | ![Landing page demo](assets/landing_page.gif) | Product landing, onboarding entry, and top-level navigation. |
+| Annotation workflow | ![Annotation tools demo](assets/features.gif) | Prompt, mask, edit, and export loop in the canvas. |
+| Batch labeling (placeholder) | ![Batch labeling placeholder](animation.gif) | Placeholder for multi-image queue labeling and export. |
 
-- **📦 Batch Workflow**: Load hundreds of images at once. Our interface handles batch processing without browser lag, making large dataset annotation a breeze.
+## Features
 
-- **⌨️ Lightning Shortcuts**: Designed for power users. Keep your hands on the keyboard and annotate without breaking flow with comprehensive keyboard shortcuts.
-
-- **💾 Export Ready**: Export to COCO JSON, YOLO format, or ZIP archives with one click. Industry-standard formats ready for your ML pipelines.
-
-- **🔒 Local-First Storage**: Your data stays local with IndexedDB - no server uploads, total privacy. All processing happens in your browser or on your local backend.
-
-
-![feature](assets/features.gif)
-
+- **SAM3 prompts**: Text and bounding box prompts for instant masks.
+- **Precision tools**: Rectangle, polygon, and point tools for manual edits.
+- **Batch workflows**: Queue large image sets without UI lag.
+- **Exports**: COCO, YOLO, and ZIP exports for training pipelines.
+- **Local-first storage**: IndexedDB by default, optional team stack.
 
 ## Architecture
 
-AnnotateANU is a simple monorepo with two independent applications:
+```mermaid
+flowchart LR
+  user[Annotator] --> web[Web App (React + Konva)]
+
+  web -->|Text/BBox prompts| inference[API Inference (FastAPI + SAM3)]
+  web -->|Projects, tasks, auth| core[API Core (FastAPI)]
+
+  inference --> sam3[Sam3 Model (HF Transformers)]
+
+  web --> idb[(IndexedDB)]
+  core --> db[(PostgreSQL or SQLite)]
+  core --> redis[(Redis)]
+  core --> minio[(MinIO / S3)]
+```
+
+Diagram source: `docs/architecture/system-overview.mmd`
+
+**Repo layout**
 
 ```
-sam3-app/                    # Simple Monorepo
+sam3-app/
 ├── apps/
-│   ├── web/                 # React annotation interface
-│   │   ├── src/
-│   │   ├── Dockerfile
-│   │   └── package.json
-│   └── api-inference/       # FastAPI SAM3 backend
-│       ├── src/app/
-│       ├── Dockerfile
-│       └── pyproject.toml
-├── docker-compose.yml       # Orchestrates all services
-├── Makefile                 # Development commands
-├── package.json             # Root config
-└── README.md
+│   ├── api-inference/    # SAM3 inference API (FastAPI)
+│   ├── api-core/         # Core API (auth, projects, BYOM)
+│   └── web/              # React annotation UI
+├── docker/               # Compose files for dev/solo/team
+└── docs/
 ```
 
 ## Quick Start
 
 ### Prerequisites
 
-- **Docker & Docker Compose** (recommended)
-- **Python 3.12+** and **uv** (for local backend development)
-- **Node.js 18+** and **npm** (for local frontend development)
-- **HuggingFace Account & Token** (required for SAM3 model access)
+- Docker + Docker Compose
+- HuggingFace account and token (SAM3 is gated)
 
-### HuggingFace Setup (REQUIRED)
+### HuggingFace Token
 
-SAM3 is a gated model. You must:
-
-1. Create account: https://huggingface.co/join
-2. Request access: https://huggingface.co/facebook/sam3
-3. Generate token: https://huggingface.co/settings/tokens
-4. Add to apps/api-inference/.env:
+1. Request access: https://huggingface.co/facebook/sam3
+2. Create a token: https://huggingface.co/settings/tokens
+3. Add it to `apps/api-inference/.env`:
 
 ```bash
 cp apps/api-inference/.env.example apps/api-inference/.env
-# Edit apps/api-inference/.env and add:
+# Edit apps/api-inference/.env and set:
 HF_TOKEN=hf_your_token_here
 ```
 
-### Docker (Recommended)
+### Start the stack (dev)
 
 ```bash
-# 1. Setup environment
-cp apps/api-inference/.env.example apps/api-inference/.env
-# Edit apps/api-inference/.env and add your HF_TOKEN
-
-# 2. Start all services
 make docker-up
-
-# 3. Access the application
-# Frontend: http://localhost:5173
-# Backend API: http://localhost:8000
-# API Docs: http://localhost:8000/docs
 ```
 
-## 🚀 Roadmap - Coming Soon
+Services:
+- Frontend: http://localhost:5173
+- SAM3 API: http://localhost:8000/docs
+- Core API: http://localhost:8001/docs
 
-We are constantly evolving. Here's what's shipping next to AnnotateANU:
+### Deployment modes
 
-#### 🔌 Bring Your Own Model (BYOM)
-Connect your existing custom models via API. Pre-label your images using your own weights to bootstrap the annotation process even faster.
+| Mode | Compose file | Default URL | Notes |
+| --- | --- | --- | --- |
+| Dev | `docker/docker-compose.dev.yml` | http://localhost:5173 | Hot-reload, Redis included. |
+| Solo | `docker/docker-compose.solo.yml` | http://localhost:3000 | IndexedDB-only, no auth. |
+| Team | `docker/docker-compose.team.yml` | http://localhost | Postgres, MinIO, Redis, auth. |
 
-#### ☁️ Enterprise Storage Integration
-Move beyond browser storage. We're adding native integration for MinIO and S3-compatible object storage, allowing you to pull and sync datasets directly from your cloud buckets.
+## Local Development
 
+```bash
+# Backend (SAM3)
+make backend-install
+make backend-run
 
-## 🤝 Contributing
+# Core API
+make core-install
+make core-run
 
-We welcome contributions from the community! Whether you're fixing bugs, adding features, or improving documentation, we'd love your help.
+# Frontend
+make frontend-install
+make frontend-dev
+```
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Commit your changes (`git commit -m 'Add some amazing feature'`)
-5. Push to the branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
+## Configuration
 
-Want to influence what we build next? Join our community on GitHub and share your ideas!
+- `apps/api-inference/.env` - SAM3 settings (requires `HF_TOKEN`).
+- `apps/api-core/.env` - Core API settings (database, JWT, Redis).
+- `apps/web/.env` - Frontend URLs and storage mode.
 
-## 📄 License
+Examples are in each app's `.env.example` file.
 
-MIT License - see [LICENSE](LICENSE) file for details.
+## Docs
 
-## References
+- Getting started: `docs/getting-started.md`
+- Architecture notes: `docs/architecture/`
+- BYOM guide: `docs/byom-integration-guide/`
+- Docker modes: `docker/README.md`
 
-- [SAM3 Model](https://huggingface.co/facebook/sam3)
-- [T-REX Label](https://www.trexlabel.com/)
-- [MakeSense.ai](https://www.makesense.ai/)
+## License
 
-
----
-
-<div align="center">
-  <p><strong>Ready to speed up your CV pipeline?</strong></p>
-  <p>© 2025 AnnotateANU. Built for the Computer Vision Community.</p>
-</div>
-
+MIT License - see `LICENSE`.
