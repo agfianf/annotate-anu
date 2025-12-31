@@ -133,8 +133,7 @@ export function VirtualizedImageGrid({
   return (
     <div
       ref={parentRef}
-      className="flex-1 overflow-auto p-3"
-      style={{ contain: 'strict', minHeight: 0 }}
+      className="absolute inset-0 overflow-auto p-3"
     >
       <div
         style={{

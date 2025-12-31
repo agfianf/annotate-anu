@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Database, Droplet, Eye, EyeOff, Hexagon, Layers, Paintbrush, RefreshCw, Square, Tag, Trash2, Type } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Droplet, Eye, EyeOff, Hexagon, Layers, Paintbrush, RefreshCw, Square, Tag, Trash2, Type } from 'lucide-react';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import type { UseExploreVisibilityReturn } from '@/hooks/useExploreVisibility';
@@ -32,6 +32,9 @@ interface UnifiedExploreSidebarProps {
   widthAggregation?: NumericAggregation;
   heightAggregation?: NumericAggregation;
   sizeAggregation?: NumericAggregation;
+  // Collapse state
+  isCollapsed?: boolean;
+  onCollapseChange?: (collapsed: boolean) => void;
 }
 
 type ActiveForm = 'tag' | 'category' | `cat-${string}` | null;
@@ -39,6 +42,7 @@ type ActiveForm = 'tag' | 'category' | `cat-${string}` | null;
 const MIN_SIDEBAR_WIDTH = 240; // 60 * 4 = 240px (w-60)
 const MAX_SIDEBAR_WIDTH = 480; // 120 * 4 = 480px (w-120)
 const DEFAULT_SIDEBAR_WIDTH = 288; // 72 * 4 = 288px (w-72)
+const COLLAPSED_SIDEBAR_WIDTH = 48; // Collapsed width showing only icons
 
 // Helper: Convert bytes to KB with 1 decimal precision
 function bytesToKB(bytes: number): number {
@@ -100,6 +104,8 @@ export function UnifiedExploreSidebar({
   widthAggregation,
   heightAggregation,
   sizeAggregation,
+  isCollapsed: controlledCollapsed,
+  onCollapseChange,
 }: UnifiedExploreSidebarProps) {
   const queryClient = useQueryClient();
   const [activeForm, setActiveForm] = useState<ActiveForm>(null);
@@ -110,6 +116,23 @@ export function UnifiedExploreSidebar({
     tagCount: number;
   } | null>(null);
 
+  // Collapse state (controlled or uncontrolled)
+  const [internalCollapsed, setInternalCollapsed] = useState(() => {
+    const saved = localStorage.getItem('exploreSidebarCollapsed');
+    return saved === 'true';
+  });
+  const isCollapsed = controlledCollapsed ?? internalCollapsed;
+
+  const handleToggleCollapse = useCallback(() => {
+    const newCollapsed = !isCollapsed;
+    if (onCollapseChange) {
+      onCollapseChange(newCollapsed);
+    } else {
+      setInternalCollapsed(newCollapsed);
+      localStorage.setItem('exploreSidebarCollapsed', newCollapsed.toString());
+    }
+  }, [isCollapsed, onCollapseChange]);
+
   // Sidebar resize state
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem('exploreSidebarWidth');
@@ -118,9 +141,15 @@ export function UnifiedExploreSidebar({
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  // Save width to localStorage when it changes
+  // Calculate effective width (collapsed vs expanded)
+  const effectiveWidth = isCollapsed ? COLLAPSED_SIDEBAR_WIDTH : sidebarWidth;
+
+  // Save width to localStorage when resizing stops (debounced)
   useEffect(() => {
-    localStorage.setItem('exploreSidebarWidth', sidebarWidth.toString());
+    const timer = setTimeout(() => {
+      localStorage.setItem('exploreSidebarWidth', sidebarWidth.toString());
+    }, 300);
+    return () => clearTimeout(timer);
   }, [sidebarWidth]);
 
   // Mouse handlers for resizing
@@ -418,48 +447,102 @@ export function UnifiedExploreSidebar({
   return (
     <div
       ref={sidebarRef}
-      className="h-full flex flex-col bg-white/70 backdrop-blur-2xl border border-orange-200/40 shadow-[0_8px_32px_rgba(251,146,60,0.12)] rounded-2xl font-sans text-sm text-slate-700 relative overflow-hidden"
-      style={{ width: `${sidebarWidth}px`, minWidth: `${MIN_SIDEBAR_WIDTH}px`, maxWidth: `${MAX_SIDEBAR_WIDTH}px` }}
+      className={`h-full flex-shrink-0 flex flex-col bg-white/70 backdrop-blur-2xl border border-orange-200/40 shadow-[0_8px_32px_rgba(251,146,60,0.12)] rounded-2xl font-sans text-sm text-slate-700 relative overflow-hidden z-10 ${
+        isResizing ? '' : 'transition-[width] duration-200 ease-out'
+      }`}
+      style={{
+        width: `${effectiveWidth}px`,
+      }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-orange-200/40 bg-gradient-to-r from-orange-50/40 to-orange-100/30 backdrop-blur-xl">
-        <div className="flex items-center gap-2">
-          <div className="p-1 border border-orange-200 bg-white/50 rounded-sm">
-            <Layers className="h-3 w-3 text-orange-600" />
+      <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-2 py-3 border-b border-orange-200/40 bg-gradient-to-r from-orange-50/40 to-orange-100/30 backdrop-blur-xl`}>
+        {!isCollapsed && (
+          <div className="flex items-center gap-2">
+            <div className="p-1 border border-orange-200 bg-white/50 rounded-sm">
+              <Layers className="h-3 w-3 text-orange-600" />
+            </div>
+            <h2 className="font-mono text-xs font-bold text-orange-900 tracking-widest uppercase">
+              Explore
+            </h2>
           </div>
-          <h2 className="font-mono text-xs font-bold text-orange-900 tracking-widest uppercase">
-            Explore
-          </h2>
-        </div>
-        <div className="flex items-center gap-1">
+        )}
+        <div className={`flex items-center gap-1 ${isCollapsed ? 'flex-col' : ''}`}>
+          {/* Collapse/Expand Toggle */}
           <button
-            onClick={handleRefresh}
-            disabled={isRefetching}
-            className="p-1.5 text-orange-600/60 hover:text-orange-700 hover:bg-orange-100 rounded-sm transition-all disabled:opacity-50"
-            title="Refresh"
-          >
-            <RefreshCw className={`h-3 w-3 ${isRefetching ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={handleShowAll}
+            onClick={handleToggleCollapse}
             className="p-1.5 text-orange-600/60 hover:text-orange-700 hover:bg-orange-100 rounded-sm transition-all"
-            title="Show all"
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            <Eye className="h-3 w-3" />
+            {isCollapsed ? (
+              <ChevronRight className="h-3 w-3" />
+            ) : (
+              <ChevronLeft className="h-3 w-3" />
+            )}
           </button>
-          <button
-            onClick={handleHideAll}
-            className="p-1.5 text-orange-600/60 hover:text-orange-700 hover:bg-orange-100 rounded-sm transition-all"
-            title="Hide all"
-          >
-            <EyeOff className="h-3 w-3" />
-          </button>
+          {!isCollapsed && (
+            <>
+              <button
+                onClick={handleRefresh}
+                disabled={isRefetching}
+                className="p-1.5 text-orange-600/60 hover:text-orange-700 hover:bg-orange-100 rounded-sm transition-all disabled:opacity-50"
+                title="Refresh"
+              >
+                <RefreshCw className={`h-3 w-3 ${isRefetching ? 'animate-spin' : ''}`} />
+              </button>
+              <button
+                onClick={handleShowAll}
+                className="p-1.5 text-orange-600/60 hover:text-orange-700 hover:bg-orange-100 rounded-sm transition-all"
+                title="Show all"
+              >
+                <Eye className="h-3 w-3" />
+              </button>
+              <button
+                onClick={handleHideAll}
+                className="p-1.5 text-orange-600/60 hover:text-orange-700 hover:bg-orange-100 rounded-sm transition-all"
+                title="Hide all"
+              >
+                <EyeOff className="h-3 w-3" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-orange-200 scrollbar-track-transparent">
-        {isLoading ? (
+        {isCollapsed ? (
+          /* Collapsed View - Icon-only navigation */
+          <div className="flex flex-col items-center gap-2 py-4">
+            <button
+              onClick={handleToggleCollapse}
+              className="p-2 text-orange-600/60 hover:text-orange-700 hover:bg-orange-100 rounded-lg transition-all"
+              title="Tags"
+            >
+              <Tag className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleToggleCollapse}
+              className="p-2 text-blue-500/60 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+              title="Labels"
+            >
+              <Layers className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleToggleCollapse}
+              className="p-2 text-emerald-500/60 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+              title="Metadata"
+            >
+              <Database className="h-4 w-4" />
+            </button>
+            <button
+              onClick={handleToggleCollapse}
+              className="p-2 text-purple-500/60 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
+              title="Display"
+            >
+              <Paintbrush className="h-4 w-4" />
+            </button>
+          </div>
+        ) : isLoading ? (
           <div className="flex items-center justify-center py-8">
             <RefreshCw className="h-4 w-4 text-orange-300 animate-spin" />
           </div>
@@ -876,12 +959,14 @@ export function UnifiedExploreSidebar({
         )}
       </div>
 
-      {/* Footer info */}
-      <div className="px-4 py-2 border-t border-orange-100 bg-orange-50/20">
-        <p className="text-[10px] text-orange-600/60 font-mono text-center">
-          {totalTags} total tags • Filter & toggle visibility
-        </p>
-      </div>
+      {/* Footer info - hidden when collapsed */}
+      {!isCollapsed && (
+        <div className="px-4 py-2 border-t border-orange-100 bg-orange-50/20">
+          <p className="text-[10px] text-orange-600/60 font-mono text-center">
+            {totalTags} total tags • Filter & toggle visibility
+          </p>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
@@ -927,16 +1012,18 @@ export function UnifiedExploreSidebar({
         </div>
       )}
 
-      {/* Resize handle */}
-      <div
-        className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-orange-400 active:bg-orange-500 transition-colors group ${
-          isResizing ? 'bg-orange-500' : 'bg-transparent'
-        }`}
-        onMouseDown={startResizing}
-        title="Drag to resize"
-      >
-        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-12 bg-orange-300 opacity-0 group-hover:opacity-100 transition-opacity rounded-l" />
-      </div>
+      {/* Resize handle - disabled when collapsed */}
+      {!isCollapsed && (
+        <div
+          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-orange-400 active:bg-orange-500 transition-colors group ${
+            isResizing ? 'bg-orange-500' : 'bg-transparent'
+          }`}
+          onMouseDown={startResizing}
+          title="Drag to resize"
+        >
+          <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-12 bg-orange-300 opacity-0 group-hover:opacity-100 transition-opacity rounded-l" />
+        </div>
+      )}
     </div>
   );
 }

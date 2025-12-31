@@ -26,6 +26,8 @@ interface UseInfiniteExploreImagesResult {
   total: number;
   /** Whether initial data is loading */
   isLoading: boolean;
+  /** Whether data is being fetched (including refetches) */
+  isFetching: boolean;
   /** Whether more pages are being fetched */
   isFetchingNextPage: boolean;
   /** Whether there are more pages to fetch */
@@ -78,6 +80,7 @@ export function useInfiniteExploreImages({
     images,
     total,
     isLoading: query.isLoading,
+    isFetching: query.isFetching,
     isFetchingNextPage: query.isFetchingNextPage,
     hasNextPage: query.hasNextPage ?? false,
     fetchNextPage: query.fetchNextPage,

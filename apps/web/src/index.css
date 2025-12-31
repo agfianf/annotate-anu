@@ -165,3 +165,43 @@ input[type="range"].slider-blue::-moz-range-progress {
   border-radius: 0.5rem;
   background: rgb(37, 99, 235);
 }
+
+/* ============================================================================
+   Elegant Scrollbar - Global Standard
+   ============================================================================ */
+
+/* Apply elegant scrollbar to ALL scrollable elements */
+* {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(16, 185, 129, 0.2) transparent; /* Firefox: thumb track */
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px; /* For horizontal scrollbars */
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 4px 0;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(16, 185, 129, 0.2); /* Subtle emerald */
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.4); /* Darker emerald on hover */
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: rgba(16, 185, 129, 0.6); /* Even darker when dragging */
+}
+
+/* Corner when both scrollbars are present */
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

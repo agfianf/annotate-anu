@@ -4,7 +4,7 @@
  */
 
 import { lazy } from 'react';
-import { BarChart3, TrendingUp, Sparkles, Grid3X3 } from 'lucide-react';
+import { BarChart3, TrendingUp, Sparkles, Grid3X3, CheckCircle2, Scale, MapPin, Eye } from 'lucide-react';
 import type { PanelDefinition, PanelType } from '@/types/analytics';
 
 /**
@@ -17,6 +17,34 @@ export const PANEL_REGISTRY: Record<PanelType, PanelDefinition> = {
     description: 'Tag distribution, dimension stats, file sizes',
     icon: BarChart3,
     component: lazy(() => import('./panels/DatasetStatsPanel')),
+  },
+  'annotation-coverage': {
+    type: 'annotation-coverage',
+    name: 'Annotation Coverage',
+    description: 'Annotation completeness and density distribution',
+    icon: CheckCircle2,
+    component: lazy(() => import('./panels/AnnotationCoveragePanel')),
+  },
+  'class-balance': {
+    type: 'class-balance',
+    name: 'Class Balance',
+    description: 'Class distribution and imbalance detection',
+    icon: Scale,
+    component: lazy(() => import('./panels/ClassBalancePanel')),
+  },
+  'spatial-heatmap': {
+    type: 'spatial-heatmap',
+    name: 'Spatial Heatmap',
+    description: 'Annotation spatial distribution visualization',
+    icon: MapPin,
+    component: lazy(() => import('./panels/SpatialHeatmapPanel')),
+  },
+  'image-quality': {
+    type: 'image-quality',
+    name: 'Image Quality',
+    description: 'Image quality assessment and flagging',
+    icon: Eye,
+    component: lazy(() => import('./panels/ImageQualityPanel')),
   },
   'prediction-analysis': {
     type: 'prediction-analysis',

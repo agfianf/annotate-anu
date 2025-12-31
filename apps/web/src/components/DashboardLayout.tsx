@@ -71,7 +71,7 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-emerald-50">
+    <div className="min-h-screen max-w-full overflow-x-hidden bg-gradient-to-br from-emerald-50 via-white to-emerald-50">
       {/* Mobile Header */}
       <header className="lg:hidden sticky top-0 z-50 glass border-b border-gray-200">
         <div className="flex items-center justify-between px-4 py-3">
@@ -226,8 +226,8 @@ export default function DashboardLayout() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-h-screen">
-          <div className="p-6 lg:p-8">
+        <main className="flex-1 min-w-0 min-h-screen overflow-x-hidden">
+          <div className="p-6 lg:p-8 max-w-full">
             <Outlet />
           </div>
         </main>

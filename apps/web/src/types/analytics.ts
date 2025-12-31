@@ -11,6 +11,10 @@ import type { ExploreFilters } from '@/lib/data-management-client';
  */
 export type PanelType =
   | 'dataset-stats'
+  | 'annotation-coverage'
+  | 'class-balance'
+  | 'spatial-heatmap'
+  | 'image-quality'
   | 'prediction-analysis'
   | 'embeddings-viewer'
   | 'confusion-matrix'
@@ -167,4 +171,103 @@ export interface AnalyticsPanelContextValue {
   setActiveTab: (id: string | null) => void;
   updateFilters: (filters: Partial<ExploreFilters>) => void;
   toggleVisibility: () => void;
+}
+
+// ============================================================================
+// NEW ANALYTICS ENDPOINTS (Phase 1)
+// ============================================================================
+
+/**
+ * Annotation Coverage API response
+ */
+export interface AnnotationCoverageResponse {
+  total_images: number;
+  annotated_images: number;
+  unannotated_images: number;
+  coverage_percentage: number;
+  density_histogram: DensityBucket[];
+  coverage_by_category?: CoverageByCategory[];
+}
+
+export interface DensityBucket {
+  bucket: string;                      // e.g., "0", "1-5", "6-10"
+  count: number;
+  min: number;
+  max: number;
+}
+
+export interface CoverageByCategory {
+  category: string;
+  annotated: number;
+  total: number;
+}
+
+/**
+ * Class Balance API response
+ */
+export interface ClassBalanceResponse {
+  class_distribution: ClassDistribution[];
+  imbalance_score: number;             // 0-1, Gini coefficient
+  imbalance_level: 'balanced' | 'moderate' | 'severe';
+  recommendations: string[];
+}
+
+export interface ClassDistribution {
+  tag_id: string;
+  tag_name: string;
+  annotation_count: number;
+  image_count: number;
+  percentage: number;
+  status: 'healthy' | 'underrepresented' | 'severely_underrepresented';
+}
+
+/**
+ * Spatial Heatmap API response
+ */
+export interface SpatialHeatmapResponse {
+  annotation_points: AnnotationPoint[];
+  center_of_mass: { x: number; y: number };
+  spread: { x_std: number; y_std: number };
+  clustering_score: number;            // 0-1
+  total_annotations: number;
+}
+
+export interface AnnotationPoint {
+  x: number;                           // Normalized 0-1
+  y: number;                           // Normalized 0-1
+  weight?: number;
+}
+
+/**
+ * Image Quality API response
+ */
+export interface ImageQualityResponse {
+  quality_distribution: QualityBucket[];
+  issue_breakdown: IssueBreakdown;
+  flagged_images: FlaggedImage[];
+}
+
+export interface QualityBucket {
+  bucket: string;                      // e.g., "Poor (0-0.3)"
+  count: number;
+  min: number;
+  max: number;
+}
+
+export interface IssueBreakdown {
+  blur_detected: number;
+  low_brightness: number;
+  high_brightness: number;
+  low_contrast: number;
+  corrupted: number;
+}
+
+export interface FlaggedImage {
+  image_id: string;
+  filename: string;
+  quality_score: number;
+  issues: string[];
+  blur_score?: number;
+  brightness?: number;
+  contrast?: number;
 }

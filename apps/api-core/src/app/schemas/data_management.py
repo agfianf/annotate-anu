@@ -583,6 +583,44 @@ class SidebarAggregationResponse(BaseModel):
     computed: ComputedFieldsAggregation = Field(default_factory=ComputedFieldsAggregation)
 
 
+# ============================================================================
+# Analytics Schemas
+# ============================================================================
+class TagDistribution(BaseModel):
+    """Tag distribution for analytics panel."""
+
+    tag_id: str
+    name: str
+    count: int
+    color: str | None = None
+
+
+class DimensionBucket(BaseModel):
+    """Dimension bucket for histogram."""
+
+    bucket: str  # e.g., "Small (<640px)"
+    count: int
+    min: int
+    max: int
+
+
+class FileSizeStats(BaseModel):
+    """File size statistics."""
+
+    min: int
+    max: int
+    avg: float
+    median: float | None = None
+
+
+class DatasetStatsResponse(BaseModel):
+    """Dataset statistics response for analytics panel."""
+
+    tag_distribution: list[TagDistribution]
+    dimension_histogram: list[DimensionBucket]
+    file_size_stats: FileSizeStats
+
+
 # Rebuild models to resolve forward references
 SharedImageResponse.model_rebuild()
 SharedImageWithAnnotations.model_rebuild()

@@ -1,0 +1,12 @@
+flowchart LR
+  user[Annotator] --> web["Web UI (React + Konva)"]
+  web --> core["API Core (FastAPI)"]
+
+  core --> inference["SAM3 Inference API"]
+  inference --> sam3["SAM3 Model (HF Transformers)"]
+  core -.-> byom["BYOM Endpoints"]
+
+  core --> db[(PostgreSQL)]
+  core --> redis[(Redis)]
+  core --> storage["Share + Export Storage"]
+  core --> worker["Celery Worker"]

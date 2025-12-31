@@ -97,6 +97,21 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   // Zoom level
   const { zoomLevel, setZoomLevel, config: zoomConfig } = useZoomLevel();
 
+  // Track window width for responsive layout
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : true);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Sidebar collapse state (synced with UnifiedExploreSidebar)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   // Search with debounce
   const [searchInput, setSearchInput] = useState('');
   const debouncedSearch = useDebounce(searchInput, 300);
@@ -104,6 +119,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   // Sidebar filters state
   const {
     filters: sidebarFilters,
+    setFilters,
     toggleTag: toggleSidebarTag,
     removeTag: removeSidebarTag,
     getIncludedTagIds,
@@ -222,6 +238,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     images,
     total,
     isLoading: isLoadingImages,
+    isFetching: isFetchingImages,
     isFetchingNextPage,
     hasNextPage,
     fetchNextPage,
@@ -948,11 +965,17 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     // Merge panel filters with existing filters
     // Panel filters can update: tag_ids, task_ids, job_id, etc.
     if (panelFilters.tag_ids !== undefined) {
-      // Update sidebar included tags
-      setSidebarFilters(prev => ({
-        ...prev,
-        includeTags: panelFilters.tag_ids || [],
-      }));
+      // Update tag filters - set all specified tags to 'include' mode
+      setFilters(prev => {
+        const newTagFilters: Record<string, 'include' | 'exclude'> = {};
+        panelFilters.tag_ids?.forEach(tagId => {
+          newTagFilters[tagId] = 'include';
+        });
+        return {
+          ...prev,
+          tagFilters: newTagFilters,
+        };
+      });
     }
     if (panelFilters.task_ids !== undefined) {
       setSelectedTaskIds(panelFilters.task_ids || []);
@@ -960,7 +983,19 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     if (panelFilters.job_id !== undefined) {
       setSelectedJobId(panelFilters.job_id || null);
     }
-  }, []);
+    if (panelFilters.width_min !== undefined || panelFilters.width_max !== undefined) {
+      setSidebarWidthRange(
+        panelFilters.width_min ?? 0,
+        panelFilters.width_max ?? 10000
+      );
+    }
+    if (panelFilters.height_min !== undefined || panelFilters.height_max !== undefined) {
+      setSidebarHeightRange(
+        panelFilters.height_min ?? 0,
+        panelFilters.height_max ?? 10000
+      );
+    }
+  }, [setFilters, setSidebarWidthRange, setSidebarHeightRange]);
 
   // Inner component to access analytics panel context
   const ProjectExploreContent = () => {
@@ -971,11 +1006,71 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       panelCount
     } = useAnalyticsPanels();
 
+    // Panel container resize state
+    const MIN_PANEL_WIDTH = 280;
+    const MAX_PANEL_WIDTH = 600;
+    const DEFAULT_PANEL_WIDTH = 380;
+
+    const [panelWidth, setPanelWidth] = useState(() => {
+      const saved = localStorage.getItem('explorePanelWidth');
+      return saved ? parseInt(saved, 10) : DEFAULT_PANEL_WIDTH;
+    });
+    const [isPanelResizing, setIsPanelResizing] = useState(false);
+    const panelContainerRef = useRef<HTMLDivElement>(null);
+
+    // Save panel width to localStorage
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        localStorage.setItem('explorePanelWidth', panelWidth.toString());
+      }, 300);
+      return () => clearTimeout(timer);
+    }, [panelWidth]);
+
+    // Panel resize handlers
+    const startPanelResizing = useCallback((e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsPanelResizing(true);
+    }, []);
+
+    const stopPanelResizing = useCallback(() => {
+      setIsPanelResizing(false);
+    }, []);
+
+    const resizePanel = useCallback(
+      (e: MouseEvent) => {
+        if (isPanelResizing && panelContainerRef.current) {
+          // Calculate width from right edge of viewport to mouse position
+          const containerRight = panelContainerRef.current.getBoundingClientRect().right;
+          const newWidth = containerRight - e.clientX;
+          if (newWidth >= MIN_PANEL_WIDTH && newWidth <= MAX_PANEL_WIDTH) {
+            setPanelWidth(newWidth);
+          }
+        }
+      },
+      [isPanelResizing]
+    );
+
+    useEffect(() => {
+      if (isPanelResizing) {
+        window.addEventListener('mousemove', resizePanel);
+        window.addEventListener('mouseup', stopPanelResizing);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        return () => {
+          window.removeEventListener('mousemove', resizePanel);
+          window.removeEventListener('mouseup', stopPanelResizing);
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+        };
+      }
+    }, [isPanelResizing, resizePanel, stopPanelResizing]);
+
     return (
-      <div className="h-full flex flex-col min-h-0">
+      <div className="h-full flex flex-col min-h-0 max-w-full overflow-hidden">
       {/* Top Bar - Filters */}
-      <div className="glass-strong rounded-2xl shadow-lg p-3 mb-3 relative z-20">
-        <div className="flex flex-wrap items-center gap-4">
+      <div className="glass-strong rounded-xl shadow-lg p-2 mb-1.5 relative z-20">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px] max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -1044,9 +1139,9 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
           <div className="flex items-center gap-2">
             <PanelLibrary />
 
-            {/* Layout Mode Toggle - only shown when multiple panels */}
+            {/* Layout Mode Toggle - only shown when multiple panels on desktop */}
             {isPanelsVisible && panelCount > 1 && (
-              <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <div className="hidden md:flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                 <button
                   onClick={() => setLayoutMode('tabs')}
                   className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -1103,7 +1198,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         </div>
 
         {/* Active Filters Display */}
-        <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+        <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-gray-100">
           <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
             Active Filters:
           </span>
@@ -1352,14 +1447,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
       {/* Main Content Area - with Sidebar in fullscreen */}
       <div
-        className="flex-1 grid gap-3 overflow-hidden min-h-0"
-        style={{
-          gridTemplateColumns:
-            isFullView && isPanelsVisible ? '300px 1fr 1fr' :
-            isFullView && !isPanelsVisible ? '300px 1fr' :
-            !isFullView && isPanelsVisible ? '1fr 1fr' :
-            '1fr'
-        }}
+        className="flex-1 flex gap-1.5 overflow-hidden min-h-0"
       >
         {/* Sidebar - only visible in fullscreen mode */}
         {isFullView && (
@@ -1380,11 +1468,14 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             widthAggregation={widthAggregation}
             heightAggregation={heightAggregation}
             sizeAggregation={sizeAggregation}
+            // Collapse control
+            isCollapsed={isSidebarCollapsed}
+            onCollapseChange={setIsSidebarCollapsed}
           />
         )}
 
         {/* Gallery */}
-      <div className="glass-strong rounded-2xl shadow-lg overflow-hidden flex flex-col min-h-0 relative z-10">
+      <div className="flex-1 min-w-0 glass-strong rounded-2xl shadow-lg overflow-hidden flex flex-col min-h-0 h-full relative z-10">
         {/* Gallery Header */}
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center gap-3">
@@ -1431,30 +1522,60 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             <p className="text-sm">Try adjusting your filters or add images to the project pool</p>
           </div>
         ) : (
-          <VirtualizedImageGrid
-            images={images}
-            selectedImages={selectedImages}
-            onToggleImage={handleToggleImage}
-            onImageDoubleClick={setShowImageModal}
-            targetRowHeight={zoomConfig.targetRowHeight}
-            thumbnailSize={zoomConfig.thumbnailSize}
-            spacing={2}
-            hasNextPage={hasNextPage}
-            isFetchingNextPage={isFetchingNextPage}
-            fetchNextPage={fetchNextPage}
-            onRemoveTag={handleRemoveTag}
-            visibility={visibilityState.visibility}
-            categoryColorMap={categoryColorMap}
-          />
+          <div className="relative flex-1 overflow-hidden">
+            <VirtualizedImageGrid
+              images={images}
+              selectedImages={selectedImages}
+              onToggleImage={handleToggleImage}
+              onImageDoubleClick={setShowImageModal}
+              targetRowHeight={zoomConfig.targetRowHeight}
+              thumbnailSize={zoomConfig.thumbnailSize}
+              spacing={2}
+              hasNextPage={hasNextPage}
+              isFetchingNextPage={isFetchingNextPage}
+              fetchNextPage={fetchNextPage}
+              onRemoveTag={handleRemoveTag}
+              visibility={visibilityState.visibility}
+              categoryColorMap={categoryColorMap}
+            />
+            {/* Loading overlay during manual refresh only */}
+            {isRefreshing && (
+              <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-10 pointer-events-none">
+                <div className="bg-white rounded-lg shadow-lg p-4 flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" />
+                  <span className="text-sm font-medium text-gray-700">Refreshing gallery...</span>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Analytics Panels */}
-      <AnalyticsPanelContainer
-        projectId={projectId}
-        filters={filters}
-        onFilterUpdate={handlePanelFilterUpdate}
-      />
+      {/* Analytics Panels with Resize Handle */}
+      {isPanelsVisible && (
+        <div
+          ref={panelContainerRef}
+          className={`relative flex-shrink-0 ${isPanelResizing ? '' : 'transition-[width] duration-200 ease-out'}`}
+          style={{ width: `${panelWidth}px` }}
+        >
+          {/* Resize Handle */}
+          <div
+            className={`absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-emerald-400 active:bg-emerald-500 transition-colors group z-20 ${
+              isPanelResizing ? 'bg-emerald-500' : 'bg-transparent'
+            }`}
+            onMouseDown={startPanelResizing}
+            title="Drag to resize"
+          >
+            <div className="absolute top-1/2 left-0 -translate-y-1/2 w-1.5 h-16 bg-emerald-300 opacity-0 group-hover:opacity-100 transition-opacity rounded-r" />
+          </div>
+
+          <AnalyticsPanelContainer
+            projectId={projectId}
+            filters={filters}
+            onFilterUpdate={handlePanelFilterUpdate}
+          />
+        </div>
+      )}
       </div>
 
       {/* Create Tag Modal */}
