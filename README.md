@@ -22,6 +22,7 @@
 - [Overview](#overview)
 - [Demo Gallery](#demo-gallery)
 - [Features](#features)
+- [Web App Highlights](#web-app-highlights)
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
 - [Local Development](#local-development)
@@ -43,6 +44,20 @@ storage or a team stack with Postgres, MinIO, and Redis.
 | Annotation workflow | ![Annotation tools demo](assets/features.gif) | Prompt, mask, edit, and export loop in the canvas. |
 | Batch labeling (placeholder) | ![Batch labeling placeholder](animation.gif) | Placeholder for multi-image queue labeling and export. |
 
+<details>
+<summary>More demos (expand)</summary>
+
+| Demo | GIF | Description |
+| --- | --- | --- |
+| Project dashboard (placeholder) | ![Project dashboard placeholder](animation.gif) | Project stats, recent activity, and quick navigation. |
+| Project detail tabs (placeholder) | ![Project detail placeholder](animation.gif) | README editor, configuration, history, and explore view. |
+| Task creation wizard (placeholder) | ![Task wizard placeholder](animation.gif) | Guided task setup with quick-create options. |
+| Job assignment + filters (placeholder) | ![Job assignment placeholder](animation.gif) | Assignees, status filters, and job queue controls. |
+| BYOM registry (placeholder) | ![BYOM registry placeholder](animation.gif) | Register external models and run health checks. |
+| File share explorer (placeholder) | ![File share placeholder](animation.gif) | Browse shared files and upload assets. |
+| Admin user management (placeholder) | ![Admin placeholder](animation.gif) | Roles, activation toggles, and user cleanup. |
+</details>
+
 ## Features
 
 - **SAM3 prompts**: Text and bounding box prompts for instant masks.
@@ -51,16 +66,25 @@ storage or a team stack with Postgres, MinIO, and Redis.
 - **Exports**: COCO, YOLO, and ZIP exports for training pipelines.
 - **Local-first storage**: IndexedDB by default, optional team stack.
 
+## Web App Highlights
+
+- **Project dashboard**: Stats, recent projects, and navigation shortcuts.
+- **Project workspace**: README editor, configuration, history, and explore views.
+- **Tasks and jobs**: Create tasks, assign jobs, filter by status.
+- **BYOM management**: Register models, define capabilities, run health checks.
+- **File sharing**: Server-side browser with multi-select and upload support.
+- **Admin + profile**: Role management, activation toggles, profile updates.
+
 ## Architecture
 
 ```mermaid
 flowchart LR
-  user[Annotator] --> web[Web App (React + Konva)]
+  user[Annotator] --> web["Web App (React + Konva)"]
 
-  web -->|Text/BBox prompts| inference[API Inference (FastAPI + SAM3)]
-  web -->|Projects, tasks, auth| core[API Core (FastAPI)]
+  web -->|Text/BBox prompts| inference["API Inference (FastAPI + SAM3)"]
+  web -->|Projects, tasks, auth| core["API Core (FastAPI)"]
 
-  inference --> sam3[Sam3 Model (HF Transformers)]
+  inference --> sam3["SAM3 Model (HF Transformers)"]
 
   web --> idb[(IndexedDB)]
   core --> db[(PostgreSQL or SQLite)]
