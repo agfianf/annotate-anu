@@ -45,7 +45,13 @@ export const CHART_CONFIG = {
 
   // Cursor for clickable bars
   cursor: 'pointer' as const,
+
+  // Tooltip cursor highlight (matches tag distribution hover tone)
+  tooltipCursorFill: 'rgba(16, 185, 129, 0.08)',
 } as const;
+
+export const CHART_TOOLTIP_CLASSNAME =
+  'rounded-lg p-2.5 shadow-lg border border-emerald-200/50 bg-white/95 backdrop-blur-sm text-xs';
 
 /**
  * Get consistent Cell props for chart bars
@@ -68,6 +74,10 @@ export function getBarProps(animated: boolean = true) {
     radius: CHART_CONFIG.barRadius,
     cursor: CHART_CONFIG.cursor,
     animationDuration: animated ? CHART_CONFIG.animationDuration : 0,
+    isAnimationActive: animated,
+    activeBar: false,
+    stroke: CHART_CONFIG.cellStroke,
+    strokeWidth: CHART_CONFIG.cellStrokeWidth,
     style: { outline: 'none' } as React.CSSProperties,
   };
 }
@@ -88,6 +98,8 @@ export function getGridProps() {
 export function getXAxisProps(angled: boolean = true) {
   return {
     tick: CHART_CONFIG.axisStyle,
+    axisLine: false,
+    tickLine: false,
     ...(angled ? {
       angle: -45,
       textAnchor: 'end' as const,
@@ -103,6 +115,18 @@ export function getXAxisProps(angled: boolean = true) {
 export function getYAxisProps() {
   return {
     tick: CHART_CONFIG.axisStyle,
+    axisLine: false,
+    tickLine: false,
     width: CHART_CONFIG.axisWidth,
+  };
+}
+
+/**
+ * Get consistent Tooltip cursor props
+ */
+export function getTooltipCursorProps() {
+  return {
+    fill: CHART_CONFIG.tooltipCursorFill,
+    stroke: 'none',
   };
 }

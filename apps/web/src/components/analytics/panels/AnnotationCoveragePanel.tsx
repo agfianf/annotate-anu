@@ -32,11 +32,13 @@ import {
 } from '../shared/PanelComponents';
 import {
   CHART_CONFIG,
+  CHART_TOOLTIP_CLASSNAME,
   getCellProps,
   getBarProps,
   getGridProps,
   getXAxisProps,
   getYAxisProps,
+  getTooltipCursorProps,
 } from '../shared/chartConfig';
 
 /**
@@ -47,7 +49,7 @@ const CoverageTooltip = ({ active, payload }: any) => {
   const data = payload[0].payload;
 
   return (
-    <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-3 py-2 border border-emerald-200/50 text-xs">
+    <div className={CHART_TOOLTIP_CLASSNAME}>
       <p className="font-semibold text-gray-800">{data.bucket}</p>
       <p className="text-gray-600">{data.count} image{data.count !== 1 ? 's' : ''}</p>
     </div>
@@ -81,10 +83,18 @@ export default function AnnotationCoveragePanel({
 
   const handleDensityClick = (bucketData: any) => {
     if (!bucketData) return;
-    showSuccess(`Filtering: ${bucketData.bucket} annotations`, { icon: '📊' });
+    const isUnannotated = bucketData.bucket === '0' || (bucketData.min === 0 && bucketData.max === 0);
+    onFilterUpdate({ is_annotated: !isUnannotated });
+    showSuccess(
+      isUnannotated
+        ? 'Filtering: unannotated images'
+        : `Filtering: annotated images (${bucketData.bucket})`,
+      { icon: '📊' }
+    );
   };
 
   const handleUnannotatedClick = () => {
+    onFilterUpdate({ is_annotated: false });
     showSuccess('Filtering to unannotated images', { icon: '⚠️' });
   };
 
@@ -133,16 +143,12 @@ export default function AnnotationCoveragePanel({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data.density_histogram}
-            margin={{ top: 5, right: 10, left: -10, bottom: 20 }}
+            margin={CHART_CONFIG.marginCompact}
           >
             <CartesianGrid {...getGridProps()} />
-            <XAxis
-              dataKey="bucket"
-              {...getXAxisProps(false)}
-              tickLine={{ stroke: '#9ca3af' }}
-            />
+            <XAxis dataKey="bucket" {...getXAxisProps(false)} />
             <YAxis {...getYAxisProps()} />
-            <Tooltip content={<CoverageTooltip />} />
+            <Tooltip content={<CoverageTooltip />} cursor={getTooltipCursorProps()} />
             <Bar
               dataKey="count"
               onClick={handleDensityClick}

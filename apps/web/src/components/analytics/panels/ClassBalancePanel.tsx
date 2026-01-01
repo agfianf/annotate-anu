@@ -33,11 +33,13 @@ import {
 } from '../shared/PanelComponents';
 import {
   CHART_CONFIG,
+  CHART_TOOLTIP_CLASSNAME,
   getCellProps,
   getBarProps,
   getGridProps,
   getXAxisProps,
   getYAxisProps,
+  getTooltipCursorProps,
 } from '../shared/chartConfig';
 
 /**
@@ -48,7 +50,7 @@ const ClassTooltip = ({ active, payload }: any) => {
   const data = payload[0].payload;
 
   return (
-    <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg px-3 py-2 border border-emerald-200/50 text-xs">
+    <div className={CHART_TOOLTIP_CLASSNAME}>
       <p className="font-semibold text-gray-800 truncate max-w-[150px]">{data.tag_name}</p>
       <p className="text-gray-600">{data.annotation_count.toLocaleString()} ({data.percentage.toFixed(1)}%)</p>
       <p className={`font-medium ${
@@ -200,7 +202,7 @@ export default function ClassBalancePanel({
             <CartesianGrid {...getGridProps()} />
             <XAxis dataKey="tag_name" {...getXAxisProps(true)} />
             <YAxis {...getYAxisProps()} width={35} />
-            <Tooltip content={<ClassTooltip />} />
+            <Tooltip content={<ClassTooltip />} cursor={getTooltipCursorProps()} />
             <Bar
               dataKey="annotation_count"
               onClick={handleClassClick}

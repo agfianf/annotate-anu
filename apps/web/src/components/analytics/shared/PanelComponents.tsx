@@ -188,6 +188,7 @@ export function ChartSection({
   hint,
   color = 'emerald',
   height = 200,
+  skipDimensionCheck = false,
   children,
 }: {
   icon: LucideIcon;
@@ -195,14 +196,19 @@ export function ChartSection({
   hint?: string;
   color?: ColorVariant;
   height?: number;
+  skipDimensionCheck?: boolean;
   children: ReactNode;
 }) {
   const styles = colorStyles[color];
   const containerRef = useRef<HTMLDivElement>(null);
-  const [hasValidDimensions, setHasValidDimensions] = useState(false);
+  const [hasValidDimensions, setHasValidDimensions] = useState(skipDimensionCheck);
 
   // Track container dimensions using ResizeObserver
   useEffect(() => {
+    if (skipDimensionCheck) {
+      setHasValidDimensions(true);
+      return;
+    }
     const element = containerRef.current;
     if (!element) return;
 
@@ -218,7 +224,7 @@ export function ChartSection({
     resizeObserver.observe(element);
 
     return () => resizeObserver.disconnect();
-  }, []);
+  }, [skipDimensionCheck]);
 
   return (
     <div className={`p-3 rounded-lg border ${styles.border} bg-white/80`}>

@@ -59,6 +59,20 @@ body {
   min-height: 100vh;
 }
 
+/* Recharts focus + active stroke cleanup */
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-wrapper *:focus,
+.recharts-wrapper *:focus-visible {
+  outline: none;
+}
+
+.recharts-rectangle,
+.recharts-active-bar,
+.recharts-bar-rectangle {
+  stroke: none !important;
+}
+
 /* Frosted glass utility classes */
 .glass {
   background: rgba(255, 255, 255, 0.7);

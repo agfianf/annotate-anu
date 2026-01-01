@@ -4,7 +4,7 @@
  * Features emerald glass morphism design with click-to-filter interactions
  */
 
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo } from 'react';
 import {
   BarChart,
   Bar,
@@ -31,12 +31,15 @@ import { useDatasetStats } from '@/hooks/useDatasetStats';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import {
   CHART_CONFIG,
+  CHART_TOOLTIP_CLASSNAME,
   getCellProps,
   getBarProps,
   getGridProps,
   getXAxisProps,
   getYAxisProps,
+  getTooltipCursorProps,
 } from '../shared/chartConfig';
+import { ChartSection } from '../shared/PanelComponents';
 
 /**
  * Format file size to human-readable format
@@ -118,14 +121,7 @@ function CustomTooltip({ active, payload, label }: any) {
   const categoryName = dataPoint.category_name;
 
   return (
-    <div
-      className="rounded-lg p-3 shadow-xl border border-emerald-200/50"
-      style={{
-        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.9) 100%)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-      }}
-    >
+    <div className={CHART_TOOLTIP_CLASSNAME}>
       <p className="text-sm font-semibold text-gray-900 mb-1">{label}</p>
       {categoryName && (
         <p className="text-xs text-gray-500 mb-1">
@@ -163,29 +159,6 @@ export default function DatasetStatsPanel({
 
   const prefersReducedMotion = useReducedMotion();
   const { showSuccess } = useAnalyticsToast();
-
-  // Dimension chart container reference for measuring
-  const dimensionChartRef = useRef<HTMLDivElement>(null);
-  const [chartHasValidDimensions, setChartHasValidDimensions] = useState(false);
-
-  // Track chart container dimensions
-  useEffect(() => {
-    const element = dimensionChartRef.current;
-    if (!element) return;
-
-    const checkDimensions = () => {
-      const rect = element.getBoundingClientRect();
-      setChartHasValidDimensions(rect.width > 0 && rect.height > 0);
-    };
-
-    // Initial check
-    checkDimensions();
-
-    const resizeObserver = new ResizeObserver(checkDimensions);
-    resizeObserver.observe(element);
-
-    return () => resizeObserver.disconnect();
-  }, []);
 
   // Group tags by category for horizontal grouped bar chart
   const { groupedTagData, maxTagCount } = useMemo(() => {
@@ -436,85 +409,87 @@ export default function DatasetStatsPanel({
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: prefersReducedMotion ? 0.01 : 0.2, delay: prefersReducedMotion ? 0 : 0.05 }}
-          className="p-3 rounded-lg border border-emerald-200/50 bg-white/80"
         >
-          <div className="flex items-center gap-2 mb-2">
-            <TagIcon className="w-3.5 h-3.5 text-emerald-600" />
-            <h3 className="text-xs font-semibold text-gray-700">Tag Distribution</h3>
-            <span className="text-[10px] text-gray-400 ml-auto">Click to filter</span>
-          </div>
-
-          {/* Custom Horizontal Grouped Bar Chart */}
-          <div className="space-y-0.5 max-h-[240px] overflow-y-auto">
-            {groupedTagData.map((group, groupIndex) => (
-              <div key={group.category_id || 'uncategorized'}>
-                {/* Tags in this category */}
-                {group.tags.map((tag) => (
-                  <div
-                    key={tag.tag_id}
-                    className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-emerald-50/50 transition-colors"
-                    onClick={() => handleTagClick(tag)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && handleTagClick(tag)}
-                    aria-label={`${tag.name}: ${tag.count} images. Category: ${group.category_name}`}
-                  >
-                    {/* Category color indicator */}
+          <ChartSection
+            icon={TagIcon}
+            title="Tag Distribution"
+            hint="Click to filter"
+            color="emerald"
+            height={240}
+            skipDimensionCheck
+          >
+            {/* Custom Horizontal Grouped Bar Chart */}
+            <div className="h-full overflow-y-auto space-y-0.5">
+              {groupedTagData.map((group, groupIndex) => (
+                <div key={group.category_id || 'uncategorized'}>
+                  {/* Tags in this category */}
+                  {group.tags.map((tag) => (
                     <div
-                      className="w-1 h-3.5 flex-shrink-0"
-                      style={{ backgroundColor: group.category_color }}
-                    />
-                    {/* Tag name */}
-                    <span className="w-20 min-w-[80px] text-[10px] text-gray-600 truncate" title={tag.name}>
-                      {tag.name}
-                    </span>
-                    {/* Bar container */}
-                    <div className="flex-1 h-3.5 bg-gray-100">
+                      key={tag.tag_id}
+                      className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-emerald-50/50 transition-colors"
+                      onClick={() => handleTagClick(tag)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && handleTagClick(tag)}
+                      aria-label={`${tag.name}: ${tag.count} images. Category: ${group.category_name}`}
+                    >
+                      {/* Category color indicator */}
                       <div
-                        className="h-full transition-all duration-300"
-                        style={{
-                          width: `${maxTagCount > 0 ? (tag.count / maxTagCount) * 100 : 0}%`,
-                          backgroundColor: tag.color,
-                        }}
+                        className="w-1 h-3.5 flex-shrink-0"
+                        style={{ backgroundColor: group.category_color }}
                       />
+                      {/* Tag name */}
+                      <span className="w-20 min-w-[80px] text-[10px] text-gray-600 truncate" title={tag.name}>
+                        {tag.name}
+                      </span>
+                      {/* Bar container */}
+                      <div className="flex-1 h-3.5 bg-gray-100">
+                        <div
+                          className="h-full transition-all duration-300"
+                          style={{
+                            width: `${maxTagCount > 0 ? (tag.count / maxTagCount) * 100 : 0}%`,
+                            backgroundColor: tag.color,
+                          }}
+                        />
+                      </div>
+                      {/* Count */}
+                      <span className="w-8 text-[10px] text-gray-500 text-right tabular-nums">
+                        {tag.count}
+                      </span>
                     </div>
-                    {/* Count */}
-                    <span className="w-8 text-[10px] text-gray-500 text-right tabular-nums">
-                      {tag.count}
-                    </span>
-                  </div>
-                ))}
+                  ))}
 
-                {/* Category divider with label (after each group except last) */}
-                {groupIndex < groupedTagData.length - 1 && (
-                  <div className="flex items-center gap-1.5 py-1 my-0.5">
-                    <div className="flex-1 border-t border-dashed border-gray-300" />
-                    <span
-                      className="text-[9px] font-medium px-1.5"
-                      style={{ color: group.category_color }}
-                    >
-                      {group.category_name}
-                    </span>
-                    <div className="flex-1 border-t border-dashed border-gray-300" />
-                  </div>
-                )}
+                  {/* Category divider with label (after each group except last) */}
+                  {groupIndex < groupedTagData.length - 1 && (
+                    <div className="flex items-center gap-1.5 py-1 my-0.5">
+                      <div className="flex-1 border-t border-dashed border-gray-300" />
+                      <span
+                        className="text-[9px] font-medium px-1.5"
+                        style={{ color: group.category_color }}
+                      >
+                        {group.category_name}
+                      </span>
+                      <div className="flex-1 border-t border-dashed border-gray-300" />
+                    </div>
+                  )}
 
-                {/* Final category label at the end of the last group */}
-                {groupIndex === groupedTagData.length - 1 && (
-                  <div className="flex items-center gap-1.5 pt-1">
-                    <div className="flex-1 border-t border-dashed border-gray-300" />
-                    <span
-                      className="text-[9px] font-medium px-1.5"
-                      style={{ color: group.category_color }}
-                    >
-                      {group.category_name}
-                    </span>
-                    <div className="flex-1 border-t border-dashed border-gray-300" />
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+                  {/* Final category label at the end of the last group */}
+                  {groupIndex === groupedTagData.length - 1 && (
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <div className="flex-1 border-t border-dashed border-gray-300" />
+                      <span
+                        className="text-[9px] font-medium px-1.5"
+                        style={{ color: group.category_color }}
+                      >
+                        {group.category_name}
+                      </span>
+                      <div className="flex-1 border-t border-dashed border-gray-300" />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </ChartSection>
         </motion.div>
       )}
 
@@ -524,57 +499,44 @@ export default function DatasetStatsPanel({
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: prefersReducedMotion ? 0.01 : 0.2, delay: prefersReducedMotion ? 0 : 0.1 }}
-          className="p-3 rounded-lg border border-purple-200/50 bg-white/80"
         >
-          <div className="flex items-center gap-2 mb-2">
-            <Ruler className="w-3.5 h-3.5 text-purple-600" />
-            <h3 className="text-xs font-semibold text-gray-700">Dimension Distribution</h3>
-            <span className="text-[10px] text-gray-400 ml-auto">Click to filter</span>
-          </div>
-
-          <div ref={dimensionChartRef} style={{ width: '100%', height: 160, minWidth: 1, minHeight: 1 }}>
-            {chartHasValidDimensions ? (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <BarChart
-                  data={dimensionChartData}
-                  margin={CHART_CONFIG.marginCompact}
+          <ChartSection
+            icon={Ruler}
+            title="Dimension Distribution"
+            hint="Click to filter"
+            color="purple"
+            height={160}
+          >
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <BarChart
+                data={dimensionChartData}
+                margin={CHART_CONFIG.marginCompact}
+              >
+                <defs>
+                  <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
+                    <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.6} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid {...getGridProps()} />
+                <XAxis dataKey="name" {...getXAxisProps(true)} />
+                <YAxis {...getYAxisProps()} />
+                <Tooltip content={<CustomTooltip />} cursor={getTooltipCursorProps()} />
+                <Bar
+                  dataKey="count"
+                  onClick={handleDimensionClick}
+                  {...getBarProps(!prefersReducedMotion)}
                 >
-                  <defs>
-                    <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
-                      <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.6} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid {...getGridProps()} />
-                  <XAxis
-                    dataKey="name"
-                    angle={-30}
-                    textAnchor="end"
-                    height={40}
-                    tick={CHART_CONFIG.axisStyle}
-                  />
-                  <YAxis {...getYAxisProps()} />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(139, 92, 246, 0.1)' }} />
-                  <Bar
-                    dataKey="count"
-                    onClick={handleDimensionClick}
-                    {...getBarProps(!prefersReducedMotion)}
-                  >
-                    {dimensionChartData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        {...getCellProps('url(#purpleGradient)')}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="w-4 h-4 text-purple-300 animate-spin" />
-              </div>
-            )}
-          </div>
+                  {dimensionChartData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      {...getCellProps('url(#purpleGradient)')}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartSection>
         </motion.div>
       )}
     </div>
