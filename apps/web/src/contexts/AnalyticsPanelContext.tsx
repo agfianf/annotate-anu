@@ -13,7 +13,7 @@ import type {
 } from '@/types/analytics';
 import type { ExploreFilters } from '@/lib/data-management-client';
 
-const AnalyticsPanelContext = createContext<AnalyticsPanelContextValue | null>(null);
+export const AnalyticsPanelContext = createContext<AnalyticsPanelContextValue | null>(null);
 
 interface AnalyticsPanelProviderProps {
   children: React.ReactNode;

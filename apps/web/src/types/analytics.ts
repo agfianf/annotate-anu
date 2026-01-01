@@ -83,6 +83,9 @@ export interface TagDistribution {
   name: string;
   count: number;
   color?: string;                      // Tag color for chart
+  category_id?: string;                // Category ID for grouping
+  category_name?: string;              // Category name for display
+  category_color?: string;             // Category color for stripe
 }
 
 export interface DimensionBucket {
