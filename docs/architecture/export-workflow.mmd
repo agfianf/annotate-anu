@@ -1,0 +1,15 @@
+flowchart TD
+  user["User"] --> explore["Project > Explore"]
+  explore --> wizard["Export Wizard"]
+  wizard --> preview["Preview counts"]
+  preview --> create["Create export"]
+
+  create --> core["API Core"]
+  core --> db[(PostgreSQL)]
+  core --> queue["Queue Celery task"]
+  queue --> worker["Celery Worker"]
+  worker --> build["Build artifact"]
+  build --> storage["Export Storage /data/exports"]
+  worker --> update["Update export status"]
+  update --> history["Export History"]
+  history --> download["Download ZIP"]

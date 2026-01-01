@@ -1,123 +1,33 @@
 # AnnotateANU Documentation
 
-Welcome to the AnnotateANU documentation directory.
+This directory documents the AnnotateANU codebase as it exists today.
+It focuses on how the system works, how to operate it, and how features fit together.
 
-## 📁 Directory Structure
+## Start Here
 
-```
-docs/
-├── getting-started.md         # 🆕 Complete guide to running AnnotateANU
-├── explore-sidebar-image-gallery.md # Explore sidebar + image gallery guide
-├── architecture/              # System architecture documents
-├── api-specs/                 # API specifications and contracts
-├── byom-integration-guide/    # Bring Your Own Model integration guide
-└── README.md                  # This file
-```
+- Getting started: `docs/getting-started.md`
+- Architecture overview: `docs/architecture/README.md`
+- Explore gallery and filters: `docs/explore-sidebar-image-gallery.md`
+- Data management and file share: `docs/data-management-feature.md`
+- Exports and history: `docs/export-workflow.md`
+- Annotation sync (team mode): `docs/annotation-sync-architecture.md`
 
-## 📚 Documentation Sections
+## Additional Guides
 
-### 🆕 Getting Started Guide (`getting-started.md`)
+- Canvas architecture: `docs/hybrid-canvas-architecture.md`
+- Pixi optimization notes: `docs/pixi_performance_plan.md`
+- Export diff roadmap: `docs/plan_exporter.md`
+- Color/theme guide: `docs/COLOR_THEME_GUIDE.md`
+- Database schema (dbml): `docs/database-schema.dbml`
 
-**Complete guide for new developers!**
+## API References
 
-Covers:
-- What is Turborepo and why we use it
-- 3 different ways to run the project
-- Complete command reference
-- Development workflows
-- Troubleshooting and best practices
+- API Core: http://localhost:8001/docs
+- SAM3 Inference: http://localhost:8000/docs
+- BYOM integration: `docs/byom-integration-guide/README.md`
+- API summary: `docs/api-specs/README.md`
 
-**👉 [Read the Getting Started Guide](./getting-started.md)**
+## Notes
 
----
-
-### Feature Guides
-
-**Explore Sidebar + Image Gallery**
-
-Documentation for the unified sidebar and the virtualized explore image gallery, including filters, visibility, and the fullscreen image modal.
-
-**👉 [Explore Sidebar + Image Gallery](./explore-sidebar-image-gallery.md)**
-
----
-
-### Architecture (`architecture/`)
-
-System design documents including:
-- Monorepo structure and organization
-- Service architecture (Solo vs Team mode)
-- Data flow diagrams
-- Database schema design
-- Infrastructure setup
-- Deployment strategies
-
-**Placeholder for future content**
-
-### API Specifications (`api-specs/`)
-
-API documentation including:
-- OpenAPI/Swagger specifications
-- API Core endpoints (user management, projects, datasets, annotations)
-- API Inference endpoints (SAM3 inference, BYOM)
-- WebSocket protocols (real-time sync)
-- Authentication and authorization flows
-
-**Placeholder for future content**
-
-### BYOM Integration Guide (`byom-integration-guide/`)
-
-Guide for integrating custom models:
-- Model registry protocol
-- Inference API contract
-- Deployment options
-- Performance optimization
-- Example implementations
-
-**Placeholder for future content**
-
----
-
-## 🚀 Quick Links
-
-- **[Getting Started Guide](./getting-started.md)** ⭐ **START HERE!**
-- [Main README](../README.md)
-- [CLAUDE.md - AI Development Guide](../CLAUDE.md)
-- [Docker Deployment Modes](../docker/README.md)
-
----
-
-## 📝 Contributing to Documentation
-
-When adding new documentation:
-
-1. **Architecture docs**: Add to `architecture/` directory
-   - Use diagrams (mermaid, plantuml, or images)
-   - Document design decisions and trade-offs
-
-2. **API specs**: Add to `api-specs/` directory
-   - Use OpenAPI 3.0 format
-   - Include request/response examples
-   - Document error codes
-
-3. **Integration guides**: Add to `byom-integration-guide/`
-   - Step-by-step tutorials
-   - Code examples
-   - Troubleshooting sections
-
-4. **Format**: Use Markdown (.md) files
-5. **Images**: Store in `docs/assets/` (create if needed)
-6. **Update this README** when adding new sections
-
----
-
-## 🎯 Documentation Roadmap
-
-- [ ] Architecture decision records (ADRs)
-- [ ] Database schema documentation
-- [ ] API reference (auto-generated from OpenAPI)
-- [ ] BYOM model registry specification
-- [ ] Deployment guide for production
-- [ ] Active learning pipeline documentation
-- [ ] CVAT integration guide
-- [ ] Team mode user guide
-- [ ] Administrator guide
+- The canonical reference for behavior is the code in `apps/`.
+- If a document conflicts with the code, update the document.

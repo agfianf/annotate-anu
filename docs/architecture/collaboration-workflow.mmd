@@ -1,0 +1,21 @@
+flowchart TB
+  admin["Admin"] -->|"Manage users and roles"| core["API Core"]
+  owner["Owner/Maintainer"] -->|"Create projects"| core
+  owner -->|"Configure labels, models, members"| core
+  owner -->|"Create tasks and jobs"| core
+
+  annotator["Annotator"] --> web["Web UI"]
+  web -->|"Login and fetch data"| core
+  web -->|"Open job"| core
+  web -->|"Auto-save annotations"| core
+  web -->|"Inference prompts"| core
+
+  core --> db[(PostgreSQL)]
+  core --> redis[(Redis)]
+  core --> share["File Share /data/share"]
+  core --> worker["Celery Worker"]
+  worker --> exports["Export Storage /data/exports"]
+
+  core --> proxy["Inference Proxy"]
+  proxy --> sam3["SAM3 Inference API"]
+  proxy --> byom["BYOM Endpoints"]

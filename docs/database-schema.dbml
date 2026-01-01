@@ -1,13 +1,7 @@
 // AnnotateANU Database Schema
-// Generated from api-core SQLAlchemy models
-// https://dbdiagram.io
-//
-// Last Updated: 2025-12-20
-// Recent Changes:
-// - Made tags project-specific (added project_id to tags and shared_image_tags)
-// - Added Data Management feature tables (shared_images, tags, shared_image_tags, project_images)
-// - Enhanced images table with shared_image_id reference
-// - Added support for file share image registry with tagging system
+// Snapshot of the API Core schema for documentation.
+// Source of truth: `apps/api-core/src/app/models/`
+// Update this file when models or Alembic migrations change.
 
 Project annotate_anu {
   database_type: 'PostgreSQL'
