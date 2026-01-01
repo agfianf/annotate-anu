@@ -14,6 +14,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  LabelList,
 } from 'recharts';
 import {
   Loader2,
@@ -29,6 +30,7 @@ import type { PanelProps } from '@/types/analytics';
 import { useAnalyticsToast } from '@/hooks/useAnalyticsToast';
 import { useDatasetStats } from '@/hooks/useDatasetStats';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useChartClick } from '../shared/useChartClick';
 import {
   CHART_CONFIG,
   CHART_TOOLTIP_CLASSNAME,
@@ -39,7 +41,7 @@ import {
   getYAxisProps,
   getTooltipCursorProps,
 } from '../shared/chartConfig';
-import { ChartSection } from '../shared/PanelComponents';
+import { BarValueLabel, ChartSection } from '../shared/PanelComponents';
 
 /**
  * Format file size to human-readable format
@@ -268,6 +270,11 @@ export default function DatasetStatsPanel({
 
     showSuccess(`Filtering by size: ${bucketData.name}`, { icon: '📐' });
   };
+
+  const dimensionChartClick = useChartClick(
+    dimensionChartData,
+    handleDimensionClick
+  );
 
   // Loading state
   if (isLoading) {
@@ -507,35 +514,41 @@ export default function DatasetStatsPanel({
             color="purple"
             height={160}
           >
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart
-                data={dimensionChartData}
-                margin={CHART_CONFIG.marginCompact}
-              >
-                <defs>
-                  <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
-                    <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.6} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid {...getGridProps()} />
-                <XAxis dataKey="name" {...getXAxisProps(true)} />
-                <YAxis {...getYAxisProps()} />
-                <Tooltip content={<CustomTooltip />} cursor={getTooltipCursorProps()} />
-                <Bar
-                  dataKey="count"
-                  onClick={handleDimensionClick}
-                  {...getBarProps(!prefersReducedMotion)}
+            <div
+              ref={dimensionChartClick.containerRef}
+              onClick={dimensionChartClick.handleContainerClick}
+              className="h-full cursor-pointer chart-clickable"
+            >
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <BarChart
+                  data={dimensionChartData}
+                  margin={CHART_CONFIG.marginCompact}
                 >
-                  {dimensionChartData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      {...getCellProps('url(#purpleGradient)')}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                  <defs>
+                    <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.6} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid {...getGridProps()} />
+                  <XAxis dataKey="name" {...getXAxisProps(true)} />
+                  <YAxis {...getYAxisProps()} />
+                  <Tooltip content={<CustomTooltip />} cursor={getTooltipCursorProps()} />
+                  <Bar
+                    dataKey="count"
+                    {...getBarProps(!prefersReducedMotion)}
+                  >
+                    {dimensionChartData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        {...getCellProps('url(#purpleGradient)')}
+                      />
+                    ))}
+                    <LabelList dataKey="count" content={<BarValueLabel />} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </ChartSection>
         </motion.div>
       )}

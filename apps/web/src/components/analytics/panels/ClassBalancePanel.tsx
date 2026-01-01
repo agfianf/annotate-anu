@@ -14,6 +14,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  LabelList,
 } from 'recharts';
 
 import type { PanelProps } from '@/types/analytics';
@@ -27,10 +28,12 @@ import {
   StatsGrid3,
   StatCard,
   ChartSection,
+  BarValueLabel,
   InfoBox,
   Legend,
   LegendItem,
 } from '../shared/PanelComponents';
+import { useChartClick } from '../shared/useChartClick';
 import {
   CHART_CONFIG,
   CHART_TOOLTIP_CLASSNAME,
@@ -116,16 +119,19 @@ export default function ClassBalancePanel({
     showSuccess('Exported!', { icon: '💾' });
   };
 
+  const classDistribution = data?.class_distribution ?? [];
+  const chartData = classDistribution.slice(0, 15);
+  const classChartClick = useChartClick(chartData, handleClassClick);
+
   if (isLoading) return <PanelLoadingState message="Loading balance..." />;
   if (error) return <PanelErrorState message={(error as Error).message} />;
-  if (!data || data.class_distribution.length === 0) {
+  if (!data || classDistribution.length === 0) {
     return <PanelEmptyState icon={Tag} title="No classes" message="Add tags to see balance" />;
   }
 
-  const { imbalance_score, imbalance_level, class_distribution } = data;
-  const chartData = class_distribution.slice(0, 15);
-  const healthyCount = class_distribution.filter(c => c.status === 'healthy').length;
-  const needsAttention = class_distribution.filter(c => c.status !== 'healthy').length;
+  const { imbalance_score, imbalance_level } = data;
+  const healthyCount = classDistribution.filter(c => c.status === 'healthy').length;
+  const needsAttention = classDistribution.filter(c => c.status !== 'healthy').length;
 
   return (
     <PanelContainer>
@@ -170,7 +176,7 @@ export default function ClassBalancePanel({
         <StatCard
           icon={Scale}
           label="Classes"
-          value={class_distribution.length}
+          value={classDistribution.length}
           color="blue"
         />
         <StatCard
@@ -194,30 +200,36 @@ export default function ClassBalancePanel({
         hint="Click to filter"
         height={200}
       >
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={chartData}
-            margin={CHART_CONFIG.margin}
-          >
-            <CartesianGrid {...getGridProps()} />
-            <XAxis dataKey="tag_name" {...getXAxisProps(true)} />
-            <YAxis {...getYAxisProps()} width={35} />
-            <Tooltip content={<ClassTooltip />} cursor={getTooltipCursorProps()} />
-            <Bar
-              dataKey="annotation_count"
-              onClick={handleClassClick}
-              {...getBarProps(true)}
+        <div
+          ref={classChartClick.containerRef}
+          onClick={classChartClick.handleContainerClick}
+          className="h-full cursor-pointer chart-clickable"
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              margin={CHART_CONFIG.margin}
             >
-              {chartData.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  {...getCellProps(getStatusColor(entry.status))}
-                  className="hover:opacity-80 transition-opacity"
-                />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+              <CartesianGrid {...getGridProps()} />
+              <XAxis dataKey="tag_name" {...getXAxisProps(true)} />
+              <YAxis {...getYAxisProps()} width={35} />
+              <Tooltip content={<ClassTooltip />} cursor={getTooltipCursorProps()} />
+              <Bar
+                dataKey="annotation_count"
+                {...getBarProps(true)}
+              >
+                {chartData.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    {...getCellProps(getStatusColor(entry.status))}
+                    className="hover:opacity-80 transition-opacity"
+                  />
+                ))}
+                <LabelList dataKey="annotation_count" content={<BarValueLabel />} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </ChartSection>
 
       {/* Legend */}

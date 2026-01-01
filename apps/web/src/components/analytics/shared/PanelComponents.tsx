@@ -245,6 +245,41 @@ export function ChartSection({
 }
 
 /**
+ * Bar chart value label (Recharts LabelList content)
+ */
+export function BarValueLabel({
+  x = 0,
+  y = 0,
+  width = 0,
+  value,
+}: {
+  x?: number;
+  y?: number;
+  width?: number;
+  value?: number | string;
+}) {
+  if (value === undefined || value === null) return null;
+  const labelX = x + width / 2;
+  const labelY = Math.max(y - 6, 10);
+
+  return (
+    <text
+      x={labelX}
+      y={labelY}
+      textAnchor="middle"
+      style={{
+        fill: '#6B7280',
+        fontSize: 9,
+        fontWeight: 500,
+        pointerEvents: 'none',
+      }}
+    >
+      {typeof value === 'number' ? value.toLocaleString() : value}
+    </text>
+  );
+}
+
+/**
  * Compact panel container
  */
 export function PanelContainer({ children }: { children: ReactNode }) {

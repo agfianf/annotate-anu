@@ -28,13 +28,13 @@ export const CHART_CONFIG = {
 
   // Margins (compact)
   margin: {
-    top: 5,
+    top: 14,
     right: 10,
     left: -10,
     bottom: 60,
   },
   marginCompact: {
-    top: 5,
+    top: 12,
     right: 10,
     left: -10,
     bottom: 40,

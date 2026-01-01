@@ -59,6 +59,14 @@ body {
   min-height: 100vh;
 }
 
+/* Clickable chart cursor */
+.chart-clickable .recharts-wrapper,
+.chart-clickable .recharts-wrapper *,
+.chart-clickable svg,
+.chart-clickable svg * {
+  cursor: pointer;
+}
+
 /* Recharts focus + active stroke cleanup */
 .recharts-wrapper:focus,
 .recharts-wrapper:focus-visible,

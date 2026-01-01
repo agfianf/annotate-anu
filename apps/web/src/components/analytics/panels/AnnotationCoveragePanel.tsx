@@ -14,6 +14,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  LabelList,
 } from 'recharts';
 
 import type { PanelProps } from '@/types/analytics';
@@ -26,10 +27,12 @@ import {
   StatsGrid3,
   StatCard,
   ChartSection,
+  BarValueLabel,
   InfoBox,
   Legend,
   LegendItem,
 } from '../shared/PanelComponents';
+import { useChartClick } from '../shared/useChartClick';
 import {
   CHART_CONFIG,
   CHART_TOOLTIP_CLASSNAME,
@@ -98,6 +101,11 @@ export default function AnnotationCoveragePanel({
     showSuccess('Filtering to unannotated images', { icon: '⚠️' });
   };
 
+  const densityChartClick = useChartClick(
+    data?.density_histogram ?? [],
+    handleDensityClick
+  );
+
   if (isLoading) return <PanelLoadingState message="Loading coverage..." />;
   if (error) return <PanelErrorState message={(error as Error).message} />;
   if (!data) return <PanelEmptyState icon={Tag} message="No coverage data" />;
@@ -140,30 +148,36 @@ export default function AnnotationCoveragePanel({
         hint="Click to filter"
         height={180}
       >
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data.density_histogram}
-            margin={CHART_CONFIG.marginCompact}
-          >
-            <CartesianGrid {...getGridProps()} />
-            <XAxis dataKey="bucket" {...getXAxisProps(false)} />
-            <YAxis {...getYAxisProps()} />
-            <Tooltip content={<CoverageTooltip />} cursor={getTooltipCursorProps()} />
-            <Bar
-              dataKey="count"
-              onClick={handleDensityClick}
-              {...getBarProps(true)}
+        <div
+          ref={densityChartClick.containerRef}
+          onClick={densityChartClick.handleContainerClick}
+          className="h-full cursor-pointer chart-clickable"
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={data.density_histogram}
+              margin={CHART_CONFIG.marginCompact}
             >
-              {data.density_histogram.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  {...getCellProps(getDensityColor(entry.bucket))}
-                  className="hover:opacity-80 transition-opacity"
-                />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+              <CartesianGrid {...getGridProps()} />
+              <XAxis dataKey="bucket" {...getXAxisProps(false)} />
+              <YAxis {...getYAxisProps()} />
+              <Tooltip content={<CoverageTooltip />} cursor={getTooltipCursorProps()} />
+              <Bar
+                dataKey="count"
+                {...getBarProps(true)}
+              >
+                {data.density_histogram.map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    {...getCellProps(getDensityColor(entry.bucket))}
+                    className="hover:opacity-80 transition-opacity"
+                  />
+                ))}
+                <LabelList dataKey="count" content={<BarValueLabel />} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </ChartSection>
 
       {/* Legend */}
