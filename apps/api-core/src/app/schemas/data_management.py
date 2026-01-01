@@ -601,10 +601,19 @@ class TagDistribution(BaseModel):
 class DimensionBucket(BaseModel):
     """Dimension bucket for histogram."""
 
-    bucket: str  # e.g., "Small (<640px)"
+    bucket: str  # e.g., "320-640px"
     count: int
     min: int
     max: int
+
+
+class AspectRatioBucket(BaseModel):
+    """Aspect ratio bucket for histogram."""
+
+    bucket: str  # e.g., "0.50-0.75", "1.00-1.25"
+    count: int
+    min: float
+    max: float
 
 
 class FileSizeStats(BaseModel):
@@ -621,6 +630,7 @@ class DatasetStatsResponse(BaseModel):
 
     tag_distribution: list[TagDistribution]
     dimension_histogram: list[DimensionBucket]
+    aspect_ratio_histogram: list[AspectRatioBucket]
     file_size_stats: FileSizeStats
 
 

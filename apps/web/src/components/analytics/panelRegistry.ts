@@ -4,7 +4,7 @@
  */
 
 import { lazy } from 'react';
-import { BarChart3, TrendingUp, Sparkles, Grid3X3, CheckCircle2, Scale, MapPin, Eye } from 'lucide-react';
+import { BarChart3, TrendingUp, Sparkles, Grid3X3, CheckCircle2, MapPin, Eye } from 'lucide-react';
 import type { PanelDefinition, PanelType } from '@/types/analytics';
 
 /**
@@ -24,13 +24,6 @@ export const PANEL_REGISTRY: Record<PanelType, PanelDefinition> = {
     description: 'Annotation completeness and density distribution',
     icon: CheckCircle2,
     component: lazy(() => import('./panels/AnnotationCoveragePanel')),
-  },
-  'class-balance': {
-    type: 'class-balance',
-    name: 'Class Balance',
-    description: 'Class distribution and imbalance detection',
-    icon: Scale,
-    component: lazy(() => import('./panels/ClassBalancePanel')),
   },
   'spatial-heatmap': {
     type: 'spatial-heatmap',

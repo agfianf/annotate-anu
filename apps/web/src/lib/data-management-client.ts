@@ -173,6 +173,8 @@ export interface ExploreFilters {
   width_max?: number;
   height_min?: number;
   height_max?: number;
+  aspect_ratio_min?: number;
+  aspect_ratio_max?: number;
   file_size_min?: number;
   file_size_max?: number;
   filepath_pattern?: string;
@@ -675,6 +677,9 @@ export const projectImagesApi = {
     if (filters?.width_max !== undefined) queryParams.append('width_max', Math.round(filters.width_max).toString());
     if (filters?.height_min !== undefined) queryParams.append('height_min', Math.round(filters.height_min).toString());
     if (filters?.height_max !== undefined) queryParams.append('height_max', Math.round(filters.height_max).toString());
+    // Aspect ratio filters (float values)
+    if (filters?.aspect_ratio_min !== undefined) queryParams.append('aspect_ratio_min', filters.aspect_ratio_min.toString());
+    if (filters?.aspect_ratio_max !== undefined) queryParams.append('aspect_ratio_max', filters.aspect_ratio_max.toString());
     if (filters?.file_size_min !== undefined) queryParams.append('file_size_min', Math.round(filters.file_size_min).toString());
     if (filters?.file_size_max !== undefined) queryParams.append('file_size_max', Math.round(filters.file_size_max).toString());
     if (filters?.filepath_pattern) queryParams.append('filepath_pattern', filters.filepath_pattern);

@@ -44,6 +44,12 @@ const MemoizedRenderPanel = memo(function MemoizedRenderPanel({
   onFilterUpdate: (filters: Partial<ExploreFilters>) => void;
 }) {
   const definition = getPanelDefinition(panelType as any);
+
+  // Safety check: if panel type is invalid/removed, return null
+  if (!definition) {
+    return null;
+  }
+
   const PanelComponent = definition.component;
 
   return (
@@ -70,7 +76,7 @@ export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
   onFilterUpdate,
 }: AnalyticsPanelContainerProps) {
   const {
-    panels,
+    panels: rawPanels,
     layoutMode,
     activeTabId,
     setActiveTab,
@@ -78,6 +84,14 @@ export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
   } = useAnalyticsPanels();
 
   const prefersReducedMotion = useReducedMotion();
+
+  // Filter out panels with invalid/removed types (e.g., deprecated panel types)
+  const panels = useMemo(() => {
+    return rawPanels.filter((panel) => {
+      const definition = getPanelDefinition(panel.type as any);
+      return definition !== undefined;
+    });
+  }, [rawPanels]);
 
   // Stabilize onFilterUpdate callback to prevent unnecessary re-renders
   const onFilterUpdateRef = useRef(onFilterUpdate);

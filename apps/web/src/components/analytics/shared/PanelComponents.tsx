@@ -3,7 +3,8 @@
  * Reusable UI components for analytics panels with consistent compact styling
  */
 
-import { ReactNode, useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { Loader2, AlertCircle, type LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';

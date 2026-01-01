@@ -12,7 +12,6 @@ import type { ExploreFilters } from '@/lib/data-management-client';
 export type PanelType =
   | 'dataset-stats'
   | 'annotation-coverage'
-  | 'class-balance'
   | 'spatial-heatmap'
   | 'image-quality'
   | 'prediction-analysis'
@@ -75,6 +74,7 @@ export interface PanelDefinition {
 export interface DatasetStatsResponse {
   tag_distribution: TagDistribution[];
   dimension_histogram: DimensionBucket[];
+  aspect_ratio_histogram: AspectRatioBucket[];
   file_size_stats: FileSizeStats;
 }
 
@@ -89,7 +89,14 @@ export interface TagDistribution {
 }
 
 export interface DimensionBucket {
-  bucket: string;                      // e.g., "0-500", "500-1000"
+  bucket: string;                      // e.g., "320-640px", "640-1024px"
+  count: number;
+  min: number;                         // Bucket min value
+  max: number;                         // Bucket max value
+}
+
+export interface AspectRatioBucket {
+  bucket: string;                      // e.g., "0.50-0.75", "1.00-1.25"
   count: number;
   min: number;                         // Bucket min value
   max: number;                         // Bucket max value

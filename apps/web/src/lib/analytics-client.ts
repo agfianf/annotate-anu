@@ -78,12 +78,17 @@ export const analyticsApi = {
 
   /**
    * Get class balance analytics
+   * @param category_id Optional category ID to filter by specific category
    */
   async getClassBalance(
     projectId: string,
-    filters: ExploreFilters = {}
+    filters: ExploreFilters = {},
+    category_id?: string | null
   ): Promise<ClassBalanceResponse> {
     const params = buildFilterParams(filters);
+    if (category_id) {
+      params.category_id = category_id;
+    }
     const response = await dataClient.get<{
       data: ClassBalanceResponse;
       message: string;

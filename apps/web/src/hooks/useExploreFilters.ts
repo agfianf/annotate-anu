@@ -11,6 +11,7 @@ export interface ExploreFiltersState {
   sizeFilter: ('small' | 'medium' | 'large')[];
   widthRange?: { min: number; max: number };
   heightRange?: { min: number; max: number };
+  aspectRatioRange?: { min: number; max: number };
   sizeRange?: { min: number; max: number };
   filepathPattern?: string; // Deprecated - use filepathPaths
   filepathPaths?: string[]; // Filter by specific directory paths
@@ -159,6 +160,10 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     setFilters((prev) => ({ ...prev, sizeRange: { min, max } }));
   }, []);
 
+  const setAspectRatioRange = useCallback((min: number, max: number) => {
+    setFilters((prev) => ({ ...prev, aspectRatioRange: { min, max } }));
+  }, []);
+
   const setFilepathFilter = useCallback((pattern: string) => {
     setFilters((prev) => ({ ...prev, filepathPattern: pattern }));
   }, []);
@@ -182,6 +187,7 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     filters.sizeFilter.length > 0 ||
     filters.widthRange !== undefined ||
     filters.heightRange !== undefined ||
+    filters.aspectRatioRange !== undefined ||
     filters.sizeRange !== undefined ||
     filters.filepathPattern !== undefined ||
     (filters.filepathPaths && filters.filepathPaths.length > 0) ||
@@ -204,12 +210,14 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     // New filters
     widthRange: filters.widthRange,
     heightRange: filters.heightRange,
+    aspectRatioRange: filters.aspectRatioRange,
     sizeRange: filters.sizeRange,
     filepathPattern: filters.filepathPattern,
     filepathPaths: filters.filepathPaths,
     imageId: filters.imageId,
     setWidthRange,
     setHeightRange,
+    setAspectRatioRange,
     setSizeRange,
     setFilepathFilter,
     setFilepathPaths,

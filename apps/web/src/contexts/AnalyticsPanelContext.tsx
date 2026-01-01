@@ -12,6 +12,7 @@ import type {
   PanelType,
 } from '@/types/analytics';
 import type { ExploreFilters } from '@/lib/data-management-client';
+import { getPanelDefinition } from '@/components/analytics/panelRegistry';
 
 export const AnalyticsPanelContext = createContext<AnalyticsPanelContextValue | null>(null);
 
@@ -37,6 +38,7 @@ function getStorageKey(projectId: string, key: 'panels' | 'layout'): string {
 
 /**
  * Load state from localStorage
+ * Filters out panels with invalid/removed types
  */
 function loadState(projectId: string): Partial<AnalyticsPanelState> {
   try {
@@ -46,8 +48,16 @@ function loadState(projectId: string): Partial<AnalyticsPanelState> {
     const savedPanels = localStorage.getItem(panelsKey);
     const savedLayout = localStorage.getItem(layoutKey);
 
+    const rawPanels: PanelConfig[] = savedPanels ? JSON.parse(savedPanels) : [];
+
+    // Filter out panels with invalid/removed types (e.g., deprecated panel types)
+    const validPanels = rawPanels.filter((panel) => {
+      const definition = getPanelDefinition(panel.type as any);
+      return definition !== undefined;
+    });
+
     return {
-      panels: savedPanels ? JSON.parse(savedPanels) : [],
+      panels: validPanels,
       layoutMode: savedLayout ? (JSON.parse(savedLayout) as LayoutMode) : 'tabs',
     };
   } catch (error) {

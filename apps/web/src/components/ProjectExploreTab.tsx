@@ -191,6 +191,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     toggleSizeFilter: toggleSidebarSizeFilter,
     setWidthRange: setSidebarWidthRange,
     setHeightRange: setSidebarHeightRange,
+    setAspectRatioRange: setSidebarAspectRatioRange,
     setSizeRange: setSidebarSizeRange,
     setFilepathFilter: setSidebarFilepathFilter,
     setFilepathPaths: setSidebarFilepathPaths,
@@ -259,6 +260,8 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         width_max: sidebarFilters.widthRange?.max,
         height_min: sidebarFilters.heightRange?.min,
         height_max: sidebarFilters.heightRange?.max,
+        aspect_ratio_min: sidebarFilters.aspectRatioRange?.min,
+        aspect_ratio_max: sidebarFilters.aspectRatioRange?.max,
         file_size_min: sidebarFilters.sizeRange?.min,
         file_size_max: sidebarFilters.sizeRange?.max,
         filepath_pattern: sidebarFilters.filepathPattern,
@@ -1055,7 +1058,13 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         panelFilters.height_max ?? 10000
       );
     }
-  }, [setFilters, setSidebarWidthRange, setSidebarHeightRange]);
+    if (panelFilters.aspect_ratio_min !== undefined || panelFilters.aspect_ratio_max !== undefined) {
+      setSidebarAspectRatioRange(
+        panelFilters.aspect_ratio_min ?? 0,
+        panelFilters.aspect_ratio_max ?? 10
+      );
+    }
+  }, [setFilters, setSidebarWidthRange, setSidebarHeightRange, setSidebarAspectRatioRange]);
 
   const renderProjectExploreContent = (
     isPanelsVisible: boolean,

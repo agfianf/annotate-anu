@@ -3,6 +3,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 from collections import Counter
+import math
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -18,6 +19,7 @@ from app.schemas.data_management import (
     DatasetStatsResponse,
     TagDistribution,
     DimensionBucket,
+    AspectRatioBucket,
     FileSizeStats,
 )
 from app.schemas.analytics import (
@@ -29,6 +31,72 @@ from app.schemas.analytics import (
 from app.services.analytics_service import AnalyticsService
 
 router = APIRouter(prefix="/api/v1/projects", tags=["Analytics"])
+
+
+def compute_dynamic_bins(values: list[int], max_bins: int = 8) -> list[tuple[int, int]]:
+    """
+    Compute dynamic bins using Sturges' rule.
+    Returns list of (min, max) tuples for each bin.
+    """
+    if not values:
+        return []
+
+    min_val = min(values)
+    max_val = max(values)
+
+    if min_val == max_val:
+        return [(min_val, max_val)]
+
+    # Sturges' rule: k = ceil(log2(n) + 1)
+    n = len(values)
+    num_bins = min(max(math.ceil(math.log2(n) + 1), 3), max_bins)
+
+    # Create evenly spaced bins
+    bin_width = (max_val - min_val) / num_bins
+    bins = []
+
+    for i in range(num_bins):
+        bin_min = int(min_val + i * bin_width)
+        bin_max = int(min_val + (i + 1) * bin_width)
+        # Ensure last bin captures max value
+        if i == num_bins - 1:
+            bin_max = max_val
+        bins.append((bin_min, bin_max))
+
+    return bins
+
+
+def compute_dynamic_ratio_bins(values: list[float], max_bins: int = 8) -> list[tuple[float, float]]:
+    """
+    Compute dynamic bins for aspect ratios using Sturges' rule.
+    Returns list of (min, max) tuples for each bin.
+    """
+    if not values:
+        return []
+
+    min_val = min(values)
+    max_val = max(values)
+
+    if min_val == max_val:
+        return [(min_val, max_val)]
+
+    # Sturges' rule: k = ceil(log2(n) + 1)
+    n = len(values)
+    num_bins = min(max(math.ceil(math.log2(n) + 1), 3), max_bins)
+
+    # Create evenly spaced bins
+    bin_width = (max_val - min_val) / num_bins
+    bins = []
+
+    for i in range(num_bins):
+        bin_min = round(min_val + i * bin_width, 2)
+        bin_max = round(min_val + (i + 1) * bin_width, 2)
+        # Ensure last bin captures max value
+        if i == num_bins - 1:
+            bin_max = round(max_val, 2)
+        bins.append((bin_min, bin_max))
+
+    return bins
 
 
 @router.get("/{project_id}/analytics/dataset-stats", response_model=JsonResponse[DatasetStatsResponse, None])
@@ -123,43 +191,56 @@ async def get_dataset_stats(
                 )
             )
 
-    # Compute dimension histogram (width x height buckets)
-    dimension_buckets_data = {}
+    # Collect dimension and aspect ratio data
+    dimensions = []  # Use max(width, height) for dimension binning
+    aspect_ratios = []
+
     for img in images:
         width = img.get("width")
         height = img.get("height")
-        if width and height:
-            # Create size buckets: small (<640), medium (640-1280), large (>1280)
-            if width < 640 or height < 640:
-                bucket_key = "Small (<640px)"
-                min_val, max_val = 0, 640
-            elif width < 1280 or height < 1280:
-                bucket_key = "Medium (640-1280px)"
-                min_val, max_val = 640, 1280
-            else:
-                bucket_key = "Large (>1280px)"
-                min_val, max_val = 1280, 10000
+        if width and height and height > 0:
+            # Use the larger dimension for binning
+            dimensions.append(max(width, height))
+            # Calculate aspect ratio (width / height)
+            aspect_ratios.append(round(width / height, 3))
 
-            if bucket_key not in dimension_buckets_data:
-                dimension_buckets_data[bucket_key] = {
-                    "count": 0,
-                    "min": min_val,
-                    "max": max_val,
-                }
-            dimension_buckets_data[bucket_key]["count"] += 1
+    # Compute dynamic dimension bins using Sturges' rule
+    dimension_bins = compute_dynamic_bins(dimensions, max_bins=8)
 
-    dimension_histogram = [
-        DimensionBucket(
-            bucket=bucket_name,
-            count=data["count"],
-            min=data["min"],
-            max=data["max"],
-        )
-        for bucket_name, data in dimension_buckets_data.items()
-    ]
+    # Count images in each dimension bin
+    dimension_histogram = []
+    if dimensions and dimension_bins:
+        max_dim = max(dimensions)
+        for bin_min, bin_max in dimension_bins:
+            count = sum(1 for d in dimensions if bin_min <= d < bin_max or (bin_max == max_dim and d == bin_max))
+            bucket_label = f"{bin_min}-{bin_max}px"
+            dimension_histogram.append(
+                DimensionBucket(
+                    bucket=bucket_label,
+                    count=count,
+                    min=bin_min,
+                    max=bin_max,
+                )
+            )
 
-    # Sort by min value
-    dimension_histogram.sort(key=lambda b: b.min)
+    # Compute dynamic aspect ratio bins
+    ratio_bins = compute_dynamic_ratio_bins(aspect_ratios, max_bins=8)
+
+    # Count images in each aspect ratio bin
+    aspect_ratio_histogram = []
+    if aspect_ratios and ratio_bins:
+        max_ratio = max(aspect_ratios)
+        for bin_min, bin_max in ratio_bins:
+            count = sum(1 for r in aspect_ratios if bin_min <= r < bin_max or (bin_max == max_ratio and r == bin_max))
+            bucket_label = f"{bin_min:.2f}-{bin_max:.2f}"
+            aspect_ratio_histogram.append(
+                AspectRatioBucket(
+                    bucket=bucket_label,
+                    count=count,
+                    min=bin_min,
+                    max=bin_max,
+                )
+            )
 
     # Compute file size stats
     file_sizes = [img["file_size_bytes"] for img in images if img.get("file_size_bytes") is not None]
@@ -176,6 +257,7 @@ async def get_dataset_stats(
     response_data = DatasetStatsResponse(
         tag_distribution=tag_distribution,
         dimension_histogram=dimension_histogram,
+        aspect_ratio_histogram=aspect_ratio_histogram,
         file_size_stats=file_size_stats,
     )
 
@@ -264,10 +346,13 @@ async def get_class_balance(
     filepath_pattern: str | None = Query(default=None, max_length=255),
     filepath_paths: list[str] | None = Query(default=None),
     image_uids: list[UUID] | None = Query(default=None),
+    category_id: UUID | None = Query(default=None, description="Filter by tag category"),
 ):
     """
     Get class balance analytics.
     Shows class distribution, imbalance score, and recommendations.
+
+    Supports category_id filter for per-category class balance analysis.
     """
     project_id = project["id"]
 
@@ -286,7 +371,7 @@ async def get_class_balance(
 
     # Compute class balance metrics
     balance_data = await AnalyticsService.compute_class_balance(
-        connection, project_id, images
+        connection, project_id, images, category_id=category_id
     )
 
     response_data = ClassBalanceResponse(**balance_data)

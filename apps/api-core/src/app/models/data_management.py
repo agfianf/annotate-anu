@@ -4,6 +4,7 @@ from sqlalchemy import (
     BigInteger,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -54,6 +55,12 @@ shared_images = Table(
         comment="Image height in pixels",
     ),
     Column(
+        "aspect_ratio",
+        Float,
+        nullable=True,
+        comment="Aspect ratio (width / height) for efficient filtering",
+    ),
+    Column(
         "file_size_bytes",
         BigInteger,
         nullable=True,
@@ -101,6 +108,7 @@ shared_images = Table(
     Index("ix_shared_images_file_path", "file_path"),
     Index("ix_shared_images_checksum", "checksum_sha256"),
     Index("ix_shared_images_filename", "filename"),
+    Index("ix_shared_images_aspect_ratio", "aspect_ratio"),
 )
 
 

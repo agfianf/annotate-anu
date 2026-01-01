@@ -81,9 +81,13 @@ class AnalyticsService:
         connection: AsyncConnection,
         project_id: int,
         images: List[Dict],
+        category_id = None,
     ) -> Dict:
         """
         Compute class balance and imbalance metrics.
+
+        Args:
+            category_id: Optional UUID to filter tags by category for per-category analysis
 
         Returns:
             - class_distribution: List of tags with annotation counts and percentages
@@ -93,6 +97,11 @@ class AnalyticsService:
         """
         # Get all tags
         all_tags = await TagRepository.list_with_usage_count(connection, project_id)
+
+        # Filter by category if specified
+        if category_id is not None:
+            all_tags = [tag for tag in all_tags if tag.get("category_id") == category_id]
+
         tag_map = {tag["id"]: tag for tag in all_tags}
 
         # Count annotations per tag (not images, but actual annotation instances)
@@ -106,6 +115,9 @@ class AnalyticsService:
             seen_tags = set()
             for tag in image_tags:
                 tag_id = tag["id"]
+                # Only count tags that are in our filtered tag_map (handles category filtering)
+                if tag_id not in tag_map:
+                    continue
                 tag_annotation_counts[tag_id] += 1
                 if tag_id not in seen_tags:
                     tag_image_counts[tag_id] += 1

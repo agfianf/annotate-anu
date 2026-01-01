@@ -9,24 +9,28 @@ import { analyticsApi } from '@/lib/analytics-client';
 
 interface UseClassBalanceOptions {
   projectId: string;
-  filters: ExploreFilters;
+  filters?: ExploreFilters;
+  categoryId?: string | null;
   enabled?: boolean;
 }
 
 /**
  * Hook to fetch class balance analytics
- * Shows FULL dataset stats (does not refetch when filters change)
+ * Supports per-category analysis via categoryId parameter
+ * Shows FULL dataset stats when categoryId is null/undefined
  */
 export function useClassBalance({
   projectId,
-  filters: _filters, // Unused - analytics shows full dataset
+  filters = {},
+  categoryId = null,
   enabled = true,
 }: UseClassBalanceOptions) {
   return useQuery<ClassBalanceResponse>({
-    queryKey: ['class-balance', projectId], // No filters in key
-    queryFn: () => analyticsApi.getClassBalance(projectId, {}),
+    queryKey: ['class-balance', projectId, categoryId], // Category in key for caching
+    queryFn: () => analyticsApi.getClassBalance(projectId, filters, categoryId),
     enabled: enabled && !!projectId,
     staleTime: 300000, // Cache for 5 minutes (static data)
     gcTime: 600000, // Keep in cache for 10 minutes
+    placeholderData: keepPreviousData, // Show previous data while fetching new category
   });
 }

@@ -224,6 +224,8 @@ class ProjectImageRepository:
         height_max: int | None = None,
         file_size_min: int | None = None,
         file_size_max: int | None = None,
+        aspect_ratio_min: float | None = None,
+        aspect_ratio_max: float | None = None,
         filepath_pattern: str | None = None,
         filepath_paths: list[str] | None = None,
         image_uids: list[UUID] | None = None,
@@ -260,6 +262,11 @@ class ProjectImageRepository:
             base_query = base_query.where(shared_images.c.file_size_bytes >= file_size_min)
         if file_size_max is not None:
             base_query = base_query.where(shared_images.c.file_size_bytes <= file_size_max)
+
+        if aspect_ratio_min is not None:
+            base_query = base_query.where(shared_images.c.aspect_ratio >= aspect_ratio_min)
+        if aspect_ratio_max is not None:
+            base_query = base_query.where(shared_images.c.aspect_ratio <= aspect_ratio_max)
 
         if filepath_pattern:
             # Convert glob-style wildcards to SQL LIKE
