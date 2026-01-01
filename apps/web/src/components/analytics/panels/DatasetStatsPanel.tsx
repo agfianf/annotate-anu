@@ -35,6 +35,8 @@ import { useDatasetStats } from '@/hooks/useDatasetStats';
 import { useClassBalance } from '@/hooks/useClassBalance';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useChartClick } from '../shared/useChartClick';
+import { useChartMultiSelect } from '../shared/useChartMultiSelect';
+import { SelectionActionBar } from '../shared/SelectionActionBar';
 import {
   CHART_CONFIG,
   CHART_TOOLTIP_CLASSNAME,
@@ -681,6 +683,12 @@ export default function DatasetStatsPanel({
     };
   }, [data]);
 
+  // Multi-select state for Dimension Distribution
+  const dimensionMultiSelect = useChartMultiSelect(dimensionChartData);
+
+  // Multi-select state for Aspect Ratio Distribution
+  const aspectRatioMultiSelect = useChartMultiSelect(aspectRatioChartData);
+
   /**
    * Handle tag bar click - filter gallery to clicked tag
    */
@@ -696,43 +704,77 @@ export default function DatasetStatsPanel({
   };
 
   /**
-   * Handle dimension bucket click - filter by dimension range
+   * Apply dimension multi-select filter
    */
-  const handleDimensionClick = (bucketData: any) => {
-    if (!bucketData) return;
+  const handleDimensionApplyFilter = () => {
+    const selected = dimensionMultiSelect.selectedData;
+    if (selected.length === 0) return;
+
+    // Combine all selected ranges into a single min/max
+    const minDimension = Math.min(...selected.map((d: any) => d.min));
+    const maxDimension = Math.max(...selected.map((d: any) => d.max));
 
     onFilterUpdate({
-      width_min: bucketData.min,
-      width_max: bucketData.max,
-      height_min: bucketData.min,
-      height_max: bucketData.max,
+      width_min: minDimension,
+      width_max: maxDimension,
+      height_min: minDimension,
+      height_max: maxDimension,
     });
 
-    showSuccess(`Filtering by size: ${bucketData.name}`, { icon: '📐' });
+    showSuccess(
+      `Filtering by ${selected.length} size range${selected.length > 1 ? 's' : ''}`,
+      { icon: '📐' }
+    );
+    dimensionMultiSelect.clearSelection();
+  };
+
+  /**
+   * Apply aspect ratio multi-select filter
+   */
+  const handleAspectRatioApplyFilter = () => {
+    const selected = aspectRatioMultiSelect.selectedData;
+    if (selected.length === 0) return;
+
+    // Combine all selected ranges into a single min/max
+    const minRatio = Math.min(...selected.map((d: any) => d.min));
+    const maxRatio = Math.max(...selected.map((d: any) => d.max));
+
+    onFilterUpdate({
+      aspect_ratio_min: minRatio,
+      aspect_ratio_max: maxRatio,
+    });
+
+    showSuccess(
+      `Filtering by ${selected.length} aspect ratio range${selected.length > 1 ? 's' : ''}`,
+      { icon: '📐' }
+    );
+    aspectRatioMultiSelect.clearSelection();
+  };
+
+  /**
+   * Handle dimension bucket click - single click or multi-select
+   */
+  const handleDimensionClick = (bucketData: any, index: number, event?: React.MouseEvent) => {
+    if (!bucketData) return;
+    dimensionMultiSelect.handleBarClick(index, bucketData, event);
   };
 
   const dimensionChartClick = useChartClick(
     dimensionChartData,
-    handleDimensionClick
+    (data, index, event) => handleDimensionClick(data, index, event)
   );
 
   /**
-   * Handle aspect ratio bucket click - filter by aspect ratio range
+   * Handle aspect ratio bucket click - single click or multi-select
    */
-  const handleAspectRatioClick = (bucketData: any) => {
+  const handleAspectRatioClick = (bucketData: any, index: number, event?: React.MouseEvent) => {
     if (!bucketData) return;
-
-    onFilterUpdate({
-      aspect_ratio_min: bucketData.min,
-      aspect_ratio_max: bucketData.max,
-    });
-
-    showSuccess(`Filtering by aspect ratio: ${bucketData.name}`, { icon: '📐' });
+    aspectRatioMultiSelect.handleBarClick(index, bucketData, event);
   };
 
   const aspectRatioChartClick = useChartClick(
     aspectRatioChartData,
-    handleAspectRatioClick
+    (data, index, event) => handleAspectRatioClick(data, index, event)
   );
 
   // Loading state
@@ -999,7 +1041,7 @@ export default function DatasetStatsPanel({
           <ChartSection
             icon={Ruler}
             title="Dimension Distribution"
-            hint="Click to filter"
+            hint="Click bars to select · Click Apply to filter"
             color="purple"
             height={160}
           >
@@ -1018,6 +1060,10 @@ export default function DatasetStatsPanel({
                       <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
                       <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.6} />
                     </linearGradient>
+                    <linearGradient id="purpleGradientSelected" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#7C3AED" stopOpacity={1} />
+                      <stop offset="100%" stopColor="#6D28D9" stopOpacity={1} />
+                    </linearGradient>
                   </defs>
                   <CartesianGrid {...getGridProps()} />
                   <XAxis dataKey="name" {...getXAxisProps(true)} />
@@ -1026,18 +1072,53 @@ export default function DatasetStatsPanel({
                   <Bar
                     dataKey="count"
                     {...getBarProps(!prefersReducedMotion)}
+                    background={(props: any) => {
+                      const index = props.index;
+                      const isSelected = dimensionMultiSelect.selectedIndices.has(index);
+                      const hasSelection = dimensionMultiSelect.hasSelection;
+
+                      if (!hasSelection) return null;
+
+                      return (
+                        <rect
+                          x={props.x}
+                          y={0}
+                          width={props.width}
+                          height={props.height + props.y}
+                          fill={
+                            isSelected
+                              ? 'rgba(139, 92, 246, 0.15)' // Purple glow for selected
+                              : 'rgba(60, 60, 60, 0.05)'    // Subtle gray for unselected
+                          }
+                        />
+                      );
+                    }}
                   >
-                    {dimensionChartData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        {...getCellProps('url(#purpleGradient)')}
-                      />
-                    ))}
+                    {dimensionChartData.map((entry, index) => {
+                      const isSelected = dimensionMultiSelect.selectedIndices.has(index);
+                      const hasSelection = dimensionMultiSelect.hasSelection;
+                      return (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={isSelected ? 'url(#purpleGradientSelected)' : 'url(#purpleGradient)'}
+                          stroke={isSelected ? '#5B21B6' : 'none'}
+                          strokeWidth={isSelected ? 3 : 0}
+                          opacity={hasSelection ? (isSelected ? 1 : 0.25) : 0.85}
+                        />
+                      );
+                    })}
                     <LabelList dataKey="count" content={<BarValueLabel />} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            <SelectionActionBar
+              selectionCount={dimensionMultiSelect.selectionCount}
+              onApply={handleDimensionApplyFilter}
+              onClear={dimensionMultiSelect.clearSelection}
+              prefersReducedMotion={prefersReducedMotion}
+            />
           </ChartSection>
         </motion.div>
       )}
@@ -1052,7 +1133,7 @@ export default function DatasetStatsPanel({
           <ChartSection
             icon={Ratio}
             title="Aspect Ratio Distribution"
-            hint="Click to filter"
+            hint="Click bars to select · Click Apply to filter"
             color="orange"
             height={160}
           >
@@ -1071,6 +1152,10 @@ export default function DatasetStatsPanel({
                       <stop offset="0%" stopColor="#F97316" stopOpacity={0.8} />
                       <stop offset="100%" stopColor="#EA580C" stopOpacity={0.6} />
                     </linearGradient>
+                    <linearGradient id="orangeGradientSelected" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#EA580C" stopOpacity={1} />
+                      <stop offset="100%" stopColor="#C2410C" stopOpacity={1} />
+                    </linearGradient>
                   </defs>
                   <CartesianGrid {...getGridProps()} />
                   <XAxis dataKey="name" {...getXAxisProps(true)} />
@@ -1079,18 +1164,53 @@ export default function DatasetStatsPanel({
                   <Bar
                     dataKey="count"
                     {...getBarProps(!prefersReducedMotion)}
+                    background={(props: any) => {
+                      const index = props.index;
+                      const isSelected = aspectRatioMultiSelect.selectedIndices.has(index);
+                      const hasSelection = aspectRatioMultiSelect.hasSelection;
+
+                      if (!hasSelection) return null;
+
+                      return (
+                        <rect
+                          x={props.x}
+                          y={0}
+                          width={props.width}
+                          height={props.height + props.y}
+                          fill={
+                            isSelected
+                              ? 'rgba(249, 115, 22, 0.15)' // Orange glow for selected
+                              : 'rgba(60, 60, 60, 0.05)'   // Subtle gray for unselected
+                          }
+                        />
+                      );
+                    }}
                   >
-                    {aspectRatioChartData.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        {...getCellProps('url(#orangeGradient)')}
-                      />
-                    ))}
+                    {aspectRatioChartData.map((entry, index) => {
+                      const isSelected = aspectRatioMultiSelect.selectedIndices.has(index);
+                      const hasSelection = aspectRatioMultiSelect.hasSelection;
+                      return (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={isSelected ? 'url(#orangeGradientSelected)' : 'url(#orangeGradient)'}
+                          stroke={isSelected ? '#9A3412' : 'none'}
+                          strokeWidth={isSelected ? 3 : 0}
+                          opacity={hasSelection ? (isSelected ? 1 : 0.25) : 0.85}
+                        />
+                      );
+                    })}
                     <LabelList dataKey="count" content={<BarValueLabel />} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
+
+            <SelectionActionBar
+              selectionCount={aspectRatioMultiSelect.selectionCount}
+              onApply={handleAspectRatioApplyFilter}
+              onClear={aspectRatioMultiSelect.clearSelection}
+              prefersReducedMotion={prefersReducedMotion}
+            />
           </ChartSection>
         </motion.div>
       )}

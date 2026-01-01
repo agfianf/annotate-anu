@@ -8,7 +8,7 @@ interface ChartEvent<T> {
 
 export function useChartClick<T>(
   data: T[],
-  onSelect: (item: T) => void
+  onSelect: (item: T, index: number, event?: MouseEvent<HTMLDivElement>) => void
 ) {
   const lastIndexRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -26,20 +26,20 @@ export function useChartClick<T>(
   const handleClick = useCallback(
     (state: ChartEvent<T>) => {
       const payload = state?.activePayload?.[0]?.payload;
-      if (payload) {
-        onSelect(payload);
-        return;
-      }
-
       const index =
         typeof state?.activeTooltipIndex === 'number'
           ? state.activeTooltipIndex
           : lastIndexRef.current;
 
+      if (payload && index !== null && index !== undefined) {
+        onSelect(payload, index);
+        return;
+      }
+
       if (index === null || index === undefined) return;
       const item = data[index];
       if (!item) return;
-      onSelect(item);
+      onSelect(item, index);
     },
     [data, onSelect]
   );
@@ -77,7 +77,7 @@ export function useChartClick<T>(
 
         const item = data[closestIndex];
         if (item) {
-          onSelect(item);
+          onSelect(item, closestIndex, event);
         }
         return;
       }
@@ -93,7 +93,7 @@ export function useChartClick<T>(
       );
       const item = data[index];
       if (item) {
-        onSelect(item);
+        onSelect(item, index, event);
       }
     },
     [data, onSelect]

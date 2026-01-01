@@ -19,7 +19,9 @@ import {
     Maximize2,
     Minimize2,
     Plus,
+    Ratio,
     RefreshCw,
+    Ruler,
     Search,
     Tag,
     X
@@ -1313,18 +1315,51 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
           {/* Dimension filters */}
           {sidebarFilters.widthRange && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs border border-purple-200">
+              <Ruler className="w-3 h-3" />
               <span className="font-medium">
                 Width: {sidebarFilters.widthRange.min} - {sidebarFilters.widthRange.max}px
               </span>
+              <button
+                onClick={() => setSidebarWidthRange(0, 10000)}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear width filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
             </div>
           )}
 
           {sidebarFilters.heightRange && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs border border-purple-200">
+              <Ruler className="w-3 h-3" />
               <span className="font-medium">
                 Height: {sidebarFilters.heightRange.min} - {sidebarFilters.heightRange.max}px
               </span>
+              <button
+                onClick={() => setSidebarHeightRange(0, 10000)}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear height filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Aspect ratio filter */}
+          {sidebarFilters.aspectRatioRange && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-orange-700 rounded-full text-xs border border-orange-200">
+              <Ratio className="w-3 h-3" />
+              <span className="font-medium">
+                Ratio: {sidebarFilters.aspectRatioRange.min.toFixed(2)} - {sidebarFilters.aspectRatioRange.max.toFixed(2)}
+              </span>
+              <button
+                onClick={() => setSidebarAspectRatioRange(0, 10)}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear aspect ratio filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
             </div>
           )}
 
