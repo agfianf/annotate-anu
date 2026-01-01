@@ -33,7 +33,7 @@ with the services listed above.
 2. Auto-save batches create/update/delete operations by image.
 3. API Core persists to Postgres and returns updated IDs.
 
-See `docs/annotation-sync-architecture.md` for details.
+See `docs/architecture/annotation-sync.md` for details.
 
 ### Exports
 
@@ -41,7 +41,14 @@ See `docs/annotation-sync-architecture.md` for details.
 2. API Core creates an export record and enqueues a Celery task.
 3. Worker builds artifacts and updates status/history.
 
-See `docs/export-workflow.md` for details.
+See `docs/features/export-workflow.md` for details.
+
+## Related Docs
+
+- Annotation sync: `docs/architecture/annotation-sync.md`
+- Canvas architecture: `docs/architecture/hybrid-canvas.md`
+- Pixi experiments: `docs/architecture/pixi-performance.md`
+- Database schema: `docs/architecture/database-schema.dbml`
 
 ## Diagrams
 
