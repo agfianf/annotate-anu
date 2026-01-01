@@ -4,7 +4,7 @@ This document describes exports created from Project > Explore.
 
 ## Export Types
 
-### Project Exports (team mode)
+### Project Exports (API Core)
 
 - Created from the Explore view with the Export Wizard.
 - Processed by the API Core worker.

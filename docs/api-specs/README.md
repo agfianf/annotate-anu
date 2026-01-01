@@ -13,11 +13,20 @@ Base URL: `http://localhost:8001/api/v1`
 
 - `POST /auth/register`
 - `POST /auth/login`
+- `POST /auth/refresh`
 - `POST /auth/logout`
 - `GET /auth/me`
-- `PATCH /auth/profile`
+- `PATCH /auth/me`
+- `GET /auth/first-user-check`
 
-### Projects
+### Admin
+
+- `GET /admin/users`
+- `PATCH /admin/users/{user_id}/role`
+- `PATCH /admin/users/{user_id}/active`
+- `DELETE /admin/users/{user_id}`
+
+### Projects, Labels, Members, Activity
 
 - `GET /projects`
 - `POST /projects`
@@ -27,47 +36,71 @@ Base URL: `http://localhost:8001/api/v1`
 - `POST /projects/{project_id}/unarchive`
 - `DELETE /projects/{project_id}`
 
-### Members
+- `GET /projects/{project_id}/labels`
+- `POST /projects/{project_id}/labels`
+- `PATCH /projects/{project_id}/labels/{label_id}`
+- `DELETE /projects/{project_id}/labels/{label_id}`
 
 - `GET /projects/{project_id}/members`
 - `GET /projects/{project_id}/available-users`
 - `POST /projects/{project_id}/members`
+- `PATCH /projects/{project_id}/members/{member_id}`
 - `DELETE /projects/{project_id}/members/{member_id}`
+
+- `GET /projects/{project_id}/activity`
+- `POST /projects/{project_id}/activity`
 
 ### Tasks and Jobs
 
 - `GET /projects/{project_id}/tasks`
 - `POST /projects/{project_id}/tasks`
+- `GET /tasks/{task_id}`
 - `PATCH /tasks/{task_id}`
 - `POST /tasks/{task_id}/assign`
 - `POST /tasks/{task_id}/archive`
 - `POST /tasks/{task_id}/unarchive`
 - `DELETE /tasks/{task_id}`
 
+- `POST /projects/{project_id}/tasks/preview`
+- `POST /projects/{project_id}/tasks/create-with-file-paths`
+- `POST /projects/{project_id}/tasks/create-with-images`
+
 - `GET /tasks/{task_id}/jobs`
+- `POST /tasks/{task_id}/jobs`
+- `POST /tasks/{task_id}/jobs/bulk`
+- `GET /jobs/{job_id}`
+- `PATCH /jobs/{job_id}`
 - `POST /jobs/{job_id}/assign`
 - `POST /jobs/{job_id}/unassign`
 - `POST /jobs/{job_id}/start`
 - `POST /jobs/{job_id}/complete`
+- `POST /jobs/{job_id}/approve`
 - `POST /jobs/{job_id}/archive`
 - `POST /jobs/{job_id}/unarchive`
 - `DELETE /jobs/{job_id}`
-
-### Job Images and Annotation Sync
-
-- `GET /jobs/{job_id}`
-- `GET /jobs/{job_id}/images`
-- `GET /jobs/{job_id}/images/{image_id}`
 - `POST /jobs/{job_id}/annotations/sync`
 
-### Labels and Annotations
+### Job Images and Annotations
 
-- `GET /projects/{project_id}/labels`
-- `POST /projects/{project_id}/labels`
-- `PATCH /projects/{project_id}/labels/{label_id}`
-- `DELETE /projects/{project_id}/labels/{label_id}`
+- `GET /jobs/{job_id}/images`
+- `POST /jobs/{job_id}/images`
+- `POST /jobs/{job_id}/images/bulk`
+- `GET /images/{image_id}`
+- `PATCH /images/{image_id}`
+- `DELETE /images/{image_id}`
+- `GET /jobs/{job_id}/images/{image_id}/thumbnail`
+- `GET /jobs/{job_id}/images/{image_id}/file`
 
-### File Share
+- `GET /images/{image_id}/annotations`
+- `POST /images/{image_id}/annotations/tags`
+- `POST /images/{image_id}/annotations/tags/bulk`
+- `POST /images/{image_id}/annotations/detections`
+- `POST /images/{image_id}/annotations/detections/bulk`
+- `POST /images/{image_id}/annotations/segmentations`
+- `POST /images/{image_id}/annotations/segmentations/bulk`
+- `POST /images/{image_id}/annotations/keypoints`
+
+### File Share and Shared Images
 
 - `GET /share` (browse)
 - `POST /share/mkdir`
@@ -77,19 +110,26 @@ Base URL: `http://localhost:8001/api/v1`
 - `POST /share/batch-info`
 - `POST /share/resolve-selection`
 
-### Shared Images and Project Pool
-
 - `GET /shared-images`
 - `POST /shared-images/register`
 - `GET /shared-images/{image_id}`
 - `GET /shared-images/{image_id}/jobs`
 
-- `GET /projects/{project_id}/images` (project pool)\n+- `POST /projects/{project_id}/images`\n+- `DELETE /projects/{project_id}/images`\n+- `GET /projects/{project_id}/images/available`\n+- `GET /projects/{project_id}/explore`\n+- `GET /projects/{project_id}/explore/sidebar`
+### Project Pool and Explore
 
-### Tags and Categories
+- `GET /projects/{project_id}/images`
+- `POST /projects/{project_id}/images`
+- `DELETE /projects/{project_id}/images`
+- `GET /projects/{project_id}/images/available`
+- `GET /projects/{project_id}/explore`
+- `GET /projects/{project_id}/explore/sidebar`
+- `POST /projects/{project_id}/images/bulk-tag`
+- `DELETE /projects/{project_id}/images/bulk-tag`
+
+### Tags, Categories, Attributes
 
 - `GET /projects/{project_id}/tags`
-- `GET /projects/{project_id}/tags/uncategorized`
+- `GET /projects/{project_id}/tags/{tag_id}`
 - `POST /projects/{project_id}/tags`
 - `PATCH /projects/{project_id}/tags/{tag_id}`
 - `DELETE /projects/{project_id}/tags/{tag_id}`
@@ -99,8 +139,6 @@ Base URL: `http://localhost:8001/api/v1`
 - `POST /projects/{project_id}/tag-categories`
 - `PATCH /projects/{project_id}/tag-categories/{category_id}`
 - `DELETE /projects/{project_id}/tag-categories/{category_id}`
-
-### Attributes (metadata)
 
 - `GET /projects/{project_id}/attributes/schemas`
 - `POST /projects/{project_id}/attributes/schemas`
@@ -118,10 +156,12 @@ Base URL: `http://localhost:8001/api/v1`
 - `POST /projects/{project_id}/exports/preview`
 - `GET /projects/{project_id}/exports/{export_id}`
 - `GET /projects/{project_id}/exports/{export_id}/download`
+- `DELETE /projects/{project_id}/exports/{export_id}`
 
 - `GET /projects/{project_id}/exports/classification-options`
 - `GET /projects/{project_id}/saved-filters`
 - `POST /projects/{project_id}/saved-filters`
+- `GET /projects/{project_id}/saved-filters/{filter_id}`
 - `PATCH /projects/{project_id}/saved-filters/{filter_id}`
 - `DELETE /projects/{project_id}/saved-filters/{filter_id}`
 

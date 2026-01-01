@@ -14,11 +14,10 @@ separate inference service for SAM3.
 - Redis (cache, queue)
 - File share storage (`/data/share`) and export storage (`/data/exports`)
 
-## Deployment Modes
+## Supported Stack
 
-- Solo: UI + SAM3 only, local IndexedDB storage, no auth.
-- Dev: full stack with hot reload (`docker/docker-compose.dev.yml`).
-- Team: full stack behind Traefik (`docker/docker-compose.team.yml`).
+The supported runtime is the Docker dev stack in `docker/docker-compose.dev.yml`
+with the services listed above.
 
 ## Request Flows
 
@@ -28,7 +27,7 @@ separate inference service for SAM3.
 2. UI calls API Core `/api/v1/inference/*`.
 3. API Core proxies to SAM3 or the BYOM endpoint and normalizes the response.
 
-### Annotation Sync (team mode)
+### Annotation Sync (job mode)
 
 1. UI stores edits locally and marks pending changes.
 2. Auto-save batches create/update/delete operations by image.

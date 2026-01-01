@@ -1,22 +1,15 @@
 flowchart LR
-  subgraph Client
-    user[User] --> web["Web UI"]
-    web --> idb[(IndexedDB (solo mode))]
-  end
+  user["Annotator"] --> web["Web UI (React + Vite)"]
+  web --> core["API Core (FastAPI)"]
 
-  subgraph Core["API Core (FastAPI)"]
-    core["API Core"]
-    core --> worker["Celery Worker"]
-    core --> db[(PostgreSQL)]
-    core --> redis[(Redis)]
-    core --> share["File Share /data/share"]
-    core --> exports["Export Storage /data/exports"]
-  end
+  core --> db[(PostgreSQL)]
+  core --> redis[(Redis)]
+  core --> share["File Share /data/share"]
+  core --> exports["Export Storage /data/exports"]
+  core --> worker["API Core Worker (Celery)"]
+  worker --> exports
 
-  subgraph Inference
-    core --> proxy["Inference Proxy"]
-    proxy --> sam3["SAM3 Inference API"]
-    proxy --> byom["BYOM Endpoints"]
-  end
-
-  web --> core
+  core --> proxy["Inference Proxy"]
+  proxy --> sam3["SAM3 Inference API"]
+  sam3 --> model["SAM3 Model (HF Transformers)"]
+  proxy -.-> byom["BYOM Endpoints"]

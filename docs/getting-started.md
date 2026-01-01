@@ -8,7 +8,7 @@ This guide shows how to run AnnotateANU with Docker or locally.
 - HuggingFace token for `facebook/sam3`
 - Local dev only: Node.js 18+ and Python 3.12+
 
-## Quick Start (dev stack)
+## Quick Start (Docker dev stack)
 
 ```bash
 cp apps/api-inference/.env.example apps/api-inference/.env
@@ -34,32 +34,7 @@ Open:
 - SAM3 API docs: http://localhost:8000/docs
 - API Core docs: http://localhost:8001/docs
 
-## Run Modes
-
-### Dev (full stack with hot reload)
-
-```bash
-make docker-up
-```
-
-Services: web, api-core, api-core-worker, postgres, redis, sam3 inference.
-
-### Solo (local-only annotation)
-
-```bash
-make docker-up-solo
-```
-
-Open http://localhost:3000/annotation.
-Solo mode uses IndexedDB storage and does not run API Core or auth.
-
-### Team (Traefik + full stack)
-
-```bash
-make docker-up-team
-```
-
-Open http://localhost for the UI and http://localhost:8080 for Traefik.
+Services started: web, api-core, api-core-worker, postgres, redis, sam3 inference.
 
 ## Local Development (no Docker)
 

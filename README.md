@@ -6,13 +6,13 @@
   Self-hosted image annotation with SAM3-assisted segmentation and BYOM inference.
 
   AnnotateANU pairs a React/Konva canvas with a FastAPI core for projects, tasks, and exports.
-  Run it as a full stack or in solo mode with local storage.
+  The supported setup is the Docker dev stack (web + API Core + SAM3 + worker + Postgres + Redis).
 
   [![Open Source](https://img.shields.io/badge/Open%20Source-100%25-brightgreen)](https://github.com/agfianf/annotate-anu.git)
   [![Privacy](https://img.shields.io/badge/Privacy-Self%20Hosted-blue)](https://github.com/agfianf/annotate-anu.git)
   [![Powered by SAM3](https://img.shields.io/badge/Powered%20by-Meta%20SAM3-0467DF)](https://huggingface.co/facebook/sam3)
 
-  [Get Started](#quick-start) · [API Docs](#api-docs) · [Report Bug](https://github.com/agfianf/annotate-anu/issues)
+  [Get Started](#quick-start) · [Docs](docs/README.md) · [API Docs](#api-docs) · [Report Bug](https://github.com/agfianf/annotate-anu/issues)
 </div>
 
 ---
@@ -25,14 +25,13 @@ and a React/Konva UI for annotation, exploration, and exports.
 
 ## Features
 
-- Annotation canvas with rectangle/polygon tools, selection, vertex editing, zoom/pan/autofit, undo/redo, and shortcuts.
-- SAM3 text and bbox prompts with single, auto-apply, and batch modes; BYOM proxy with auto-detect support.
-- Projects, tasks, and jobs with train/val/test splits, job chunking, assignment, status tracking, and archiving.
-- Project setup: README editor, labels with colors, annotation type toggles, allowed models, and team members.
-- File share browser with uploads, shared image registry, and a project image pool.
-- Explore view with a virtualized gallery, tags and categories, attribute/size/path filters, bulk tagging, and analytics panels.
-- Exports: local COCO/YOLO from the annotation app; server-side exports (COCO JSON, manifest CSV, image folders) with saved filters and history.
-- JWT auth with role-based access and admin user management.
+- Annotation canvas with rectangle, polygon, and point tools, selection, vertex editing, zoom/pan, undo/redo, and shortcuts.
+- SAM3 text and bbox prompts with single, auto-apply, and batch modes plus auto-detect helpers.
+- Projects, tasks, and jobs with assignment, status tracking, approvals, and train/val/test splits.
+- File share browser with uploads, shared image registry, project image pools, and tag/category metadata.
+- Explore view with a virtualized gallery, filters, bulk tagging, and analytics panels.
+- Exports: server-side datasets (COCO JSON, manifest CSV, image folders) plus local COCO/YOLO export from the annotation app.
+- BYOM registry with inference proxy, plus admin user management and role-based auth.
 
 ## Demo
 
@@ -45,20 +44,25 @@ and a React/Konva UI for annotation, exploration, and exports.
 
 ```mermaid
 flowchart LR
-  user[Annotator] --> web["Web UI (React + Konva)"]
+  user["Annotator"] --> web["Web UI (React + Vite)"]
   web --> core["API Core (FastAPI)"]
-
-  core --> inference["SAM3 Inference API"]
-  inference --> sam3["SAM3 Model (HF Transformers)"]
-  core -.-> byom["BYOM Endpoints"]
 
   core --> db[(PostgreSQL)]
   core --> redis[(Redis)]
-  core --> storage["File Share + Export Storage"]
-  core --> worker["Celery Worker"]
+  core --> share["File Share /data/share"]
+  core --> exports["Export Storage /data/exports"]
+  core --> worker["API Core Worker (Celery)"]
+  worker --> exports
+
+  core --> proxy["Inference Proxy"]
+  proxy --> sam3["SAM3 Inference API"]
+  sam3 --> model["SAM3 Model (HF Transformers)"]
+  proxy -.-> byom["BYOM Endpoints"]
 ```
 
-## Services (dev stack)
+Diagram source: `docs/architecture/system-overview.mmd`.
+
+## Services (Docker dev stack)
 
 | Service | Responsibility | Port |
 | --- | --- | --- |
@@ -67,13 +71,7 @@ flowchart LR
 | SAM3 Inference API | Text, bbox, batch segmentation | 8000 |
 | API Core Worker | Export jobs and background tasks | - |
 | PostgreSQL | Core data store | 5432 |
-| Redis | Cache and task queue | 6379 |
-
-## Modes
-
-- Solo (`docker/docker-compose.solo.yml`): SAM3 + web UI only, local IndexedDB storage, no API core or auth.
-- Dev (`docker/docker-compose.dev.yml`): full stack with hot reload (API core, worker, Postgres, Redis).
-- Team (`docker/docker-compose.team.yml`): full stack behind Traefik with production-style routing.
+| Redis | Cache and task queue | - |
 
 ## Quick Start
 
@@ -90,13 +88,13 @@ cp apps/api-core/.env.example apps/api-core/.env
 cp apps/web/.env.example apps/web/.env
 ```
 
-Add your HuggingFace token:
+Add your HuggingFace token in `apps/api-inference/.env`:
 
 ```bash
 HF_TOKEN=hf_your_token_here
 ```
 
-### Start the dev stack
+### Start the stack
 
 ```bash
 make docker-up
@@ -106,22 +104,6 @@ Services:
 - Web: http://localhost:5173
 - SAM3 API docs: http://localhost:8000/docs
 - API Core docs: http://localhost:8001/docs
-
-### Solo mode (local annotation only)
-
-```bash
-make docker-up-solo
-```
-
-Open http://localhost:3000/annotation for local-only annotation with IndexedDB storage.
-
-### Team mode (Traefik + full stack)
-
-```bash
-make docker-up-team
-```
-
-Frontend is available at http://localhost and Traefik at http://localhost:8080.
 
 ## Local Development (no Docker)
 
@@ -143,8 +125,8 @@ make frontend-dev
 
 - `apps/api-inference/.env`
   - `HF_TOKEN` (required)
-  - `SAM3_DEVICE` (`auto`, `cpu`, `cuda`)
-  - `MAX_IMAGE_SIZE_MB`, `MAX_BATCH_SIZE`
+  - `SAM3_MODEL_NAME`, `SAM3_DEVICE` (`auto`, `cpu`, `cuda`)
+  - `MAX_IMAGE_SIZE_MB`, `MAX_BATCH_SIZE`, `MAX_IMAGE_DIMENSION`
 - `apps/api-core/.env`
   - `DATABASE_URL`, `DATABASE_URL_SYNC`
   - `REDIS_URL`
@@ -153,6 +135,7 @@ make frontend-dev
 - `apps/web/.env`
   - `VITE_SAM3_API_URL`
   - `VITE_CORE_API_URL`
+  - `VITE_ENV`
 
 ## API Docs
 

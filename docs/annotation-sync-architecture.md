@@ -1,4 +1,4 @@
-# Annotation Sync (Team Mode)
+# Annotation Sync (Job Mode)
 
 This document explains how annotations sync between the web UI and API Core when a user
 opens a job in the annotation app.
@@ -8,7 +8,7 @@ opens a job in the annotation app.
 In job mode, the UI stores edits locally and periodically syncs changes to API Core.
 The sync pipeline batches create/update/delete operations per image.
 
-Solo mode does not sync to the backend and uses IndexedDB only.
+When no job ID is present, the annotation app uses IndexedDB-only storage and skips sync.
 
 ## IDs and Mapping
 

@@ -10,13 +10,12 @@ It focuses on how the system works, how to operate it, and how features fit toge
 - Explore gallery and filters: `docs/explore-sidebar-image-gallery.md`
 - Data management and file share: `docs/data-management-feature.md`
 - Exports and history: `docs/export-workflow.md`
-- Annotation sync (team mode): `docs/annotation-sync-architecture.md`
+- Annotation sync (job mode): `docs/annotation-sync-architecture.md`
 
 ## Additional Guides
 
 - Canvas architecture: `docs/hybrid-canvas-architecture.md`
 - Pixi optimization notes: `docs/pixi_performance_plan.md`
-- Export diff roadmap: `docs/plan_exporter.md`
 - Color/theme guide: `docs/COLOR_THEME_GUIDE.md`
 - Database schema (dbml): `docs/database-schema.dbml`
 
