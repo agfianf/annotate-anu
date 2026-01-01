@@ -12,6 +12,7 @@ from app.dependencies.database import get_async_transaction_conn
 from app.helpers.response_api import JsonResponse
 from app.repositories.project_image import ProjectImageRepository
 from app.repositories.tag import TagRepository
+from app.repositories.tag_category import TagCategoryRepository
 from app.repositories.shared_image import SharedImageRepository
 from app.schemas.data_management import (
     DatasetStatsResponse,
@@ -89,6 +90,10 @@ async def get_dataset_stats(
     all_tags = await TagRepository.list_with_usage_count(connection, project_id)
     tag_map = {tag["id"]: tag for tag in all_tags}
 
+    # Get all tag categories for category info lookup
+    all_categories = await TagCategoryRepository.list_for_project(connection, project_id)
+    category_map = {cat["id"]: cat for cat in all_categories}
+
     # Compute tag distribution from filtered images
     tag_counter = Counter()
     for img in images:
@@ -97,17 +102,24 @@ async def get_dataset_stats(
         for tag in image_tags:
             tag_counter[tag["id"]] += 1
 
-    # Build tag distribution list
+    # Build tag distribution list with category info
     tag_distribution = []
     for tag_id, count in tag_counter.most_common():
         tag_info = tag_map.get(tag_id)
         if tag_info:
+            # Get category info if available
+            category_id = tag_info.get("category_id")
+            category_info = category_map.get(category_id) if category_id else None
+
             tag_distribution.append(
                 TagDistribution(
                     tag_id=str(tag_id),
                     name=tag_info["name"],
                     count=count,
                     color=tag_info.get("color", "#6B7280"),
+                    category_id=str(category_id) if category_id else None,
+                    category_name=category_info["name"] if category_info else None,
+                    category_color=category_info.get("color") if category_info else None,
                 )
             )
 

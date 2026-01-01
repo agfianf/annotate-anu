@@ -4,7 +4,7 @@
  * Features emerald glass morphism design with click-to-filter interactions
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import {
   BarChart,
   Bar,
@@ -14,8 +14,6 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  Legend,
-  ReferenceLine,
 } from 'recharts';
 import {
   Loader2,
@@ -25,13 +23,20 @@ import {
   Tag as TagIcon,
   TrendingUp,
   AlertTriangle,
-  Info,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import toast from 'react-hot-toast';
 import type { PanelProps } from '@/types/analytics';
+import { useAnalyticsToast } from '@/hooks/useAnalyticsToast';
 import { useDatasetStats } from '@/hooks/useDatasetStats';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import {
+  CHART_CONFIG,
+  getCellProps,
+  getBarProps,
+  getGridProps,
+  getXAxisProps,
+  getYAxisProps,
+} from '../shared/chartConfig';
 
 /**
  * Format file size to human-readable format
@@ -83,14 +88,34 @@ function identifyOutliers(values: number[]): Set<number> {
 }
 
 /**
+ * Types for grouped tag chart
+ */
+interface TagItem {
+  name: string;
+  count: number;
+  color: string;
+  tag_id: string;
+}
+
+interface GroupedCategory {
+  category_id: string | null;
+  category_name: string;
+  category_color: string;
+  tags: TagItem[];
+}
+
+/**
  * Custom tooltip for charts with glass morphism styling
  */
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload || !payload.length) return null;
 
-  const dataPoint = payload[0].payload;
+  // Find the data point (may be in either payload for stacked bars)
+  const dataPoint = payload.find((p: any) => p.payload)?.payload || payload[0].payload;
   const isOutlier = dataPoint.isOutlier;
   const percentOfMean = dataPoint.percentOfMean;
+  const count = dataPoint.count;
+  const categoryName = dataPoint.category_name;
 
   return (
     <div
@@ -102,8 +127,13 @@ function CustomTooltip({ active, payload, label }: any) {
       }}
     >
       <p className="text-sm font-semibold text-gray-900 mb-1">{label}</p>
+      {categoryName && (
+        <p className="text-xs text-gray-500 mb-1">
+          {categoryName}
+        </p>
+      )}
       <p className="text-sm text-emerald-600 font-medium">
-        {payload[0].value.toLocaleString()} images
+        {(count ?? payload[0].value).toLocaleString()} images
       </p>
       {percentOfMean !== undefined && (
         <p className="text-xs text-gray-500 mt-1">
@@ -132,25 +162,65 @@ export default function DatasetStatsPanel({
   });
 
   const prefersReducedMotion = useReducedMotion();
+  const { showSuccess } = useAnalyticsToast();
 
-  // Transform tag distribution for chart with outlier detection
-  const tagChartData = useMemo(() => {
-    if (!data?.tag_distribution) return [];
+  // Dimension chart container reference for measuring
+  const dimensionChartRef = useRef<HTMLDivElement>(null);
+  const [chartHasValidDimensions, setChartHasValidDimensions] = useState(false);
 
-    // Identify outliers in tag distribution
-    const counts = data.tag_distribution.map((tag) => tag.count);
-    const outlierIndices = identifyOutliers(counts);
-    const { mean } = calculateStats(counts);
+  // Track chart container dimensions
+  useEffect(() => {
+    const element = dimensionChartRef.current;
+    if (!element) return;
 
-    // Limit to top 20 tags for better visualization
-    return data.tag_distribution.slice(0, 20).map((tag, index) => ({
-      name: tag.name,
-      count: tag.count,
-      color: tag.color || '#10B981',
-      tag_id: tag.tag_id,
-      isOutlier: outlierIndices.has(index),
-      percentOfMean: mean > 0 ? (tag.count / mean) * 100 : 0,
-    }));
+    const checkDimensions = () => {
+      const rect = element.getBoundingClientRect();
+      setChartHasValidDimensions(rect.width > 0 && rect.height > 0);
+    };
+
+    // Initial check
+    checkDimensions();
+
+    const resizeObserver = new ResizeObserver(checkDimensions);
+    resizeObserver.observe(element);
+
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  // Group tags by category for horizontal grouped bar chart
+  const { groupedTagData, maxTagCount } = useMemo(() => {
+    if (!data?.tag_distribution) return { groupedTagData: [], maxTagCount: 0 };
+
+    const groups: Map<string, GroupedCategory> = new Map();
+    let maxCount = 0;
+
+    // Limit to top 20 tags and group by category
+    data.tag_distribution.slice(0, 20).forEach((tag) => {
+      const categoryKey = tag.category_id || 'uncategorized';
+
+      if (!groups.has(categoryKey)) {
+        groups.set(categoryKey, {
+          category_id: tag.category_id || null,
+          category_name: tag.category_name || 'Uncategorized',
+          category_color: tag.category_color || '#6B7280',
+          tags: [],
+        });
+      }
+
+      groups.get(categoryKey)!.tags.push({
+        name: tag.name,
+        count: tag.count,
+        color: tag.color || '#10B981',
+        tag_id: tag.tag_id,
+      });
+
+      if (tag.count > maxCount) maxCount = tag.count;
+    });
+
+    return {
+      groupedTagData: Array.from(groups.values()),
+      maxTagCount: maxCount,
+    };
   }, [data]);
 
   // Transform dimension histogram for chart with outlier detection
@@ -199,37 +269,31 @@ export default function DatasetStatsPanel({
   /**
    * Handle tag bar click - filter gallery to clicked tag
    */
-  const handleTagClick = (data: any) => {
-    if (!data || !data.tag_id) return;
+  const handleTagClick = (tag: TagItem) => {
+    if (!tag || !tag.tag_id) return;
 
     // Update filters to show only images with this tag
     onFilterUpdate({
-      tag_ids: [data.tag_id],
+      tag_ids: [tag.tag_id],
     });
 
-    toast.success(`Filtering by tag: ${data.name}`, {
-      icon: '🏷️',
-      duration: 3000,
-    });
+    showSuccess(`Filtering by tag: ${tag.name}`, { icon: '🏷️' });
   };
 
   /**
    * Handle dimension bucket click - filter by dimension range
    */
-  const handleDimensionClick = (data: any) => {
-    if (!data) return;
+  const handleDimensionClick = (bucketData: any) => {
+    if (!bucketData) return;
 
     onFilterUpdate({
-      width_min: data.min,
-      width_max: data.max,
-      height_min: data.min,
-      height_max: data.max,
+      width_min: bucketData.min,
+      width_max: bucketData.max,
+      height_min: bucketData.min,
+      height_max: bucketData.max,
     });
 
-    toast.success(`Filtering by size: ${data.name}`, {
-      icon: '📐',
-      duration: 3000,
-    });
+    showSuccess(`Filtering by size: ${bucketData.name}`, { icon: '📐' });
   };
 
   // Loading state
@@ -260,7 +324,7 @@ export default function DatasetStatsPanel({
   }
 
   // Empty state
-  if (!data || (tagChartData.length === 0 && dimensionChartData.length === 0)) {
+  if (!data || (groupedTagData.length === 0 && dimensionChartData.length === 0)) {
     return (
       <div className="flex items-center justify-center h-full min-h-[200px] p-4">
         <div className="text-center">
@@ -314,7 +378,7 @@ export default function DatasetStatsPanel({
             <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">Tags</span>
           </div>
           <div className="text-base font-bold text-gray-900">
-            {statsInsights?.totalTags || tagChartData.length}
+            {statsInsights?.totalTags || data?.tag_distribution?.length || 0}
           </div>
           <div className="text-[10px] text-gray-500">
             {statsInsights && statsInsights.tagOutliers > 0 ? (
@@ -366,8 +430,8 @@ export default function DatasetStatsPanel({
         </div>
       </motion.div>
 
-      {/* Tag Distribution Chart */}
-      {tagChartData.length > 0 && (
+      {/* Tag Distribution Chart - Grouped by Category */}
+      {groupedTagData.length > 0 && (
         <motion.div
           initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -380,44 +444,76 @@ export default function DatasetStatsPanel({
             <span className="text-[10px] text-gray-400 ml-auto">Click to filter</span>
           </div>
 
-          <div style={{ width: '100%', height: 200 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={tagChartData}
-                margin={{ top: 5, right: 10, left: -10, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis
-                  dataKey="name"
-                  angle={-45}
-                  textAnchor="end"
-                  height={60}
-                  tick={{ fill: '#6B7280', fontSize: 9 }}
-                  interval={0}
-                />
-                <YAxis tick={{ fill: '#6B7280', fontSize: 9 }} width={30} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(16, 185, 129, 0.1)' }} />
-                <Bar
-                  dataKey="count"
-                  onClick={handleTagClick}
-                  radius={[4, 4, 0, 0]}
-                  cursor="pointer"
-                  animationDuration={prefersReducedMotion ? 0 : 500}
-                  style={{ outline: 'none' }}
-                >
-                  {tagChartData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.color}
-                      stroke={entry.isOutlier ? '#F97316' : 'none'}
-                      strokeWidth={entry.isOutlier ? 2 : 0}
-                      className="hover:opacity-80 transition-opacity"
-                      style={{ outline: 'none' }}
+          {/* Custom Horizontal Grouped Bar Chart */}
+          <div className="space-y-0.5 max-h-[240px] overflow-y-auto">
+            {groupedTagData.map((group, groupIndex) => (
+              <div key={group.category_id || 'uncategorized'}>
+                {/* Tags in this category */}
+                {group.tags.map((tag) => (
+                  <div
+                    key={tag.tag_id}
+                    className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-emerald-50/50 transition-colors"
+                    onClick={() => handleTagClick(tag)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === 'Enter' && handleTagClick(tag)}
+                    aria-label={`${tag.name}: ${tag.count} images. Category: ${group.category_name}`}
+                  >
+                    {/* Category color indicator */}
+                    <div
+                      className="w-1 h-3.5 flex-shrink-0"
+                      style={{ backgroundColor: group.category_color }}
                     />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                    {/* Tag name */}
+                    <span className="w-20 min-w-[80px] text-[10px] text-gray-600 truncate" title={tag.name}>
+                      {tag.name}
+                    </span>
+                    {/* Bar container */}
+                    <div className="flex-1 h-3.5 bg-gray-100">
+                      <div
+                        className="h-full transition-all duration-300"
+                        style={{
+                          width: `${maxTagCount > 0 ? (tag.count / maxTagCount) * 100 : 0}%`,
+                          backgroundColor: tag.color,
+                        }}
+                      />
+                    </div>
+                    {/* Count */}
+                    <span className="w-8 text-[10px] text-gray-500 text-right tabular-nums">
+                      {tag.count}
+                    </span>
+                  </div>
+                ))}
+
+                {/* Category divider with label (after each group except last) */}
+                {groupIndex < groupedTagData.length - 1 && (
+                  <div className="flex items-center gap-1.5 py-1 my-0.5">
+                    <div className="flex-1 border-t border-dashed border-gray-300" />
+                    <span
+                      className="text-[9px] font-medium px-1.5"
+                      style={{ color: group.category_color }}
+                    >
+                      {group.category_name}
+                    </span>
+                    <div className="flex-1 border-t border-dashed border-gray-300" />
+                  </div>
+                )}
+
+                {/* Final category label at the end of the last group */}
+                {groupIndex === groupedTagData.length - 1 && (
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <div className="flex-1 border-t border-dashed border-gray-300" />
+                    <span
+                      className="text-[9px] font-medium px-1.5"
+                      style={{ color: group.category_color }}
+                    >
+                      {group.category_name}
+                    </span>
+                    <div className="flex-1 border-t border-dashed border-gray-300" />
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </motion.div>
       )}
@@ -436,48 +532,48 @@ export default function DatasetStatsPanel({
             <span className="text-[10px] text-gray-400 ml-auto">Click to filter</span>
           </div>
 
-          <div style={{ width: '100%', height: 160 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={dimensionChartData}
-                margin={{ top: 5, right: 10, left: -10, bottom: 40 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis
-                  dataKey="name"
-                  angle={-30}
-                  textAnchor="end"
-                  height={40}
-                  tick={{ fill: '#6B7280', fontSize: 9 }}
-                />
-                <YAxis tick={{ fill: '#6B7280', fontSize: 9 }} width={30} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(139, 92, 246, 0.1)' }} />
-                <Bar
-                  dataKey="count"
-                  onClick={handleDimensionClick}
-                  radius={[4, 4, 0, 0]}
-                  cursor="pointer"
-                  animationDuration={prefersReducedMotion ? 0 : 500}
-                  style={{ outline: 'none' }}
+          <div ref={dimensionChartRef} style={{ width: '100%', height: 160, minWidth: 1, minHeight: 1 }}>
+            {chartHasValidDimensions ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <BarChart
+                  data={dimensionChartData}
+                  margin={CHART_CONFIG.marginCompact}
                 >
-                  {dimensionChartData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill="url(#purpleGradient)"
-                      stroke={entry.isOutlier ? '#F97316' : 'none'}
-                      strokeWidth={entry.isOutlier ? 2 : 0}
-                      style={{ outline: 'none' }}
-                    />
-                  ))}
-                </Bar>
-                <defs>
-                  <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
-                    <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.6} />
-                  </linearGradient>
-                </defs>
-              </BarChart>
-            </ResponsiveContainer>
+                  <defs>
+                    <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
+                      <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.6} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid {...getGridProps()} />
+                  <XAxis
+                    dataKey="name"
+                    angle={-30}
+                    textAnchor="end"
+                    height={40}
+                    tick={CHART_CONFIG.axisStyle}
+                  />
+                  <YAxis {...getYAxisProps()} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(139, 92, 246, 0.1)' }} />
+                  <Bar
+                    dataKey="count"
+                    onClick={handleDimensionClick}
+                    {...getBarProps(!prefersReducedMotion)}
+                  >
+                    {dimensionChartData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        {...getCellProps('url(#purpleGradient)')}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="w-4 h-4 text-purple-300 animate-spin" />
+              </div>
+            )}
           </div>
         </motion.div>
       )}

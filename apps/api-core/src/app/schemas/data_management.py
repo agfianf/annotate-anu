@@ -593,6 +593,9 @@ class TagDistribution(BaseModel):
     name: str
     count: int
     color: str | None = None
+    category_id: str | None = None
+    category_name: str | None = None
+    category_color: str | None = None
 
 
 class DimensionBucket(BaseModel):

@@ -1,10 +1,11 @@
 /**
  * Analytics Panel Container
  * Main container for analytics panels with tab/stacked layout
+ * Optimized for stable rendering to prevent flickering during filter updates
  */
 
-import { Suspense, memo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Suspense, memo, useMemo, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useAnalyticsPanels } from '@/hooks/useAnalyticsPanels';
 import { getPanelDefinition } from './panelRegistry';
@@ -27,9 +28,11 @@ function PanelLoading() {
 }
 
 /**
- * Render panel content with lazy loading
+ * Memoized panel renderer
+ * Custom comparison: only re-render if projectId or panelType changes
+ * Filter changes are handled internally by each panel's data hooks
  */
-function RenderPanel({
+const MemoizedRenderPanel = memo(function MemoizedRenderPanel({
   panelType,
   projectId,
   filters,
@@ -52,7 +55,14 @@ function RenderPanel({
       />
     </Suspense>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison: only re-render if projectId or panelType changes
+  // Filter changes don't require re-render since data hooks handle caching independently
+  return (
+    prevProps.projectId === nextProps.projectId &&
+    prevProps.panelType === nextProps.panelType
+  );
+});
 
 export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
   projectId,
@@ -69,20 +79,33 @@ export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
 
   const prefersReducedMotion = useReducedMotion();
 
+  // Stabilize onFilterUpdate callback to prevent unnecessary re-renders
+  const onFilterUpdateRef = useRef(onFilterUpdate);
+  onFilterUpdateRef.current = onFilterUpdate;
+  const stableOnFilterUpdate = useCallback(
+    (updates: Partial<ExploreFilters>) => onFilterUpdateRef.current(updates),
+    []
+  );
+
+  // Generate stable container key based on panel configuration only
+  const panelContainerKey = useMemo(
+    () => `panels-${panels.map(p => p.id).join('-')}-${layoutMode}`,
+    [panels, layoutMode]
+  );
+
   if (panels.length === 0) {
     return null;
   }
 
-  // Tabbed layout
+  // Tabbed layout - uses CSS visibility switching instead of AnimatePresence
   if (layoutMode === 'tabs') {
     const activePanelId = activeTabId || panels[0]?.id;
-    const activePanel = panels.find(p => p.id === activePanelId);
 
     return (
       <motion.div
+        key={panelContainerKey}
         initial={prefersReducedMotion ? {} : { opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
-        exit={prefersReducedMotion ? {} : { opacity: 0, x: -20 }}
         transition={{ duration: prefersReducedMotion ? 0.01 : 0.25 }}
         className="w-full min-w-0 flex flex-col h-full glass-strong rounded-xl overflow-hidden"
         role="region"
@@ -101,6 +124,7 @@ export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
             return (
               <button
                 key={panel.id}
+                id={`tab-${panel.id}`}
                 onClick={() => setActiveTab(panel.id)}
                 className={`group flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${
                   isActive
@@ -130,32 +154,29 @@ export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
           })}
         </div>
 
-        {/* Tab Panel Content */}
-        <div
-          className="flex-1 overflow-auto"
-          role="tabpanel"
-          id={activePanel ? `panel-${activePanel.id}` : undefined}
-          aria-labelledby={activePanel ? `tab-${activePanel.id}` : undefined}
-        >
-          <AnimatePresence mode="wait">
-            {activePanel && (
-              <motion.div
-                key={activePanel.id}
-                initial={prefersReducedMotion ? {} : { opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={prefersReducedMotion ? {} : { opacity: 0, y: -10 }}
-                transition={{ duration: prefersReducedMotion ? 0.01 : 0.2 }}
-                className="h-full overflow-auto"
-              >
-                <RenderPanel
-                  panelType={activePanel.type}
-                  projectId={projectId}
-                  filters={filters}
-                  onFilterUpdate={onFilterUpdate}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
+        {/* Tab Panel Content - CSS visibility switching for smooth transitions */}
+        <div className="flex-1 overflow-hidden relative">
+          {panels.map((panel) => (
+            <div
+              key={panel.id}
+              id={`panel-${panel.id}`}
+              role="tabpanel"
+              aria-labelledby={`tab-${panel.id}`}
+              aria-hidden={panel.id !== activePanelId}
+              className={`absolute inset-0 overflow-auto transition-opacity duration-200 ${
+                panel.id === activePanelId
+                  ? 'opacity-100 z-10'
+                  : 'opacity-0 z-0 pointer-events-none'
+              }`}
+            >
+              <MemoizedRenderPanel
+                panelType={panel.type}
+                projectId={projectId}
+                filters={filters}
+                onFilterUpdate={stableOnFilterUpdate}
+              />
+            </div>
+          ))}
         </div>
       </motion.div>
     );
@@ -164,9 +185,9 @@ export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
   // Stacked layout
   return (
     <motion.div
+      key={panelContainerKey}
       initial={prefersReducedMotion ? {} : { opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
-      exit={prefersReducedMotion ? {} : { opacity: 0, x: -20 }}
       transition={{ duration: prefersReducedMotion ? 0.01 : 0.25 }}
       className="w-full min-w-0 flex flex-col h-full overflow-hidden"
       role="region"
@@ -181,11 +202,11 @@ export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
             className="min-h-[250px] sm:min-h-[300px] flex-shrink-0"
             aria-label={`Panel ${index + 1} of ${panels.length}`}
           >
-            <RenderPanel
+            <MemoizedRenderPanel
               panelType={panel.type}
               projectId={projectId}
               filters={filters}
-              onFilterUpdate={onFilterUpdate}
+              onFilterUpdate={stableOnFilterUpdate}
             />
           </PanelWrapper>
         ))}

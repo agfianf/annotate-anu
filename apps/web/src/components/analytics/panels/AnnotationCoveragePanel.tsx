@@ -4,7 +4,7 @@
  */
 
 import { CheckCircle2, AlertCircle, Tag } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useAnalyticsToast } from '@/hooks/useAnalyticsToast';
 import {
   BarChart,
   Bar,
@@ -30,6 +30,14 @@ import {
   Legend,
   LegendItem,
 } from '../shared/PanelComponents';
+import {
+  CHART_CONFIG,
+  getCellProps,
+  getBarProps,
+  getGridProps,
+  getXAxisProps,
+  getYAxisProps,
+} from '../shared/chartConfig';
 
 /**
  * Compact tooltip for coverage charts
@@ -69,19 +77,15 @@ export default function AnnotationCoveragePanel({
     enabled: !!projectId,
   });
 
+  const { showSuccess } = useAnalyticsToast();
+
   const handleDensityClick = (bucketData: any) => {
     if (!bucketData) return;
-    toast.success(`Filtering: ${bucketData.bucket} annotations`, {
-      icon: '📊',
-      duration: 2000,
-    });
+    showSuccess(`Filtering: ${bucketData.bucket} annotations`, { icon: '📊' });
   };
 
   const handleUnannotatedClick = () => {
-    toast.success('Filtering to unannotated images', {
-      icon: '⚠️',
-      duration: 2000,
-    });
+    showSuccess('Filtering to unannotated images', { icon: '⚠️' });
   };
 
   if (isLoading) return <PanelLoadingState message="Loading coverage..." />;
@@ -131,28 +135,23 @@ export default function AnnotationCoveragePanel({
             data={data.density_histogram}
             margin={{ top: 5, right: 10, left: -10, bottom: 20 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <CartesianGrid {...getGridProps()} />
             <XAxis
               dataKey="bucket"
-              tick={{ fill: '#6b7280', fontSize: 9 }}
+              {...getXAxisProps(false)}
               tickLine={{ stroke: '#9ca3af' }}
             />
-            <YAxis
-              tick={{ fill: '#6b7280', fontSize: 9 }}
-              width={30}
-            />
+            <YAxis {...getYAxisProps()} />
             <Tooltip content={<CoverageTooltip />} />
             <Bar
               dataKey="count"
               onClick={handleDensityClick}
-              radius={[4, 4, 0, 0]}
-              cursor="pointer"
-              animationDuration={500}
+              {...getBarProps(true)}
             >
               {data.density_histogram.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={getDensityColor(entry.bucket)}
+                  {...getCellProps(getDensityColor(entry.bucket))}
                   className="hover:opacity-80 transition-opacity"
                 />
               ))}

@@ -4,7 +4,7 @@
  */
 
 import { Scale, AlertTriangle, Tag, CheckCircle, Download } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { useAnalyticsToast } from '@/hooks/useAnalyticsToast';
 import {
   BarChart,
   Bar,
@@ -31,6 +31,14 @@ import {
   Legend,
   LegendItem,
 } from '../shared/PanelComponents';
+import {
+  CHART_CONFIG,
+  getCellProps,
+  getBarProps,
+  getGridProps,
+  getXAxisProps,
+  getYAxisProps,
+} from '../shared/chartConfig';
 
 /**
  * Compact tooltip for class distribution chart
@@ -79,10 +87,12 @@ export default function ClassBalancePanel({
     enabled: !!projectId,
   });
 
+  const { showSuccess } = useAnalyticsToast();
+
   const handleClassClick = (classData: any) => {
     if (!classData || !classData.tag_id) return;
     onFilterUpdate({ tag_ids: [classData.tag_id] });
-    toast.success(`Filtering: ${classData.tag_name}`, { icon: '🏷️', duration: 2000 });
+    showSuccess(`Filtering: ${classData.tag_name}`, { icon: '🏷️' });
   };
 
   const handleExport = () => {
@@ -101,7 +111,7 @@ export default function ClassBalancePanel({
     a.download = `class-balance-${projectId}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('Exported!', { icon: '💾', duration: 2000 });
+    showSuccess('Exported!', { icon: '💾' });
   };
 
   if (isLoading) return <PanelLoadingState message="Loading balance..." />;
@@ -185,30 +195,21 @@ export default function ClassBalancePanel({
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
-            margin={{ top: 5, right: 10, left: -10, bottom: 60 }}
+            margin={CHART_CONFIG.margin}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis
-              dataKey="tag_name"
-              angle={-45}
-              textAnchor="end"
-              height={60}
-              tick={{ fill: '#6b7280', fontSize: 9 }}
-              interval={0}
-            />
-            <YAxis tick={{ fill: '#6b7280', fontSize: 9 }} width={35} />
+            <CartesianGrid {...getGridProps()} />
+            <XAxis dataKey="tag_name" {...getXAxisProps(true)} />
+            <YAxis {...getYAxisProps()} width={35} />
             <Tooltip content={<ClassTooltip />} />
             <Bar
               dataKey="annotation_count"
               onClick={handleClassClick}
-              radius={[4, 4, 0, 0]}
-              cursor="pointer"
-              animationDuration={500}
+              {...getBarProps(true)}
             >
               {chartData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={getStatusColor(entry.status)}
+                  {...getCellProps(getStatusColor(entry.status))}
                   className="hover:opacity-80 transition-opacity"
                 />
               ))}

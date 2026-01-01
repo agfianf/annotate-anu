@@ -3,7 +3,7 @@
  * Reusable UI components for analytics panels with consistent compact styling
  */
 
-import { ReactNode } from 'react';
+import { ReactNode, useRef, useState, useEffect } from 'react';
 import { Loader2, AlertCircle, type LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -179,7 +179,8 @@ export function StatCard({
 }
 
 /**
- * Compact chart section wrapper
+ * Compact chart section wrapper with dimension validation
+ * Only renders children when container has valid dimensions to prevent Recharts warnings
  */
 export function ChartSection({
   icon: Icon,
@@ -197,6 +198,27 @@ export function ChartSection({
   children: ReactNode;
 }) {
   const styles = colorStyles[color];
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [hasValidDimensions, setHasValidDimensions] = useState(false);
+
+  // Track container dimensions using ResizeObserver
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const checkDimensions = () => {
+      const rect = element.getBoundingClientRect();
+      setHasValidDimensions(rect.width > 0 && rect.height > 0);
+    };
+
+    // Initial check
+    checkDimensions();
+
+    const resizeObserver = new ResizeObserver(checkDimensions);
+    resizeObserver.observe(element);
+
+    return () => resizeObserver.disconnect();
+  }, []);
 
   return (
     <div className={`p-3 rounded-lg border ${styles.border} bg-white/80`}>
@@ -205,8 +227,12 @@ export function ChartSection({
         <h3 className="text-xs font-semibold text-gray-700">{title}</h3>
         {hint && <span className="text-[10px] text-gray-400 ml-auto">{hint}</span>}
       </div>
-      <div style={{ width: '100%', height }}>
-        {children}
+      <div ref={containerRef} style={{ width: '100%', height, minWidth: 1, minHeight: 1 }}>
+        {hasValidDimensions ? children : (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="w-4 h-4 text-gray-300 animate-spin" />
+          </div>
+        )}
       </div>
     </div>
   );

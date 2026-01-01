@@ -55,9 +55,9 @@ import { getTextColorForBackground } from '@/lib/colors';
 import { ExportWizardModal } from './export';
 import type { FilterSnapshot } from '@/types/export';
 // Analytics Panel System
-import { AnalyticsPanelProvider } from '@/contexts/AnalyticsPanelContext';
+import { AnalyticsPanelContext, AnalyticsPanelProvider } from '@/contexts/AnalyticsPanelContext';
 import { AnalyticsPanelContainer, PanelLibrary } from './analytics';
-import { useAnalyticsPanels } from '@/hooks/useAnalyticsPanels';
+import type { LayoutMode } from '@/types/analytics';
 
 interface ProjectExploreTabProps {
   projectId: string;
@@ -111,6 +111,66 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
   // Sidebar collapse state (synced with UnifiedExploreSidebar)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Panel container resize state
+  const MIN_PANEL_WIDTH = 280;
+  const MAX_PANEL_WIDTH = 600;
+  const DEFAULT_PANEL_WIDTH = 380;
+
+  const [panelWidth, setPanelWidth] = useState(() => {
+    const saved = localStorage.getItem('explorePanelWidth');
+    return saved ? parseInt(saved, 10) : DEFAULT_PANEL_WIDTH;
+  });
+  const [isPanelResizing, setIsPanelResizing] = useState(false);
+  const panelContainerRef = useRef<HTMLDivElement>(null);
+
+  // Save panel width to localStorage
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      localStorage.setItem('explorePanelWidth', panelWidth.toString());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [panelWidth]);
+
+  // Panel resize handlers
+  const startPanelResizing = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsPanelResizing(true);
+  }, []);
+
+  const stopPanelResizing = useCallback(() => {
+    setIsPanelResizing(false);
+  }, []);
+
+  const resizePanel = useCallback(
+    (e: MouseEvent) => {
+      if (isPanelResizing && panelContainerRef.current) {
+        // Calculate width from right edge of viewport to mouse position
+        const containerRight = panelContainerRef.current.getBoundingClientRect().right;
+        const newWidth = containerRight - e.clientX;
+        if (newWidth >= MIN_PANEL_WIDTH && newWidth <= MAX_PANEL_WIDTH) {
+          setPanelWidth(newWidth);
+        }
+      }
+    },
+    [isPanelResizing]
+  );
+
+  useEffect(() => {
+    if (isPanelResizing) {
+      window.addEventListener('mousemove', resizePanel);
+      window.addEventListener('mouseup', stopPanelResizing);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      return () => {
+        window.removeEventListener('mousemove', resizePanel);
+        window.removeEventListener('mouseup', stopPanelResizing);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [isPanelResizing, resizePanel, stopPanelResizing]);
 
   // Search with debounce
   const [searchInput, setSearchInput] = useState('');
@@ -997,76 +1057,12 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     }
   }, [setFilters, setSidebarWidthRange, setSidebarHeightRange]);
 
-  // Inner component to access analytics panel context
-  const ProjectExploreContent = () => {
-    const {
-      isVisible: isPanelsVisible,
-      layoutMode,
-      setLayoutMode,
-      panelCount
-    } = useAnalyticsPanels();
-
-    // Panel container resize state
-    const MIN_PANEL_WIDTH = 280;
-    const MAX_PANEL_WIDTH = 600;
-    const DEFAULT_PANEL_WIDTH = 380;
-
-    const [panelWidth, setPanelWidth] = useState(() => {
-      const saved = localStorage.getItem('explorePanelWidth');
-      return saved ? parseInt(saved, 10) : DEFAULT_PANEL_WIDTH;
-    });
-    const [isPanelResizing, setIsPanelResizing] = useState(false);
-    const panelContainerRef = useRef<HTMLDivElement>(null);
-
-    // Save panel width to localStorage
-    useEffect(() => {
-      const timer = setTimeout(() => {
-        localStorage.setItem('explorePanelWidth', panelWidth.toString());
-      }, 300);
-      return () => clearTimeout(timer);
-    }, [panelWidth]);
-
-    // Panel resize handlers
-    const startPanelResizing = useCallback((e: React.MouseEvent) => {
-      e.preventDefault();
-      setIsPanelResizing(true);
-    }, []);
-
-    const stopPanelResizing = useCallback(() => {
-      setIsPanelResizing(false);
-    }, []);
-
-    const resizePanel = useCallback(
-      (e: MouseEvent) => {
-        if (isPanelResizing && panelContainerRef.current) {
-          // Calculate width from right edge of viewport to mouse position
-          const containerRight = panelContainerRef.current.getBoundingClientRect().right;
-          const newWidth = containerRight - e.clientX;
-          if (newWidth >= MIN_PANEL_WIDTH && newWidth <= MAX_PANEL_WIDTH) {
-            setPanelWidth(newWidth);
-          }
-        }
-      },
-      [isPanelResizing]
-    );
-
-    useEffect(() => {
-      if (isPanelResizing) {
-        window.addEventListener('mousemove', resizePanel);
-        window.addEventListener('mouseup', stopPanelResizing);
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-
-        return () => {
-          window.removeEventListener('mousemove', resizePanel);
-          window.removeEventListener('mouseup', stopPanelResizing);
-          document.body.style.cursor = '';
-          document.body.style.userSelect = '';
-        };
-      }
-    }, [isPanelResizing, resizePanel, stopPanelResizing]);
-
-    return (
+  const renderProjectExploreContent = (
+    isPanelsVisible: boolean,
+    layoutMode: LayoutMode,
+    setLayoutMode: (mode: LayoutMode) => void,
+    panelCount: number
+  ) => (
       <div className="h-full flex flex-col min-h-0 max-w-full overflow-hidden">
       {/* Top Bar - Filters */}
       <div className="glass-strong rounded-xl shadow-lg p-2 mb-1.5 relative z-20">
@@ -1538,8 +1534,36 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               visibility={visibilityState.visibility}
               categoryColorMap={categoryColorMap}
             />
-            {/* Loading overlay during manual refresh only */}
-            {isRefreshing && (
+            {/* Liquid Glass Loading Overlay - shows during filter updates */}
+            {(isFetchingImages && !isLoadingImages) && (
+              <div
+                className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none transition-opacity duration-300"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(240, 253, 244, 0.5) 100%)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                }}
+              >
+                <div
+                  className="rounded-2xl px-6 py-4 flex items-center gap-3 shadow-xl border"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(240, 253, 244, 0.95) 100%)',
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    borderColor: 'rgba(16, 185, 129, 0.3)',
+                    boxShadow: '0 8px 32px rgba(16, 185, 129, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5) inset'
+                  }}
+                >
+                  <div className="relative">
+                    <div className="w-8 h-8 rounded-full border-2 border-emerald-200 border-t-emerald-500 animate-spin" />
+                    <div className="absolute inset-0 w-8 h-8 rounded-full border-2 border-transparent border-b-emerald-300 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
+                  </div>
+                  <span className="text-sm font-medium text-emerald-700">Updating gallery...</span>
+                </div>
+              </div>
+            )}
+            {/* Loading overlay during manual refresh */}
+            {isRefreshing && !isFetchingImages && (
               <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-10 pointer-events-none">
                 <div className="bg-white rounded-lg shadow-lg p-4 flex items-center gap-3">
                   <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" />
@@ -1946,11 +1970,21 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       )}
       </div>
     );
-  };
 
   return (
     <AnalyticsPanelProvider projectId={projectId} onFilterUpdate={handlePanelFilterUpdate}>
-      <ProjectExploreContent />
+      <AnalyticsPanelContext.Consumer>
+        {(panelContext) => {
+          if (!panelContext) return null;
+          const { state, setLayoutMode } = panelContext;
+          return renderProjectExploreContent(
+            state.isVisible,
+            state.layoutMode,
+            setLayoutMode,
+            state.panels.length
+          );
+        }}
+      </AnalyticsPanelContext.Consumer>
     </AnalyticsPanelProvider>
   );
 }
