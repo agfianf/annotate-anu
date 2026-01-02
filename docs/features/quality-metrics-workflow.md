@@ -2,9 +2,12 @@
 
 > Background processing system for computing image quality metrics with real-time progress tracking.
 
+**Implementation Status**: ✅ COMPLETE (2026-01-02)
+
 ## Table of Contents
 
 - [Overview](#overview)
+- [Implementation Status](#implementation-status)
 - [Problem Statement](#problem-statement)
 - [Architecture](#architecture)
 - [Database Schema](#database-schema)
@@ -35,6 +38,29 @@ The Quality Metrics Workflow provides automated computation of image quality met
 | Accurate Counts | Server-side totals prevent display bugs |
 | Job Management | Start, monitor, and cancel jobs per project |
 | Auto-trigger | New uploads automatically queue for processing |
+
+---
+
+## Implementation Status
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Background job system | ✅ Complete | Celery task `process_quality_metrics_task` |
+| Redis progress tracking | ✅ Complete | Real-time updates every batch |
+| Quality metrics computation | ✅ Complete | Sharpness, brightness, contrast, uniqueness |
+| Perceptual hash duplicate detection | ✅ Complete | imagehash.phash |
+| Start/Cancel job API | ✅ Complete | POST endpoints with job management |
+| Progress polling API | ✅ Complete | GET endpoint with 2-second frontend polling |
+| useQualityProgress hook | ✅ Complete | React Query with auto-refetch |
+| Enhanced Dataset Stats panel | ✅ Complete | Quality tab in consolidated panel |
+| Quality histogram filters | ✅ Complete | Multi-select filtering by quality range |
+| Issue detection | ✅ Complete | Auto-detects blur, brightness, contrast issues |
+
+**Recent Updates (c255398)**:
+- Added consolidated `EnhancedDatasetStatsPanel` with Quality tab
+- Integrated quality histogram with multi-select filtering
+- Added quality status counts display (pending/completed/failed)
+- Added issue breakdown visualization
 
 ---
 
@@ -852,9 +878,26 @@ docker logs -f anu-api-core-worker-dev
 
 ## Related Documentation
 
-- [Analytics Panel Architecture](./analytics-panels.md)
-- [Celery Task Configuration](../development/celery-setup.md)
-- [Database Migrations](../development/migrations.md)
+- [Explore Gallery](./explore-gallery.md) - Analytics panels in the Explore view
+- [Data Management](./data-management.md) - Image pool and task workflow
+- [Export Workflow](./export-workflow.md) - Dataset export with quality filtering
+
+## Best Practices
+
+### Performance Optimization
+- Use batch size of 50 for optimal throughput vs. progress granularity
+- Redis TTL of 1 hour prevents stale progress data
+- Single job per project prevents resource contention
+
+### Error Handling
+- Per-image failures don't stop the job
+- Failed images are counted separately from processed
+- Error messages stored per-image for debugging
+
+### Frontend Integration
+- Poll every 2 seconds during active job
+- Stop polling when status is `completed`, `failed`, or `cancelled`
+- Invalidate React Query cache on job completion to refresh stats
 
 ---
 

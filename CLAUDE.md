@@ -557,6 +557,70 @@ function MyComponent() {
 - Respect accessibility: use `apps/web/src/hooks/useReducedMotion.ts` or reduced-motion helpers in `apps/web/src/lib/motion-config.ts`.
 - Keep colors/timings consistent via `apps/web/src/lib/motion-config.ts` (emerald theme).
 
+### Analytics Panel System
+
+**Location**: `apps/web/src/components/analytics/`
+
+**Key Components**:
+- `AnalyticsPanelContainer.tsx` - Panel container with add/remove functionality
+- `panels/EnhancedDatasetStatsPanel.tsx` - Consolidated dataset stats (Dimensions, Tags, Quality tabs)
+- `panels/AnnotationAnalysisPanel.tsx` - Annotation stats (Coverage, Spatial, Classes tabs)
+- `shared/HistogramChart.tsx` - Reusable histogram with multi-select support
+- `shared/SelectionActionBar.tsx` - Filter action bar for multi-select
+
+**Adding a New Analytics Panel**:
+1. Create panel component in `apps/web/src/components/analytics/panels/`
+2. Create React Query hook in `apps/web/src/hooks/use{PanelName}.ts`
+3. Add API client method in `apps/web/src/lib/analytics-client.ts`
+4. Register panel in `apps/web/src/components/analytics/panelRegistry.ts`
+5. Add type to `PanelType` union in `apps/web/src/types/analytics.ts`
+6. Add backend endpoint in `apps/api-core/src/app/routers/analytics.py`
+
+**Multi-Select Filtering Pattern**:
+```typescript
+import { useChartMultiSelect } from '@/hooks/useChartMultiSelect';
+import { SelectionActionBar } from '@/components/analytics/shared/SelectionActionBar';
+
+const { selectedIndices, handleBarClick, clearSelection } = useChartMultiSelect({
+  onFilterApply: (indices) => {
+    // Convert indices to filter values and update explore filters
+  },
+});
+```
+
+**Best Practices**:
+- Use consolidated panels (EnhancedDatasetStats, AnnotationAnalysis) over individual panels
+- Implement multi-select filtering for all histogram charts
+- Use `useChartMultiSelect` hook for consistent selection behavior
+- Show selection action bar below charts when items are selected
+- Use dynamic binning (Sturges' rule) for histograms
+
+### Image Quality Metrics
+
+**Docs**: `/docs/features/quality-metrics-workflow.md`
+
+**Key Files**:
+- Backend task: `apps/api-core/src/app/tasks/quality.py`
+- Backend service: `apps/api-core/src/app/services/image_quality_service.py`
+- Frontend hook: `apps/web/src/hooks/useQualityProgress.ts`
+
+**Workflow**:
+1. User clicks "Process" in Quality tab
+2. Frontend calls `POST /analytics/start-quality-job`
+3. Backend creates Celery task and returns job_id
+4. Frontend polls `GET /analytics/quality-progress` every 2 seconds
+5. Worker computes metrics (sharpness, brightness, contrast, uniqueness)
+6. Frontend shows progress bar with accurate server-side counts
+7. On completion, React Query cache invalidates to refresh stats
+
+**Computed Metrics**:
+- `sharpness`: Laplacian variance (blur detection)
+- `brightness`: Mean pixel intensity (0.3-0.7 optimal)
+- `contrast`: Pixel std deviation
+- `uniqueness`: 1 - max perceptual hash similarity
+- `overall_quality`: Weighted composite score
+- `issues`: Auto-detected problems (blur, low_brightness, duplicate, etc.)
+
 ## API Quick Reference
 
 ### SAM3 Inference API (http://localhost:8000)
@@ -570,11 +634,16 @@ function MyComponent() {
 - `POST /api/v1/auth/login` - User login
 - `GET /api/v1/projects` - List projects
 - `POST /api/v1/models` - Register BYOM model
+- `GET /api/v1/projects/{id}/analytics/enhanced-dataset-stats` - Consolidated dataset stats
+- `GET /api/v1/projects/{id}/analytics/annotation-analysis` - Annotation analysis
+- `POST /api/v1/projects/{id}/analytics/start-quality-job` - Start quality processing
+- `GET /api/v1/projects/{id}/analytics/quality-progress` - Poll quality job progress
 - `GET /docs` - Swagger UI
 
 ## Additional Documentation
 
-- `/docs/getting-started.md` - Getting started guide
+- `/docs/Navigation.md` - Documentation index
+- `/docs/development/getting-started.md` - Getting started guide
 - `/docs/architecture/` - Architecture documentation
-- `/docs/byom-integration-guide/` - BYOM integration guide
+- `/docs/development/byom-integration.md` - BYOM integration guide
 - `/docker/README.md` - Docker deployment modes

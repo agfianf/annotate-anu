@@ -12,7 +12,7 @@
   [![Privacy](https://img.shields.io/badge/Privacy-Self%20Hosted-blue)](https://github.com/agfianf/annotate-anu.git)
   [![Powered by SAM3](https://img.shields.io/badge/Powered%20by-Meta%20SAM3-0467DF)](https://huggingface.co/facebook/sam3)
 
-  [Get Started](#quick-start) · [Docs](docs/README.md) · [API Docs](#api-docs) · [Report Bug](https://github.com/agfianf/annotate-anu/issues)
+  [Get Started](#quick-start) · [Docs](docs/Navigation.md) · [API Docs](#api-docs) · [Report Bug](https://github.com/agfianf/annotate-anu/issues)
 </div>
 
 ---
@@ -30,6 +30,8 @@ and a React/Konva UI for annotation, exploration, and exports.
 - Projects, tasks, and jobs with assignment, status tracking, approvals, and train/val/test splits.
 - File share browser with uploads, shared image registry, project image pools, and tag/category metadata.
 - Explore view with a virtualized gallery, filters, bulk tagging, and analytics panels.
+- **Analytics panels**: Dataset statistics, annotation analysis, spatial heatmaps, and image quality metrics with multi-select filtering.
+- **Image quality metrics**: Background processing for sharpness, brightness, contrast, uniqueness with real-time progress tracking.
 - Exports: server-side datasets (COCO JSON, manifest CSV, image folders) plus local COCO/YOLO export from the annotation app.
 - BYOM registry with inference proxy, plus admin user management and role-based auth.
 

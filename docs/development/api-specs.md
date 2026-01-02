@@ -167,11 +167,24 @@ Base URL: `http://localhost:8001/api/v1`
 
 ### Analytics
 
-- `GET /projects/{project_id}/analytics/dataset-stats`
-- `GET /projects/{project_id}/analytics/annotation-coverage`
-- `GET /projects/{project_id}/analytics/class-balance`
-- `GET /projects/{project_id}/analytics/spatial-heatmap`
-- `GET /projects/{project_id}/analytics/image-quality`
+#### Dataset Statistics
+- `GET /projects/{project_id}/analytics/dataset-stats` - Tag distribution, dimension/aspect ratio histograms, file size stats
+- `GET /projects/{project_id}/analytics/enhanced-dataset-stats` - Consolidated stats with quality metrics (preferred)
+- `GET /projects/{project_id}/analytics/dimension-insights` - Dimension analysis and resize recommendations
+
+#### Annotation Analysis
+- `GET /projects/{project_id}/analytics/annotation-coverage` - Object count per image, density histogram
+- `GET /projects/{project_id}/analytics/annotation-analysis` - Consolidated annotation stats with spatial heatmap
+- `GET /projects/{project_id}/analytics/class-balance` - Label distribution and balance metrics
+- `GET /projects/{project_id}/analytics/spatial-heatmap` - 2D grid density of annotation centers
+
+#### Image Quality
+- `GET /projects/{project_id}/analytics/image-quality` - Quality metrics summary and issue breakdown
+- `POST /projects/{project_id}/analytics/sync-quality` - Sync quality records with project images
+- `POST /projects/{project_id}/analytics/compute-quality` - Compute metrics for pending images (legacy)
+- `POST /projects/{project_id}/analytics/start-quality-job` - Start background quality job
+- `GET /projects/{project_id}/analytics/quality-progress` - Poll job progress (2-second interval)
+- `POST /projects/{project_id}/analytics/cancel-quality-job` - Cancel running quality job
 
 ### Model Registry + Inference Proxy
 

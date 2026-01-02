@@ -57,13 +57,31 @@ Use it to review large datasets, tag images, and start exports.
 
 ## Analytics Panels
 
-The Explore view includes dataset analytics panels driven by API Core endpoints:
+The Explore view includes dataset analytics panels driven by API Core endpoints. Panels are organized into consolidated views for better UX:
 
-- Tag distribution
-- Annotation coverage
-- Class balance
-- Spatial heatmap
-- Image quality
+### Enhanced Dataset Statistics (Consolidated)
+- **Dimensions Tab**: Width/height distribution, aspect ratio histogram, resize recommendations
+- **Tags Tab**: Tag distribution with category grouping, color-coded bars
+- **Quality Tab**: Quality score histogram, status counts (pending/completed/failed), issue breakdown
+- Supports multi-select filtering: click bars to filter, Cmd/Ctrl+click for multi-select
+
+### Annotation Analysis (Consolidated)
+- **Coverage Tab**: Object count histogram (0, 1, 2-5, 6-10, 11-20, 21+), annotation density
+- **Spatial Tab**: Canvas-based 2D heatmap showing annotation center distribution
+- **Classes Tab**: Label distribution with balance metrics
+
+### Individual Panels (Legacy)
+- `dataset-stats`: Tag distribution, dimensions
+- `annotation-coverage`: Object count histogram
+- `class-balance`: Label distribution
+- `spatial-heatmap`: 2D grid density
+- `image-quality`: Quality metrics summary
+
+### Panel Features
+- **Dynamic binning**: Uses Sturges' rule for optimal histogram bins
+- **Multi-select filtering**: Click histogram bars to filter images
+- **Category grouping**: Tags grouped by category with collapsible sections
+- **Real-time quality processing**: Background job with progress tracking
 
 ## Key API Calls
 
