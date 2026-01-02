@@ -24,6 +24,11 @@ export type StrokeWidthLevel = 'thin' | 'normal' | 'medium' | 'thick' | 'extra-t
 export type FillOpacityLevel = 'none' | 'light' | 'medium' | 'strong' | 'solid';
 
 /**
+ * Dim levels for highlight mode (image dimming)
+ */
+export type DimLevel = 'subtle' | 'medium' | 'strong';
+
+/**
  * Annotation display options for thumbnails
  */
 export interface AnnotationDisplayState {
@@ -32,6 +37,8 @@ export interface AnnotationDisplayState {
   showBboxes: boolean;
   showPolygons: boolean;
   fillOpacity: FillOpacityLevel;
+  highlightMode: boolean;
+  dimLevel: DimLevel;
 }
 
 /**
@@ -69,6 +76,8 @@ const defaultAnnotationDisplay: AnnotationDisplayState = {
   showBboxes: true,
   showPolygons: true,
   fillOpacity: 'none',
+  highlightMode: false,
+  dimLevel: 'medium',
 };
 
 const defaultVisibility: VisibilityState = {
@@ -458,6 +467,32 @@ export function useExploreVisibility(projectId: string) {
     }));
   }, []);
 
+  /**
+   * Toggle highlight mode (dim image, spotlight annotations)
+   */
+  const toggleHighlightMode = useCallback(() => {
+    setVisibility((prev) => ({
+      ...prev,
+      annotationDisplay: {
+        ...prev.annotationDisplay,
+        highlightMode: !prev.annotationDisplay.highlightMode,
+      },
+    }));
+  }, []);
+
+  /**
+   * Set dim level for highlight mode
+   */
+  const setDimLevel = useCallback((level: DimLevel) => {
+    setVisibility((prev) => ({
+      ...prev,
+      annotationDisplay: {
+        ...prev.annotationDisplay,
+        dimLevel: level,
+      },
+    }));
+  }, []);
+
   return {
     visibility,
     setVisibility,
@@ -487,6 +522,8 @@ export function useExploreVisibility(projectId: string) {
     toggleShowBboxes,
     toggleShowPolygons,
     setFillOpacity,
+    toggleHighlightMode,
+    setDimLevel,
   };
 }
 

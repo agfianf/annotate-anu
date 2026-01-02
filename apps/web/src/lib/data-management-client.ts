@@ -179,6 +179,10 @@ export interface ExploreFilters {
   file_size_max?: number;
   object_count_min?: number; // Filter by minimum annotation count per image
   object_count_max?: number; // Filter by maximum annotation count per image
+  bbox_count_min?: number; // Filter by minimum bbox (detection) count per image
+  bbox_count_max?: number; // Filter by maximum bbox (detection) count per image
+  polygon_count_min?: number; // Filter by minimum polygon (segmentation) count per image
+  polygon_count_max?: number; // Filter by maximum polygon (segmentation) count per image
   filepath_pattern?: string;
   filepath_paths?: string[]; // Filter by specific directory paths (checkbox-based)
   include_annotations?: boolean;
@@ -729,6 +733,14 @@ export const projectImagesApi = {
     if (filters?.green_max !== undefined) queryParams.append('green_max', filters.green_max.toString());
     if (filters?.blue_min !== undefined) queryParams.append('blue_min', filters.blue_min.toString());
     if (filters?.blue_max !== undefined) queryParams.append('blue_max', filters.blue_max.toString());
+    // Annotation count filters (objects per image)
+    if (filters?.object_count_min !== undefined) queryParams.append('object_count_min', filters.object_count_min.toString());
+    if (filters?.object_count_max !== undefined) queryParams.append('object_count_max', filters.object_count_max.toString());
+    // BBox and Polygon count filters
+    if (filters?.bbox_count_min !== undefined) queryParams.append('bbox_count_min', filters.bbox_count_min.toString());
+    if (filters?.bbox_count_max !== undefined) queryParams.append('bbox_count_max', filters.bbox_count_max.toString());
+    if (filters?.polygon_count_min !== undefined) queryParams.append('polygon_count_min', filters.polygon_count_min.toString());
+    if (filters?.polygon_count_max !== undefined) queryParams.append('polygon_count_max', filters.polygon_count_max.toString());
 
     const response: AxiosResponse<ApiResponse<ExploreResponse>> = await dataClient.get(
       `/api/v1/projects/${projectId}/explore?${queryParams.toString()}`

@@ -36,6 +36,14 @@ export interface ExploreFiltersState {
   blue_max?: number;
   // Quality issues filter
   issues?: string[];
+  // Annotation count filters (objects per image)
+  object_count_min?: number;
+  object_count_max?: number;
+  // BBox and Polygon count filters (annotation type specific)
+  bbox_count_min?: number;
+  bbox_count_max?: number;
+  polygon_count_min?: number;
+  polygon_count_max?: number;
 }
 
 const defaultFilters: ExploreFiltersState = {
@@ -232,7 +240,13 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     filters.filepathPattern !== undefined ||
     (filters.filepathPaths && filters.filepathPaths.length > 0) ||
     (filters.imageId && filters.imageId.length > 0) ||
-    hasQualityFilters;
+    hasQualityFilters ||
+    filters.object_count_min !== undefined ||
+    filters.object_count_max !== undefined ||
+    filters.bbox_count_min !== undefined ||
+    filters.bbox_count_max !== undefined ||
+    filters.polygon_count_min !== undefined ||
+    filters.polygon_count_max !== undefined;
 
   return {
     filters,

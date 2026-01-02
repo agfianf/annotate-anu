@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Database, Droplet, Eye, EyeOff, Hexagon, Layers, Paintbrush, RefreshCw, Square, Tag, Trash2, Type } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Droplet, Eye, EyeOff, Hexagon, Layers, Lightbulb, Paintbrush, RefreshCw, Square, Sun, Tag, Trash2, Type } from 'lucide-react';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import type { UseExploreVisibilityReturn } from '@/hooks/useExploreVisibility';
@@ -953,6 +953,58 @@ export function UnifiedExploreSidebar({
                     />
                   </button>
                 </div>
+
+                {/* Highlight Mode Toggle */}
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                    <Lightbulb className="h-3 w-3 text-purple-500" />
+                    Highlight Mode
+                  </label>
+                  <button
+                    onClick={() => visibility.toggleHighlightMode()}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      visibility.visibility.annotationDisplay.highlightMode
+                        ? 'bg-purple-500'
+                        : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${
+                        visibility.visibility.annotationDisplay.highlightMode
+                          ? 'translate-x-5'
+                          : ''
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Dim Level Slider - only shown when Highlight Mode is ON */}
+                {visibility.visibility.annotationDisplay.highlightMode && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                      <Sun className="h-3 w-3 text-purple-500" />
+                      Dim Level
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min={0}
+                        max={2}
+                        value={['subtle', 'medium', 'strong'].indexOf(
+                          visibility.visibility.annotationDisplay.dimLevel
+                        )}
+                        onChange={(e) => {
+                          const levels = ['subtle', 'medium', 'strong'] as const;
+                          visibility.setDimLevel(levels[parseInt(e.target.value)]);
+                        }}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                      />
+                      <span className="text-xs text-gray-500 w-16 text-right capitalize">
+                        {visibility.visibility.annotationDisplay.dimLevel}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </UnifiedSidebarSection>
           </div>

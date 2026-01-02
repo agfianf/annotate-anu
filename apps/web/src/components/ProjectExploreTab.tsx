@@ -291,6 +291,14 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         blue_max: sidebarFilters.blue_max,
         // Quality issues
         issues: sidebarFilters.issues && sidebarFilters.issues.length > 0 ? sidebarFilters.issues : undefined,
+        // Annotation count filters (objects per image)
+        object_count_min: sidebarFilters.object_count_min,
+        object_count_max: sidebarFilters.object_count_max,
+        // BBox and Polygon count filters
+        bbox_count_min: sidebarFilters.bbox_count_min,
+        bbox_count_max: sidebarFilters.bbox_count_max,
+        polygon_count_min: sidebarFilters.polygon_count_min,
+        polygon_count_max: sidebarFilters.polygon_count_max,
       };
     },
     [debouncedSearch, sidebarFilters, selectedTaskIds, selectedJobId, isAnnotatedFilter, getIncludedTagIds, getExcludedTagIds]
@@ -1099,6 +1107,22 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         object_count_max: panelFilters.object_count_max,
       }));
     }
+    // BBox count filter (detections only)
+    if (panelFilters.bbox_count_min !== undefined || panelFilters.bbox_count_max !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        bbox_count_min: panelFilters.bbox_count_min,
+        bbox_count_max: panelFilters.bbox_count_max,
+      }));
+    }
+    // Polygon count filter (segmentations only)
+    if (panelFilters.polygon_count_min !== undefined || panelFilters.polygon_count_max !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        polygon_count_min: panelFilters.polygon_count_min,
+        polygon_count_max: panelFilters.polygon_count_max,
+      }));
+    }
     // Quality metric filters
     if (panelFilters.quality_min !== undefined || panelFilters.quality_max !== undefined) {
       setFilters(prev => ({
@@ -1607,6 +1631,51 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 onClick={() => setFilters(prev => ({ ...prev, issues: undefined }))}
                 className="hover:opacity-100 transition-opacity ml-1"
                 title="Clear issues filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {(sidebarFilters.object_count_min !== undefined || sidebarFilters.object_count_max !== undefined) && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs border border-indigo-200">
+              <span className="font-medium">
+                Objects/Image: {sidebarFilters.object_count_min ?? 0} - {sidebarFilters.object_count_max ?? '∞'}
+              </span>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, object_count_min: undefined, object_count_max: undefined }))}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear objects per image filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {(sidebarFilters.bbox_count_min !== undefined || sidebarFilters.bbox_count_max !== undefined) && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-orange-700 rounded-full text-xs border border-orange-200">
+              <span className="font-medium">
+                BBox/Image: {sidebarFilters.bbox_count_min ?? 0} - {sidebarFilters.bbox_count_max ?? '∞'}
+              </span>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, bbox_count_min: undefined, bbox_count_max: undefined }))}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear bbox count filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {(sidebarFilters.polygon_count_min !== undefined || sidebarFilters.polygon_count_max !== undefined) && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs border border-purple-200">
+              <span className="font-medium">
+                Polygon/Image: {sidebarFilters.polygon_count_min ?? 0} - {sidebarFilters.polygon_count_max ?? '∞'}
+              </span>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, polygon_count_min: undefined, polygon_count_max: undefined }))}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear polygon count filter"
               >
                 <X className="w-3 h-3" />
               </button>

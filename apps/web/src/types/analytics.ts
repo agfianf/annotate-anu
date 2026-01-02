@@ -213,6 +213,26 @@ export interface DensityBucket {
   max: number;
 }
 
+/**
+ * BBox annotation count distribution bucket (dynamic binning)
+ */
+export interface BboxCountBucket {
+  bucket: string;                      // e.g., "0", "1-2", "3-5" (dynamic)
+  count: number;
+  min: number;
+  max: number;
+}
+
+/**
+ * Polygon annotation count distribution bucket (dynamic binning)
+ */
+export interface PolygonCountBucket {
+  bucket: string;                      // e.g., "0", "1-2", "3-5" (dynamic)
+  count: number;
+  min: number;
+  max: number;
+}
+
 export interface CoverageByCategory {
   category: string;
   annotated: number;
@@ -458,6 +478,10 @@ export interface AnnotationAnalysisResponse {
   total_objects: number;
   avg_objects_per_image: number;
   median_objects_per_image: number;
+
+  // Annotation Type Distribution (Dynamic Binning)
+  bbox_count_histogram: BboxCountBucket[];
+  polygon_count_histogram: PolygonCountBucket[];
 
   // From Spatial Heatmap
   grid_density: number[][];

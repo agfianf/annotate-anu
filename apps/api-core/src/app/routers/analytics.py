@@ -892,7 +892,16 @@ async def get_annotation_analysis(
         connection, project_id, images, grid_size=grid_size
     )
 
-    from app.schemas.analytics import DensityBucket, CenterOfMass, Spread, AnnotationPoint
+    # Compute bbox and polygon count distributions (dynamic binning)
+    shared_image_ids = [img["id"] for img in images]
+    bbox_histogram = await AnalyticsService.compute_bbox_count_distribution(
+        connection, shared_image_ids
+    )
+    polygon_histogram = await AnalyticsService.compute_polygon_count_distribution(
+        connection, shared_image_ids
+    )
+
+    from app.schemas.analytics import DensityBucket, BboxCountBucket, PolygonCountBucket, CenterOfMass, Spread, AnnotationPoint
 
     response_data = AnnotationAnalysisResponse(
         # Coverage
@@ -904,6 +913,9 @@ async def get_annotation_analysis(
         total_objects=coverage_data.get("total_objects", 0),
         avg_objects_per_image=coverage_data.get("avg_objects_per_image", 0.0),
         median_objects_per_image=coverage_data.get("median_objects_per_image", 0),
+        # Annotation type distributions (dynamic binning)
+        bbox_count_histogram=[BboxCountBucket(**b) for b in bbox_histogram],
+        polygon_count_histogram=[PolygonCountBucket(**b) for b in polygon_histogram],
         # Heatmap
         grid_density=heatmap_data.get("grid_density", []),
         grid_size=heatmap_data.get("grid_size", grid_size),

@@ -23,6 +23,22 @@ class DensityBucket(BaseModel):
     max: int = Field(..., description="Maximum annotations in bucket")
 
 
+class BboxCountBucket(BaseModel):
+    """Bounding box annotation count distribution bucket (dynamic binning)."""
+    bucket: str = Field(..., description="Bucket label (e.g., '0', '1-2', '3-5')")
+    count: int = Field(..., description="Number of images in this range")
+    min: int = Field(..., description="Minimum bbox count in bucket")
+    max: int = Field(..., description="Maximum bbox count in bucket")
+
+
+class PolygonCountBucket(BaseModel):
+    """Polygon annotation count distribution bucket (dynamic binning)."""
+    bucket: str = Field(..., description="Bucket label (e.g., '0', '1-2', '3-5')")
+    count: int = Field(..., description="Number of images in this range")
+    min: int = Field(..., description="Minimum polygon count in bucket")
+    max: int = Field(..., description="Maximum polygon count in bucket")
+
+
 class CoverageByCategory(BaseModel):
     """Coverage breakdown by tag category."""
     category: str = Field(..., description="Category name")
@@ -478,6 +494,16 @@ class AnnotationAnalysisResponse(BaseModel):
     total_objects: int = Field(default=0, description="Total annotations across all images")
     avg_objects_per_image: float = Field(default=0.0, description="Average objects per image")
     median_objects_per_image: int = Field(default=0, description="Median objects per image")
+
+    # === Annotation Type Distribution (Dynamic Binning) ===
+    bbox_count_histogram: List[BboxCountBucket] = Field(
+        default_factory=list,
+        description="Distribution of bbox (detection) count per image (8-12 dynamic bins)"
+    )
+    polygon_count_histogram: List[PolygonCountBucket] = Field(
+        default_factory=list,
+        description="Distribution of polygon (segmentation) count per image (8-12 dynamic bins)"
+    )
 
     # === From Spatial Heatmap ===
     grid_density: List[List[int]] = Field(

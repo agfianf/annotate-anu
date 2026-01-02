@@ -1,10 +1,12 @@
 /**
  * SVG annotation overlay for thumbnails
  * Renders bounding boxes and polygons with configurable display options
+ * Supports highlight mode to dim image and spotlight annotations
  */
 
+import { useId } from 'react';
 import type { BboxPreview, PolygonPreview } from '../../lib/data-management-client';
-import type { AnnotationDisplayState } from '../../hooks/useExploreVisibility';
+import type { AnnotationDisplayState, DimLevel } from '../../hooks/useExploreVisibility';
 
 // Stroke width mapping (relative to viewBox 0-1)
 const STROKE_WIDTH_MAP: Record<AnnotationDisplayState['strokeWidth'], number> = {
@@ -22,6 +24,13 @@ const FILL_OPACITY_MAP: Record<AnnotationDisplayState['fillOpacity'], number> = 
   'medium': 0.25,
   'strong': 0.4,
   'solid': 0.6,
+};
+
+// Dim level mapping for highlight mode (image dimming opacity)
+const DIM_LEVEL_MAP: Record<DimLevel, number> = {
+  'subtle': 0.3,
+  'medium': 0.5,
+  'strong': 0.7,
 };
 
 interface AnnotationOverlayProps {
@@ -73,7 +82,14 @@ const defaultDisplayOptions: AnnotationDisplayState = {
   showBboxes: true,
   showPolygons: true,
   fillOpacity: 'none',
+  highlightMode: false,
+  dimLevel: 'medium',
 };
+
+// Font styling for annotation labels
+const LABEL_FONT_FAMILY = "'Source Sans 3', 'Source Sans Pro', sans-serif";
+const LABEL_FONT_SIZE = 0.022;
+const LABEL_FONT_WEIGHT = '600';
 
 export function AnnotationOverlay({
   bboxes,
@@ -81,14 +97,21 @@ export function AnnotationOverlay({
   displayOptions = defaultDisplayOptions,
   showOnHover = true,
 }: AnnotationOverlayProps) {
+  // Generate unique ID for mask to avoid conflicts with multiple overlays
+  const maskId = useId();
+
   const showBboxes = displayOptions.showBboxes && bboxes && bboxes.length > 0;
   const showPolygons = displayOptions.showPolygons && polygons && polygons.length > 0;
+  const highlightMode = displayOptions.highlightMode ?? false;
 
-  if (!showBboxes && !showPolygons) return null;
+  // Return null only if no annotations AND highlight mode is off
+  // (highlight mode should dim all images even without annotations)
+  if (!showBboxes && !showPolygons && !highlightMode) return null;
 
   const strokeWidth = STROKE_WIDTH_MAP[displayOptions.strokeWidth];
   const fillOpacity = FILL_OPACITY_MAP[displayOptions.fillOpacity];
   const showLabels = displayOptions.showLabels;
+  const dimLevel = DIM_LEVEL_MAP[displayOptions.dimLevel ?? 'medium'];
 
   return (
     <svg
@@ -99,6 +122,54 @@ export function AnnotationOverlay({
       preserveAspectRatio="none"
       style={{ width: '100%', height: '100%' }}
     >
+      {/* Highlight mode: dim overlay with annotation cutouts */}
+      {highlightMode && (
+        <>
+          <defs>
+            <mask id={maskId}>
+              {/* White background = fully visible (dimmed area) */}
+              <rect x="0" y="0" width="1" height="1" fill="white" />
+
+              {/* Black cutouts for bboxes = fully transparent (spotlight) */}
+              {showBboxes && bboxes?.map((bbox, idx) => (
+                <rect
+                  key={`mask-bbox-${idx}`}
+                  x={bbox.x_min}
+                  y={bbox.y_min}
+                  width={bbox.x_max - bbox.x_min}
+                  height={bbox.y_max - bbox.y_min}
+                  fill="black"
+                />
+              ))}
+
+              {/* Black cutouts for polygons = fully transparent (spotlight) */}
+              {showPolygons && polygons?.map((poly, idx) => {
+                const pathD = pointsToPath(poly.points);
+                if (!pathD) return null;
+                return (
+                  <path
+                    key={`mask-poly-${idx}`}
+                    d={pathD}
+                    fill="black"
+                  />
+                );
+              })}
+            </mask>
+          </defs>
+
+          {/* Dark overlay with mask (annotation areas are cut out) */}
+          <rect
+            x="0"
+            y="0"
+            width="1"
+            height="1"
+            fill="black"
+            fillOpacity={dimLevel}
+            mask={`url(#${maskId})`}
+          />
+        </>
+      )}
+
       {/* Render bboxes (detections) */}
       {showBboxes && bboxes?.map((bbox, idx) => {
         const labelPos = getBboxLabelPosition(bbox);
@@ -120,8 +191,9 @@ export function AnnotationOverlay({
                 x={labelPos[0]}
                 y={labelPos[1]}
                 fill={bbox.label_color}
-                fontSize={0.025}
-                fontWeight="600"
+                fontFamily={LABEL_FONT_FAMILY}
+                fontSize={LABEL_FONT_SIZE}
+                fontWeight={LABEL_FONT_WEIGHT}
                 textAnchor="middle"
                 dominantBaseline="auto"
                 style={{
@@ -159,8 +231,9 @@ export function AnnotationOverlay({
                 x={centroid[0]}
                 y={centroid[1]}
                 fill={poly.label_color}
-                fontSize={0.025}
-                fontWeight="600"
+                fontFamily={LABEL_FONT_FAMILY}
+                fontSize={LABEL_FONT_SIZE}
+                fontWeight={LABEL_FONT_WEIGHT}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 style={{

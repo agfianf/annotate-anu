@@ -40,6 +40,9 @@ function buildFilterParams(filters: ExploreFilters): Record<string, any> {
   if (filters.filepath_pattern) params.filepath_pattern = filters.filepath_pattern;
   if (filters.filepath_paths) params.filepath_paths = filters.filepath_paths;
   if (filters.image_uids) params.image_uids = filters.image_uids;
+  // Annotation count filters (objects per image)
+  if (filters.object_count_min !== undefined) params.object_count_min = filters.object_count_min;
+  if (filters.object_count_max !== undefined) params.object_count_max = filters.object_count_max;
 
   return params;
 }

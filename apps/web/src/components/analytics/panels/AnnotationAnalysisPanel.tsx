@@ -19,9 +19,11 @@ import {
   Target,
   MapPin,
   Grid3X3,
+  Square,
+  Hexagon,
 } from 'lucide-react';
 import { useAnalyticsToast } from '@/hooks/useAnalyticsToast';
-import type { DensityBucket, PanelProps } from '@/types/analytics';
+import type { DensityBucket, BboxCountBucket, PolygonCountBucket, PanelProps } from '@/types/analytics';
 import { useAnnotationAnalysis } from '@/hooks/useAnnotationAnalysis';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import {
@@ -43,6 +45,19 @@ import { CHART_TOOLTIP_CLASSNAME } from '../shared/chartConfig';
 import { HistogramChart, HISTOGRAM_THEMES, type HistogramTheme } from '../shared/HistogramChart';
 
 /**
+ * Metric explanations for tooltip (?) icons
+ */
+const METRIC_EXPLANATIONS = {
+  bbox_count: 'Distribution of bounding box (detection) annotations per image. Shows how many bbox objects each image contains.',
+  polygon_count: 'Distribution of polygon (segmentation) annotations per image. Shows how many polygon objects each image contains.',
+};
+
+const XAXIS_HINTS = {
+  bbox_count: 'Number of bbox annotations per image',
+  polygon_count: 'Number of polygon annotations per image',
+};
+
+/**
  * Compact tooltip for coverage charts
  */
 const CoverageTooltip = ({ active, payload }: any) => {
@@ -52,6 +67,36 @@ const CoverageTooltip = ({ active, payload }: any) => {
   return (
     <div className={CHART_TOOLTIP_CLASSNAME}>
       <p className="font-semibold text-gray-800">{data.bucket}</p>
+      <p className="text-gray-600">{data.count} image{data.count !== 1 ? 's' : ''}</p>
+    </div>
+  );
+};
+
+/**
+ * Tooltip for BBox count chart
+ */
+const BboxCountTooltip = ({ active, payload }: any) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const data = payload[0].payload;
+
+  return (
+    <div className={CHART_TOOLTIP_CLASSNAME}>
+      <p className="font-semibold text-gray-800">{data.bucket} bbox{data.bucket !== '1' && data.bucket !== '0' ? 'es' : ''}</p>
+      <p className="text-gray-600">{data.count} image{data.count !== 1 ? 's' : ''}</p>
+    </div>
+  );
+};
+
+/**
+ * Tooltip for Polygon count chart
+ */
+const PolygonCountTooltip = ({ active, payload }: any) => {
+  if (!active || !payload || payload.length === 0) return null;
+  const data = payload[0].payload;
+
+  return (
+    <div className={CHART_TOOLTIP_CLASSNAME}>
+      <p className="font-semibold text-gray-800">{data.bucket} polygon{data.bucket !== '1' && data.bucket !== '0' ? 's' : ''}</p>
       <p className="text-gray-600">{data.count} image{data.count !== 1 ? 's' : ''}</p>
     </div>
   );
@@ -128,6 +173,10 @@ export default function AnnotationAnalysisPanel({
   // Multi-select state for object count histogram
   const densityMultiSelect = useChartMultiSelect(data?.density_histogram ?? []);
 
+  // Multi-select states for bbox and polygon count histograms
+  const bboxMultiSelect = useChartMultiSelect(data?.bbox_count_histogram ?? []);
+  const polygonMultiSelect = useChartMultiSelect(data?.polygon_count_histogram ?? []);
+
   const handleUnannotatedClick = () => {
     onFilterUpdate({ is_annotated: false });
     showSuccess('Filtering to unannotated images', { icon: '⚠️' });
@@ -160,6 +209,56 @@ export default function AnnotationAnalysisPanel({
   };
 
   /**
+   * Apply bbox count multi-select filter
+   */
+  const handleApplyBboxCountFilter = useCallback(() => {
+    const selected = bboxMultiSelect.selectedData;
+
+    if (selected.length === 0) {
+      return;
+    }
+
+    const minCount = Math.min(...selected.map((d: any) => d.min));
+    const maxCount = Math.max(...selected.map((d: any) => d.max));
+
+    onFilterUpdate({
+      bbox_count_min: minCount,
+      bbox_count_max: maxCount,
+    });
+
+    showSuccess(
+      `Filtering by ${selected.length} bbox count range${selected.length > 1 ? 's' : ''}`,
+      { icon: '📦' }
+    );
+    bboxMultiSelect.clearSelection();
+  }, [bboxMultiSelect, onFilterUpdate, showSuccess]);
+
+  /**
+   * Apply polygon count multi-select filter
+   */
+  const handleApplyPolygonCountFilter = useCallback(() => {
+    const selected = polygonMultiSelect.selectedData;
+
+    if (selected.length === 0) {
+      return;
+    }
+
+    const minCount = Math.min(...selected.map((d: any) => d.min));
+    const maxCount = Math.max(...selected.map((d: any) => d.max));
+
+    onFilterUpdate({
+      polygon_count_min: minCount,
+      polygon_count_max: maxCount,
+    });
+
+    showSuccess(
+      `Filtering by ${selected.length} polygon count range${selected.length > 1 ? 's' : ''}`,
+      { icon: '🔷' }
+    );
+    polygonMultiSelect.clearSelection();
+  }, [polygonMultiSelect, onFilterUpdate, showSuccess]);
+
+  /**
    * Handle density bucket click - single click or multi-select
    */
   const handleDensityClick = (bucketData: any, index: number, event?: React.MouseEvent) => {
@@ -172,6 +271,21 @@ export default function AnnotationAnalysisPanel({
   const densityChartClick = useChartClick(
     data?.density_histogram ?? [],
     (data, index, event) => handleDensityClick(data, index, event)
+  );
+
+  // Chart click handlers for bbox and polygon histograms
+  const bboxChartClick = useChartClick(
+    data?.bbox_count_histogram ?? [],
+    (bucketData, index, event) => {
+      if (bucketData) bboxMultiSelect.handleBarClick(index, bucketData, event);
+    }
+  );
+
+  const polygonChartClick = useChartClick(
+    data?.polygon_count_histogram ?? [],
+    (bucketData, index, event) => {
+      if (bucketData) polygonMultiSelect.handleBarClick(index, bucketData, event);
+    }
   );
 
   // Render heatmap on canvas
@@ -382,6 +496,68 @@ export default function AnnotationAnalysisPanel({
           <LegendItem color="#06B6D4" label="11-20" />
           <LegendItem color="#8B5CF6" label="21+" />
         </Legend>
+
+        {/* BBox Count Distribution */}
+        {data?.bbox_count_histogram && data.bbox_count_histogram.length > 0 && (
+          <ChartSection
+            icon={Square}
+            title="BBox Objects per Image"
+            hint="Click bar to select, Cmd/Ctrl+Click for multi-select"
+            height={160}
+            tooltip={METRIC_EXPLANATIONS.bbox_count}
+            xAxisHint={XAXIS_HINTS.bbox_count}
+          >
+            <HistogramChart
+              data={data.bbox_count_histogram}
+              xKey="bucket"
+              yKey="count"
+              tooltip={<BboxCountTooltip />}
+              multiSelect={bboxMultiSelect}
+              chartClick={bboxChartClick}
+              theme={HISTOGRAM_THEMES.orange}
+              xAxisAngled={false}
+              prefersReducedMotion={prefersReducedMotion}
+            />
+
+            <SelectionActionBar
+              selectionCount={bboxMultiSelect.selectionCount}
+              onApply={handleApplyBboxCountFilter}
+              onClear={bboxMultiSelect.clearSelection}
+              prefersReducedMotion={prefersReducedMotion}
+            />
+          </ChartSection>
+        )}
+
+        {/* Polygon Count Distribution */}
+        {data?.polygon_count_histogram && data.polygon_count_histogram.length > 0 && (
+          <ChartSection
+            icon={Hexagon}
+            title="Polygon Objects per Image"
+            hint="Click bar to select, Cmd/Ctrl+Click for multi-select"
+            height={160}
+            tooltip={METRIC_EXPLANATIONS.polygon_count}
+            xAxisHint={XAXIS_HINTS.polygon_count}
+          >
+            <HistogramChart
+              data={data.polygon_count_histogram}
+              xKey="bucket"
+              yKey="count"
+              tooltip={<PolygonCountTooltip />}
+              multiSelect={polygonMultiSelect}
+              chartClick={polygonChartClick}
+              theme={HISTOGRAM_THEMES.purple}
+              xAxisAngled={false}
+              prefersReducedMotion={prefersReducedMotion}
+            />
+
+            <SelectionActionBar
+              selectionCount={polygonMultiSelect.selectionCount}
+              onApply={handleApplyPolygonCountFilter}
+              onClear={polygonMultiSelect.clearSelection}
+              prefersReducedMotion={prefersReducedMotion}
+            />
+          </ChartSection>
+        )}
 
         {/* Coverage Recommendation */}
         <InfoBox type={isHealthy ? 'success' : isModerate ? 'warning' : 'error'}>

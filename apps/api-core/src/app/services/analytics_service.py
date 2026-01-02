@@ -3,6 +3,7 @@
 from typing import Dict, List, Tuple
 from collections import Counter
 import statistics
+import math
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.repositories.project_image import ProjectImageRepository
@@ -107,6 +108,163 @@ class AnalyticsService:
             "avg_objects_per_image": round(avg_objects_per_image, 2),
             "median_objects_per_image": median_objects_per_image,
         }
+
+    @staticmethod
+    def _create_dynamic_bins(
+        values: List[int],
+        min_bins: int = 8,
+        max_bins: int = 12
+    ) -> List[Tuple[str, int, int]]:
+        """
+        Create dynamic bins using Sturges' rule.
+
+        Args:
+            values: List of integer values to bin
+            min_bins: Minimum number of bins (default 8)
+            max_bins: Maximum number of bins (default 12)
+
+        Returns:
+            List of (label, min_val, max_val) tuples
+        """
+        if not values:
+            return []
+
+        # Filter to only non-negative values
+        values = [v for v in values if v >= 0]
+        if not values:
+            return []
+
+        n = len(values)
+        # Sturges' rule: k = ceil(log2(n) + 1)
+        num_bins = min(max_bins, max(min_bins, int(math.ceil(math.log2(n + 1) + 1))))
+
+        min_val = min(values)
+        max_val = max(values)
+
+        # If all values are the same
+        if min_val == max_val:
+            return [(str(min_val), min_val, max_val)]
+
+        # Calculate bin width (use ceil to ensure coverage)
+        range_size = max_val - min_val
+        bin_width = math.ceil(range_size / num_bins)
+
+        # Ensure bin_width is at least 1
+        bin_width = max(1, bin_width)
+
+        bins = []
+        current_start = min_val
+
+        for i in range(num_bins):
+            start = current_start
+            # Last bin should include max_val
+            if i == num_bins - 1:
+                end = max_val
+            else:
+                end = start + bin_width - 1
+                # Don't exceed max_val
+                end = min(end, max_val)
+
+            # Create label
+            if start == end:
+                label = str(start)
+            else:
+                label = f"{start}-{end}"
+
+            bins.append((label, start, end))
+
+            current_start = end + 1
+            # Stop if we've covered the entire range
+            if current_start > max_val:
+                break
+
+        return bins
+
+    @staticmethod
+    async def compute_bbox_count_distribution(
+        connection: AsyncConnection,
+        shared_image_ids: List[int],
+    ) -> List[Dict]:
+        """
+        Compute bounding box (detection) count distribution per image.
+
+        Uses dynamic binning (8-12 bins via Sturges' rule) based on actual data range.
+
+        Returns:
+            List of histogram buckets with {bucket, count, min, max}
+        """
+        if not shared_image_ids:
+            return []
+
+        # Get annotation counts for all images
+        annotation_counts_map = await AnnotationSummaryRepository.get_counts_for_images(
+            connection, shared_image_ids
+        )
+
+        # Extract detection counts
+        bbox_counts = []
+        for img_id in shared_image_ids:
+            counts = annotation_counts_map.get(img_id, {"detection_count": 0, "segmentation_count": 0})
+            bbox_counts.append(counts["detection_count"])
+
+        # Create dynamic bins
+        bins = AnalyticsService._create_dynamic_bins(bbox_counts)
+
+        # Build histogram
+        histogram = []
+        for label, min_val, max_val in bins:
+            count = sum(1 for c in bbox_counts if min_val <= c <= max_val)
+            histogram.append({
+                "bucket": label,
+                "count": count,
+                "min": min_val,
+                "max": max_val,
+            })
+
+        return histogram
+
+    @staticmethod
+    async def compute_polygon_count_distribution(
+        connection: AsyncConnection,
+        shared_image_ids: List[int],
+    ) -> List[Dict]:
+        """
+        Compute polygon (segmentation) count distribution per image.
+
+        Uses dynamic binning (8-12 bins via Sturges' rule) based on actual data range.
+
+        Returns:
+            List of histogram buckets with {bucket, count, min, max}
+        """
+        if not shared_image_ids:
+            return []
+
+        # Get annotation counts for all images
+        annotation_counts_map = await AnnotationSummaryRepository.get_counts_for_images(
+            connection, shared_image_ids
+        )
+
+        # Extract segmentation counts
+        polygon_counts = []
+        for img_id in shared_image_ids:
+            counts = annotation_counts_map.get(img_id, {"detection_count": 0, "segmentation_count": 0})
+            polygon_counts.append(counts["segmentation_count"])
+
+        # Create dynamic bins
+        bins = AnalyticsService._create_dynamic_bins(polygon_counts)
+
+        # Build histogram
+        histogram = []
+        for label, min_val, max_val in bins:
+            count = sum(1 for c in polygon_counts if min_val <= c <= max_val)
+            histogram.append({
+                "bucket": label,
+                "count": count,
+                "min": min_val,
+                "max": max_val,
+            })
+
+        return histogram
 
     @staticmethod
     async def compute_class_balance(

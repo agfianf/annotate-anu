@@ -67,6 +67,7 @@ export function FullscreenImage({
   } | null>(null);
 
   const hasAnnotations = (bboxes && bboxes.length > 0) || (polygons && polygons.length > 0);
+  const shouldShowOverlay = hasAnnotations || displayOptions?.highlightMode;
 
   const updateBounds = useCallback(() => {
     if (!containerRef.current || !imgRef.current) return;
@@ -93,7 +94,7 @@ export function FullscreenImage({
 
   // Update bounds on resize
   useEffect(() => {
-    if (!hasAnnotations) return;
+    if (!shouldShowOverlay) return;
 
     const resizeObserver = new ResizeObserver(() => {
       updateBounds();
@@ -104,7 +105,7 @@ export function FullscreenImage({
     }
 
     return () => resizeObserver.disconnect();
-  }, [hasAnnotations, updateBounds]);
+  }, [shouldShowOverlay, updateBounds]);
 
   if (isLoading) {
     return (
@@ -132,7 +133,7 @@ export function FullscreenImage({
         className="w-full h-full object-contain"
         onLoad={handleImageLoad}
       />
-      {hasAnnotations && imageBounds && (
+      {shouldShowOverlay && imageBounds && (
         <div
           className="absolute pointer-events-none"
           style={{

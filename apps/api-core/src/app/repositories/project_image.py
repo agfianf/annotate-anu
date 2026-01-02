@@ -230,6 +230,10 @@ class ProjectImageRepository:
         aspect_ratio_max: float | None = None,
         object_count_min: int | None = None,
         object_count_max: int | None = None,
+        bbox_count_min: int | None = None,
+        bbox_count_max: int | None = None,
+        polygon_count_min: int | None = None,
+        polygon_count_max: int | None = None,
         filepath_pattern: str | None = None,
         filepath_paths: list[str] | None = None,
         image_uids: list[UUID] | None = None,
@@ -333,6 +337,52 @@ class ProjectImageRepository:
                 base_query = base_query.where(total_count >= object_count_min)
             if object_count_max is not None:
                 base_query = base_query.where(total_count <= object_count_max)
+
+        # BBox count filtering (detections only)
+        if bbox_count_min is not None or bbox_count_max is not None:
+            bbox_count_subquery = (
+                select(
+                    images.c.shared_image_id,
+                    func.count(detections.c.id).label("bbox_cnt")
+                )
+                .select_from(detections.join(images, detections.c.image_id == images.c.id))
+                .where(images.c.shared_image_id.in_(select(shared_images.c.id)))
+                .group_by(images.c.shared_image_id)
+                .subquery()
+            )
+
+            bbox_cnt = func.coalesce(bbox_count_subquery.c.bbox_cnt, 0)
+            base_query = base_query.outerjoin(
+                bbox_count_subquery, shared_images.c.id == bbox_count_subquery.c.shared_image_id
+            )
+
+            if bbox_count_min is not None:
+                base_query = base_query.where(bbox_cnt >= bbox_count_min)
+            if bbox_count_max is not None:
+                base_query = base_query.where(bbox_cnt <= bbox_count_max)
+
+        # Polygon count filtering (segmentations only)
+        if polygon_count_min is not None or polygon_count_max is not None:
+            polygon_count_subquery = (
+                select(
+                    images.c.shared_image_id,
+                    func.count(segmentations.c.id).label("polygon_cnt")
+                )
+                .select_from(segmentations.join(images, segmentations.c.image_id == images.c.id))
+                .where(images.c.shared_image_id.in_(select(shared_images.c.id)))
+                .group_by(images.c.shared_image_id)
+                .subquery()
+            )
+
+            polygon_cnt = func.coalesce(polygon_count_subquery.c.polygon_cnt, 0)
+            base_query = base_query.outerjoin(
+                polygon_count_subquery, shared_images.c.id == polygon_count_subquery.c.shared_image_id
+            )
+
+            if polygon_count_min is not None:
+                base_query = base_query.where(polygon_cnt >= polygon_count_min)
+            if polygon_count_max is not None:
+                base_query = base_query.where(polygon_cnt <= polygon_count_max)
 
         if filepath_pattern:
             # Convert glob-style wildcards to SQL LIKE

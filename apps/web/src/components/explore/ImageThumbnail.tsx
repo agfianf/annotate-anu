@@ -216,8 +216,8 @@ export const ImageThumbnail = memo(function ImageThumbnail({
         </div>
       </div>
 
-      {/* Annotation overlay (always visible) */}
-      {(overlayBboxes?.length || overlayPolygons?.length) && (
+      {/* Annotation overlay (render when annotations exist OR highlight mode is on) */}
+      {(overlayBboxes?.length || overlayPolygons?.length || visibility?.annotationDisplay?.highlightMode) && (
         <AnnotationOverlay
           bboxes={overlayBboxes}
           polygons={overlayPolygons}
