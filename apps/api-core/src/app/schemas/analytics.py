@@ -426,6 +426,29 @@ class EnhancedDatasetStatsResponse(BaseModel):
     quality_distribution: List[QualityBucket] = Field(
         default_factory=list, description="Overall quality score distribution"
     )
+    # Individual metric histograms for interactive filtering
+    sharpness_histogram: List[QualityBucket] = Field(
+        default_factory=list, description="Sharpness score distribution"
+    )
+    brightness_histogram: List[QualityBucket] = Field(
+        default_factory=list, description="Brightness score distribution"
+    )
+    contrast_histogram: List[QualityBucket] = Field(
+        default_factory=list, description="Contrast score distribution"
+    )
+    uniqueness_histogram: List[QualityBucket] = Field(
+        default_factory=list, description="Uniqueness score distribution"
+    )
+    # RGB channel histograms
+    red_histogram: List[QualityBucket] = Field(
+        default_factory=list, description="Red channel average distribution"
+    )
+    green_histogram: List[QualityBucket] = Field(
+        default_factory=list, description="Green channel average distribution"
+    )
+    blue_histogram: List[QualityBucket] = Field(
+        default_factory=list, description="Blue channel average distribution"
+    )
     issue_breakdown: IssueBreakdownEnhanced = Field(
         default_factory=IssueBreakdownEnhanced, description="Breakdown of quality issues"
     )

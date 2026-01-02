@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.models.data_management import project_images, shared_image_tags, shared_images, tags
 from app.models.image import images
+from app.models.image_quality import image_quality_metrics
 from app.models.job import jobs
 from app.models.task import tasks
 from app.models.annotation import detections, segmentations
@@ -218,7 +219,7 @@ class ProjectImageRepository:
         job_id: int | None = None,
         is_annotated: bool | None = None,
         search: str | None = None,
-        # New filters
+        # Dimension filters
         width_min: int | None = None,
         width_max: int | None = None,
         height_min: int | None = None,
@@ -232,6 +233,26 @@ class ProjectImageRepository:
         filepath_pattern: str | None = None,
         filepath_paths: list[str] | None = None,
         image_uids: list[UUID] | None = None,
+        # Quality metric filters
+        quality_min: float | None = None,
+        quality_max: float | None = None,
+        sharpness_min: float | None = None,
+        sharpness_max: float | None = None,
+        brightness_min: float | None = None,
+        brightness_max: float | None = None,
+        contrast_min: float | None = None,
+        contrast_max: float | None = None,
+        uniqueness_min: float | None = None,
+        uniqueness_max: float | None = None,
+        # RGB channel filters
+        red_min: float | None = None,
+        red_max: float | None = None,
+        green_min: float | None = None,
+        green_max: float | None = None,
+        blue_min: float | None = None,
+        blue_max: float | None = None,
+        # Quality issues filter
+        issues: list[str] | None = None,
     ) -> tuple[list[dict], int]:
         """
         Explore images with combined filtering.
@@ -340,6 +361,104 @@ class ProjectImageRepository:
         # Filter by image UUIDs
         if image_uids and len(image_uids) > 0:
             base_query = base_query.where(shared_images.c.id.in_(image_uids))
+
+        # Quality metric filters - join with image_quality_metrics if any quality filter is set
+        has_quality_filter = any([
+            quality_min is not None, quality_max is not None,
+            sharpness_min is not None, sharpness_max is not None,
+            brightness_min is not None, brightness_max is not None,
+            contrast_min is not None, contrast_max is not None,
+            uniqueness_min is not None, uniqueness_max is not None,
+            red_min is not None, red_max is not None,
+            green_min is not None, green_max is not None,
+            blue_min is not None, blue_max is not None,
+            issues is not None and len(issues) > 0,
+        ])
+
+        if has_quality_filter:
+            # Use subquery to filter by quality metrics
+            quality_subquery = (
+                select(image_quality_metrics.c.shared_image_id)
+                .where(image_quality_metrics.c.status == "completed")
+            )
+
+            if quality_min is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.overall_quality >= quality_min
+                )
+            if quality_max is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.overall_quality <= quality_max
+                )
+            if sharpness_min is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.sharpness >= sharpness_min
+                )
+            if sharpness_max is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.sharpness <= sharpness_max
+                )
+            if brightness_min is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.brightness >= brightness_min
+                )
+            if brightness_max is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.brightness <= brightness_max
+                )
+            if contrast_min is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.contrast >= contrast_min
+                )
+            if contrast_max is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.contrast <= contrast_max
+                )
+            if uniqueness_min is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.uniqueness >= uniqueness_min
+                )
+            if uniqueness_max is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.uniqueness <= uniqueness_max
+                )
+            # RGB channel filters
+            if red_min is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.red_avg >= red_min
+                )
+            if red_max is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.red_avg <= red_max
+                )
+            if green_min is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.green_avg >= green_min
+                )
+            if green_max is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.green_avg <= green_max
+                )
+            if blue_min is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.blue_avg >= blue_min
+                )
+            if blue_max is not None:
+                quality_subquery = quality_subquery.where(
+                    image_quality_metrics.c.blue_avg <= blue_max
+                )
+            # Issues filter - find images containing any of the specified issues
+            if issues and len(issues) > 0:
+                from sqlalchemy import or_
+                # Use PostgreSQL JSONB ?| operator (contains any of array elements)
+                # For each issue, check if it's in the issues array
+                issue_conditions = [
+                    image_quality_metrics.c.issues.contains([issue])
+                    for issue in issues
+                ]
+                quality_subquery = quality_subquery.where(or_(*issue_conditions))
+
+            base_query = base_query.where(shared_images.c.id.in_(quality_subquery))
 
         # Apply exclude filter FIRST (fail-fast)
         if excluded_tag_ids and len(excluded_tag_ids) > 0:

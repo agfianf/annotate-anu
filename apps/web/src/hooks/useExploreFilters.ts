@@ -16,6 +16,26 @@ export interface ExploreFiltersState {
   filepathPattern?: string; // Deprecated - use filepathPaths
   filepathPaths?: string[]; // Filter by specific directory paths
   imageId?: string[]; // Filter by specific image UIDs
+  // Quality metric filters
+  quality_min?: number;
+  quality_max?: number;
+  sharpness_min?: number;
+  sharpness_max?: number;
+  brightness_min?: number;
+  brightness_max?: number;
+  contrast_min?: number;
+  contrast_max?: number;
+  uniqueness_min?: number;
+  uniqueness_max?: number;
+  // RGB channel filters
+  red_min?: number;
+  red_max?: number;
+  green_min?: number;
+  green_max?: number;
+  blue_min?: number;
+  blue_max?: number;
+  // Quality issues filter
+  issues?: string[];
 }
 
 const defaultFilters: ExploreFiltersState = {
@@ -180,6 +200,26 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     setFilters(defaultFilters);
   }, []);
 
+  // Check if any quality filter is active
+  const hasQualityFilters =
+    filters.quality_min !== undefined ||
+    filters.quality_max !== undefined ||
+    filters.sharpness_min !== undefined ||
+    filters.sharpness_max !== undefined ||
+    filters.brightness_min !== undefined ||
+    filters.brightness_max !== undefined ||
+    filters.contrast_min !== undefined ||
+    filters.contrast_max !== undefined ||
+    filters.uniqueness_min !== undefined ||
+    filters.uniqueness_max !== undefined ||
+    filters.red_min !== undefined ||
+    filters.red_max !== undefined ||
+    filters.green_min !== undefined ||
+    filters.green_max !== undefined ||
+    filters.blue_min !== undefined ||
+    filters.blue_max !== undefined ||
+    (filters.issues && filters.issues.length > 0);
+
   const hasActiveFilters =
     Object.keys(filters.tagFilters).length > 0 ||
     Object.values(filters.selectedAttributes).some((arr) => arr.length > 0) ||
@@ -191,7 +231,8 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     filters.sizeRange !== undefined ||
     filters.filepathPattern !== undefined ||
     (filters.filepathPaths && filters.filepathPaths.length > 0) ||
-    (filters.imageId && filters.imageId.length > 0);
+    (filters.imageId && filters.imageId.length > 0) ||
+    hasQualityFilters;
 
   return {
     filters,

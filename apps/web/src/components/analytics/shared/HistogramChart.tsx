@@ -89,6 +89,71 @@ export const HISTOGRAM_THEMES = {
     },
     selectedStroke: '#065F46',
   },
+  blue: {
+    gradient: {
+      from: '#3B82F6',
+      to: '#2563EB',
+      selectedFrom: '#2563EB',
+      selectedTo: '#1D4ED8',
+    },
+    selectionBackground: {
+      selected: 'rgba(59, 130, 246, 0.15)',
+      unselected: 'rgba(60, 60, 60, 0.05)',
+    },
+    selectedStroke: '#1E40AF',
+  },
+  amber: {
+    gradient: {
+      from: '#F59E0B',
+      to: '#D97706',
+      selectedFrom: '#D97706',
+      selectedTo: '#B45309',
+    },
+    selectionBackground: {
+      selected: 'rgba(245, 158, 11, 0.15)',
+      unselected: 'rgba(60, 60, 60, 0.05)',
+    },
+    selectedStroke: '#92400E',
+  },
+  cyan: {
+    gradient: {
+      from: '#06B6D4',
+      to: '#0891B2',
+      selectedFrom: '#0891B2',
+      selectedTo: '#0E7490',
+    },
+    selectionBackground: {
+      selected: 'rgba(6, 182, 212, 0.15)',
+      unselected: 'rgba(60, 60, 60, 0.05)',
+    },
+    selectedStroke: '#155E75',
+  },
+  red: {
+    gradient: {
+      from: '#EF4444',
+      to: '#DC2626',
+      selectedFrom: '#DC2626',
+      selectedTo: '#B91C1C',
+    },
+    selectionBackground: {
+      selected: 'rgba(239, 68, 68, 0.15)',
+      unselected: 'rgba(60, 60, 60, 0.05)',
+    },
+    selectedStroke: '#991B1B',
+  },
+  green: {
+    gradient: {
+      from: '#22C55E',
+      to: '#16A34A',
+      selectedFrom: '#16A34A',
+      selectedTo: '#15803D',
+    },
+    selectionBackground: {
+      selected: 'rgba(34, 197, 94, 0.15)',
+      unselected: 'rgba(60, 60, 60, 0.05)',
+    },
+    selectedStroke: '#166534',
+  },
 } as const;
 
 type ChartMargin = {

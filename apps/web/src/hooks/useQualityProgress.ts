@@ -65,7 +65,8 @@ export function useQualityProgress({
   const isComplete = progress?.status === 'completed';
   const isFailed = progress?.status === 'failed';
   const isCancelled = progress?.status === 'cancelled';
-  const isIdle = progress?.status === 'idle' || !progress;
+  // isIdle: no active job running - includes terminal states where a new job can start
+  const isIdle = !progress || ['idle', 'completed', 'failed', 'cancelled'].includes(progress.status);
 
   return {
     // Progress data

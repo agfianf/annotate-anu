@@ -183,6 +183,26 @@ export interface ExploreFilters {
   filepath_paths?: string[]; // Filter by specific directory paths (checkbox-based)
   include_annotations?: boolean;
   image_uids?: string[]; // Filter by specific image UIDs
+  // Quality metric filters
+  quality_min?: number;
+  quality_max?: number;
+  sharpness_min?: number;
+  sharpness_max?: number;
+  brightness_min?: number;
+  brightness_max?: number;
+  contrast_min?: number;
+  contrast_max?: number;
+  uniqueness_min?: number;
+  uniqueness_max?: number;
+  // RGB channel filters
+  red_min?: number;
+  red_max?: number;
+  green_min?: number;
+  green_max?: number;
+  blue_min?: number;
+  blue_max?: number;
+  // Quality issues filter
+  issues?: string[]; // Filter by quality issues: blur, low_brightness, high_brightness, low_contrast, duplicate
 }
 
 export interface ApiResponse<T> {
@@ -691,6 +711,24 @@ export const projectImagesApi = {
     if (filters?.image_uids && filters.image_uids.length > 0) {
       filters.image_uids.forEach((id) => queryParams.append('image_uids', id));
     }
+    // Quality metric filters
+    if (filters?.quality_min !== undefined) queryParams.append('quality_min', filters.quality_min.toString());
+    if (filters?.quality_max !== undefined) queryParams.append('quality_max', filters.quality_max.toString());
+    if (filters?.sharpness_min !== undefined) queryParams.append('sharpness_min', filters.sharpness_min.toString());
+    if (filters?.sharpness_max !== undefined) queryParams.append('sharpness_max', filters.sharpness_max.toString());
+    if (filters?.brightness_min !== undefined) queryParams.append('brightness_min', filters.brightness_min.toString());
+    if (filters?.brightness_max !== undefined) queryParams.append('brightness_max', filters.brightness_max.toString());
+    if (filters?.contrast_min !== undefined) queryParams.append('contrast_min', filters.contrast_min.toString());
+    if (filters?.contrast_max !== undefined) queryParams.append('contrast_max', filters.contrast_max.toString());
+    if (filters?.uniqueness_min !== undefined) queryParams.append('uniqueness_min', filters.uniqueness_min.toString());
+    if (filters?.uniqueness_max !== undefined) queryParams.append('uniqueness_max', filters.uniqueness_max.toString());
+    // RGB channel filters
+    if (filters?.red_min !== undefined) queryParams.append('red_min', filters.red_min.toString());
+    if (filters?.red_max !== undefined) queryParams.append('red_max', filters.red_max.toString());
+    if (filters?.green_min !== undefined) queryParams.append('green_min', filters.green_min.toString());
+    if (filters?.green_max !== undefined) queryParams.append('green_max', filters.green_max.toString());
+    if (filters?.blue_min !== undefined) queryParams.append('blue_min', filters.blue_min.toString());
+    if (filters?.blue_max !== undefined) queryParams.append('blue_max', filters.blue_max.toString());
 
     const response: AxiosResponse<ApiResponse<ExploreResponse>> = await dataClient.get(
       `/api/v1/projects/${projectId}/explore?${queryParams.toString()}`

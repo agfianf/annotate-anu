@@ -6,6 +6,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+    AlertTriangle,
     Check,
     ChevronDown,
     Delete,
@@ -23,6 +24,7 @@ import {
     RefreshCw,
     Ruler,
     Search,
+    Sparkles,
     Tag,
     X
 } from 'lucide-react';
@@ -269,6 +271,26 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         filepath_pattern: sidebarFilters.filepathPattern,
         filepath_paths: sidebarFilters.filepathPaths && sidebarFilters.filepathPaths.length > 0 ? sidebarFilters.filepathPaths : undefined,
         image_uids: sidebarFilters.imageId && sidebarFilters.imageId.length > 0 ? sidebarFilters.imageId : undefined,
+        // Quality metric filters
+        quality_min: sidebarFilters.quality_min,
+        quality_max: sidebarFilters.quality_max,
+        sharpness_min: sidebarFilters.sharpness_min,
+        sharpness_max: sidebarFilters.sharpness_max,
+        brightness_min: sidebarFilters.brightness_min,
+        brightness_max: sidebarFilters.brightness_max,
+        contrast_min: sidebarFilters.contrast_min,
+        contrast_max: sidebarFilters.contrast_max,
+        uniqueness_min: sidebarFilters.uniqueness_min,
+        uniqueness_max: sidebarFilters.uniqueness_max,
+        // RGB channel filters
+        red_min: sidebarFilters.red_min,
+        red_max: sidebarFilters.red_max,
+        green_min: sidebarFilters.green_min,
+        green_max: sidebarFilters.green_max,
+        blue_min: sidebarFilters.blue_min,
+        blue_max: sidebarFilters.blue_max,
+        // Quality issues
+        issues: sidebarFilters.issues && sidebarFilters.issues.length > 0 ? sidebarFilters.issues : undefined,
       };
     },
     [debouncedSearch, sidebarFilters, selectedTaskIds, selectedJobId, isAnnotatedFilter, getIncludedTagIds, getExcludedTagIds]
@@ -1077,6 +1099,78 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         object_count_max: panelFilters.object_count_max,
       }));
     }
+    // Quality metric filters
+    if (panelFilters.quality_min !== undefined || panelFilters.quality_max !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        quality_min: panelFilters.quality_min,
+        quality_max: panelFilters.quality_max,
+      }));
+    }
+    if (panelFilters.sharpness_min !== undefined || panelFilters.sharpness_max !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        sharpness_min: panelFilters.sharpness_min,
+        sharpness_max: panelFilters.sharpness_max,
+      }));
+    }
+    if (panelFilters.brightness_min !== undefined || panelFilters.brightness_max !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        brightness_min: panelFilters.brightness_min,
+        brightness_max: panelFilters.brightness_max,
+      }));
+    }
+    if (panelFilters.contrast_min !== undefined || panelFilters.contrast_max !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        contrast_min: panelFilters.contrast_min,
+        contrast_max: panelFilters.contrast_max,
+      }));
+    }
+    if (panelFilters.uniqueness_min !== undefined || panelFilters.uniqueness_max !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        uniqueness_min: panelFilters.uniqueness_min,
+        uniqueness_max: panelFilters.uniqueness_max,
+      }));
+    }
+    // RGB channel filters
+    if (panelFilters.red_min !== undefined || panelFilters.red_max !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        red_min: panelFilters.red_min,
+        red_max: panelFilters.red_max,
+      }));
+    }
+    if (panelFilters.green_min !== undefined || panelFilters.green_max !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        green_min: panelFilters.green_min,
+        green_max: panelFilters.green_max,
+      }));
+    }
+    if (panelFilters.blue_min !== undefined || panelFilters.blue_max !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        blue_min: panelFilters.blue_min,
+        blue_max: panelFilters.blue_max,
+      }));
+    }
+    // Specific image filter (for flagged images)
+    if (panelFilters.image_uids !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        imageId: panelFilters.image_uids,
+      }));
+    }
+    // Quality issues filter
+    if (panelFilters.issues !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        issues: panelFilters.issues,
+      }));
+    }
   }, [setFilters, setSidebarWidthRange, setSidebarHeightRange, setSidebarAspectRatioRange]);
 
   const renderProjectExploreContent = (
@@ -1420,6 +1514,99 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 onClick={() => setImageUids([])}
                 className="hover:opacity-100 transition-opacity ml-1"
                 title="Clear image selection"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {/* Quality filters */}
+          {(sidebarFilters.quality_min !== undefined || sidebarFilters.quality_max !== undefined) && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs border border-emerald-200">
+              <Sparkles className="w-3 h-3" />
+              <span className="font-medium">
+                Quality: {sidebarFilters.quality_min?.toFixed(2) ?? '0'} - {sidebarFilters.quality_max?.toFixed(2) ?? '1'}
+              </span>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, quality_min: undefined, quality_max: undefined }))}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear quality filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {(sidebarFilters.sharpness_min !== undefined || sidebarFilters.sharpness_max !== undefined) && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs border border-cyan-200">
+              <span className="font-medium">
+                Sharpness: {sidebarFilters.sharpness_min?.toFixed(2) ?? '0'} - {sidebarFilters.sharpness_max?.toFixed(2) ?? '1'}
+              </span>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, sharpness_min: undefined, sharpness_max: undefined }))}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear sharpness filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {(sidebarFilters.brightness_min !== undefined || sidebarFilters.brightness_max !== undefined) && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs border border-amber-200">
+              <span className="font-medium">
+                Brightness: {sidebarFilters.brightness_min?.toFixed(2) ?? '0'} - {sidebarFilters.brightness_max?.toFixed(2) ?? '1'}
+              </span>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, brightness_min: undefined, brightness_max: undefined }))}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear brightness filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {(sidebarFilters.contrast_min !== undefined || sidebarFilters.contrast_max !== undefined) && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs border border-blue-200">
+              <span className="font-medium">
+                Contrast: {sidebarFilters.contrast_min?.toFixed(2) ?? '0'} - {sidebarFilters.contrast_max?.toFixed(2) ?? '1'}
+              </span>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, contrast_min: undefined, contrast_max: undefined }))}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear contrast filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {(sidebarFilters.uniqueness_min !== undefined || sidebarFilters.uniqueness_max !== undefined) && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs border border-purple-200">
+              <span className="font-medium">
+                Uniqueness: {sidebarFilters.uniqueness_min?.toFixed(2) ?? '0'} - {sidebarFilters.uniqueness_max?.toFixed(2) ?? '1'}
+              </span>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, uniqueness_min: undefined, uniqueness_max: undefined }))}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear uniqueness filter"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+
+          {sidebarFilters.issues && sidebarFilters.issues.length > 0 && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs border border-amber-200">
+              <AlertTriangle className="w-3 h-3" />
+              <span className="font-medium">
+                Issues: {sidebarFilters.issues.map(i => i.replace(/_/g, ' ')).join(', ')}
+              </span>
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, issues: undefined }))}
+                className="hover:opacity-100 transition-opacity ml-1"
+                title="Clear issues filter"
               >
                 <X className="w-3 h-3" />
               </button>

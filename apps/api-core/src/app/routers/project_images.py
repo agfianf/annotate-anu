@@ -265,6 +265,26 @@ async def explore_project_images(
     filepath_pattern: str | None = Query(default=None, max_length=255),
     filepath_paths: list[str] | None = Query(default=None),
     image_uids: list[UUID] | None = Query(default=None),
+    # Quality metric filters
+    quality_min: float | None = Query(default=None, ge=0, le=1, description="Minimum overall quality score (0-1)"),
+    quality_max: float | None = Query(default=None, ge=0, le=1, description="Maximum overall quality score (0-1)"),
+    sharpness_min: float | None = Query(default=None, ge=0, le=1, description="Minimum sharpness score (0-1)"),
+    sharpness_max: float | None = Query(default=None, ge=0, le=1, description="Maximum sharpness score (0-1)"),
+    brightness_min: float | None = Query(default=None, ge=0, le=1, description="Minimum brightness score (0-1)"),
+    brightness_max: float | None = Query(default=None, ge=0, le=1, description="Maximum brightness score (0-1)"),
+    contrast_min: float | None = Query(default=None, ge=0, le=1, description="Minimum contrast score (0-1)"),
+    contrast_max: float | None = Query(default=None, ge=0, le=1, description="Maximum contrast score (0-1)"),
+    uniqueness_min: float | None = Query(default=None, ge=0, le=1, description="Minimum uniqueness score (0-1)"),
+    uniqueness_max: float | None = Query(default=None, ge=0, le=1, description="Maximum uniqueness score (0-1)"),
+    # RGB channel filters
+    red_min: float | None = Query(default=None, ge=0, le=1, description="Minimum red channel average (0-1)"),
+    red_max: float | None = Query(default=None, ge=0, le=1, description="Maximum red channel average (0-1)"),
+    green_min: float | None = Query(default=None, ge=0, le=1, description="Minimum green channel average (0-1)"),
+    green_max: float | None = Query(default=None, ge=0, le=1, description="Maximum green channel average (0-1)"),
+    blue_min: float | None = Query(default=None, ge=0, le=1, description="Minimum blue channel average (0-1)"),
+    blue_max: float | None = Query(default=None, ge=0, le=1, description="Maximum blue channel average (0-1)"),
+    # Quality issues filter
+    issues: list[str] | None = Query(default=None, description="Filter by quality issues: blur, low_brightness, high_brightness, low_contrast, duplicate"),
     # Annotation overlay options
     include_bboxes: bool = Query(default=True, description="Include bboxes in annotation_summary"),
     include_polygons: bool = Query(default=True, description="Include polygon data for segmentations"),
@@ -308,6 +328,26 @@ async def explore_project_images(
         filepath_pattern=filepath_pattern,
         filepath_paths=filepath_paths,
         image_uids=image_uids,
+        # Quality filters
+        quality_min=quality_min,
+        quality_max=quality_max,
+        sharpness_min=sharpness_min,
+        sharpness_max=sharpness_max,
+        brightness_min=brightness_min,
+        brightness_max=brightness_max,
+        contrast_min=contrast_min,
+        contrast_max=contrast_max,
+        uniqueness_min=uniqueness_min,
+        uniqueness_max=uniqueness_max,
+        # RGB filters
+        red_min=red_min,
+        red_max=red_max,
+        green_min=green_min,
+        green_max=green_max,
+        blue_min=blue_min,
+        blue_max=blue_max,
+        # Quality issues
+        issues=issues,
     )
 
     # Fetch annotation summaries for all images in batch

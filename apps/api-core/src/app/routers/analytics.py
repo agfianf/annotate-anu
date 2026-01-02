@@ -726,6 +726,37 @@ async def get_enhanced_dataset_stats(
             count = sum(1 for s in quality_scores if min_val <= s < max_val or (max_val == 1.0 and s == 1.0))
             quality_distribution.append(QualityBucket(bucket=label, count=count, min=min_val, max=max_val))
 
+    # Build individual metric histograms for interactive filtering
+    def build_metric_histogram(metric_name: str, buckets_config: list) -> list:
+        """Build histogram for a specific metric."""
+        values = [m.get(metric_name) for m in quality_distribution_data if m.get(metric_name) is not None]
+        if not values:
+            return []
+        histogram = []
+        for label, min_val, max_val in buckets_config:
+            count = sum(1 for v in values if min_val <= v < max_val or (max_val == 1.0 and v == 1.0))
+            histogram.append(QualityBucket(bucket=label, count=count, min=min_val, max=max_val))
+        return histogram
+
+    # Use consistent score-based buckets for all metrics (raw 0-1 scale)
+    score_buckets = [
+        ("0.0-0.2", 0.0, 0.2),
+        ("0.2-0.4", 0.2, 0.4),
+        ("0.4-0.6", 0.4, 0.6),
+        ("0.6-0.8", 0.6, 0.8),
+        ("0.8-1.0", 0.8, 1.0),
+    ]
+
+    sharpness_histogram = build_metric_histogram("sharpness", score_buckets)
+    brightness_histogram = build_metric_histogram("brightness", score_buckets)
+    contrast_histogram = build_metric_histogram("contrast", score_buckets)
+    uniqueness_histogram = build_metric_histogram("uniqueness", score_buckets)
+
+    # RGB channel histograms
+    red_histogram = build_metric_histogram("red_avg", score_buckets)
+    green_histogram = build_metric_histogram("green_avg", score_buckets)
+    blue_histogram = build_metric_histogram("blue_avg", score_buckets)
+
     # Count issues
     issue_counts = {"blur": 0, "low_brightness": 0, "high_brightness": 0, "low_contrast": 0, "duplicate": 0}
     for m in quality_distribution_data:
@@ -788,6 +819,13 @@ async def get_enhanced_dataset_stats(
         quality_status_counts=QualityStatusCounts(**status_counts),
         quality_averages=QualityMetricsAverages(**quality_stats.get("averages", {})) if quality_stats.get("averages") else None,
         quality_distribution=quality_distribution,
+        sharpness_histogram=sharpness_histogram,
+        brightness_histogram=brightness_histogram,
+        contrast_histogram=contrast_histogram,
+        uniqueness_histogram=uniqueness_histogram,
+        red_histogram=red_histogram,
+        green_histogram=green_histogram,
+        blue_histogram=blue_histogram,
         issue_breakdown=issue_breakdown,
         flagged_images=flagged_images,
     )
@@ -1019,7 +1057,6 @@ async def start_quality_job(
         project_id=project_id,
         total_images=total_to_process,
     )
-    await connection.commit()
 
     # Dispatch Celery task
     task = process_quality_metrics_task.delay(
@@ -1028,7 +1065,7 @@ async def start_quality_job(
         batch_size=batch_size,
     )
 
-    # Update job with task ID
+    # Update job with task ID and commit both changes together
     await QualityJobRepository.update_celery_task_id(connection, job["id"], task.id)
     await connection.commit()
 

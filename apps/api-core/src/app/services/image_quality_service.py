@@ -323,7 +323,8 @@ class ImageQualityService:
         # First pass: compute individual metrics
         computed_metrics: dict[UUID, dict] = {}
         for item in batch_items:
-            shared_image_id = item["id"]
+            # Use shared_image_id from the quality metrics record
+            shared_image_id = item["shared_image_id"]
             file_path = item.get("file_path")
 
             if not file_path:

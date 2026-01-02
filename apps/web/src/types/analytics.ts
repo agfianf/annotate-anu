@@ -431,6 +431,15 @@ export interface EnhancedDatasetStatsResponse {
   quality_status_counts: QualityStatusCounts;
   quality_averages?: QualityMetricsAverages;
   quality_distribution: QualityBucket[];
+  // Individual metric histograms for interactive filtering
+  sharpness_histogram: QualityBucket[];
+  brightness_histogram: QualityBucket[];
+  contrast_histogram: QualityBucket[];
+  uniqueness_histogram: QualityBucket[];
+  // RGB channel histograms
+  red_histogram: QualityBucket[];
+  green_histogram: QualityBucket[];
+  blue_histogram: QualityBucket[];
   issue_breakdown: IssueBreakdownEnhanced;
   flagged_images: FlaggedImageEnhanced[];
 }

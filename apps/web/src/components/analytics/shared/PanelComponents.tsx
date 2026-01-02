@@ -5,7 +5,8 @@
 
 import { useRef, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { Loader2, AlertCircle, type LucideIcon } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Loader2, AlertCircle, Info, type LucideIcon } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
@@ -74,7 +75,7 @@ export function PanelEmptyState({
 /**
  * Color variants for stat cards
  */
-type ColorVariant = 'emerald' | 'blue' | 'purple' | 'orange' | 'red' | 'yellow' | 'cyan';
+type ColorVariant = 'emerald' | 'blue' | 'purple' | 'orange' | 'red' | 'yellow' | 'cyan' | 'amber' | 'green';
 
 const colorStyles: Record<ColorVariant, { bg: string; border: string; iconBg: string; iconColor: string; textColor: string; labelColor: string }> = {
   emerald: {
@@ -133,6 +134,22 @@ const colorStyles: Record<ColorVariant, { bg: string; border: string; iconBg: st
     textColor: 'text-gray-900',
     labelColor: 'text-gray-500',
   },
+  amber: {
+    bg: 'linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(217, 119, 6, 0.08) 100%)',
+    border: 'border-amber-200/50',
+    iconBg: 'bg-amber-100',
+    iconColor: 'text-amber-600',
+    textColor: 'text-gray-900',
+    labelColor: 'text-gray-500',
+  },
+  green: {
+    bg: 'linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, rgba(22, 163, 74, 0.08) 100%)',
+    border: 'border-green-200/50',
+    iconBg: 'bg-green-100',
+    iconColor: 'text-green-600',
+    textColor: 'text-gray-900',
+    labelColor: 'text-gray-500',
+  },
 };
 
 /**
@@ -187,6 +204,8 @@ export function ChartSection({
   icon: Icon,
   title,
   hint,
+  tooltip,
+  xAxisHint,
   color = 'emerald',
   height = 200,
   skipDimensionCheck = false,
@@ -195,6 +214,8 @@ export function ChartSection({
   icon: LucideIcon;
   title: string;
   hint?: string;
+  tooltip?: string;
+  xAxisHint?: string;
   color?: ColorVariant;
   height?: number;
   skipDimensionCheck?: boolean;
@@ -202,7 +223,10 @@ export function ChartSection({
 }) {
   const styles = colorStyles[color];
   const containerRef = useRef<HTMLDivElement>(null);
+  const infoIconRef = useRef<SVGSVGElement>(null);
   const [hasValidDimensions, setHasValidDimensions] = useState(skipDimensionCheck);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
 
   // Track container dimensions using ResizeObserver
   useEffect(() => {
@@ -227,11 +251,46 @@ export function ChartSection({
     return () => resizeObserver.disconnect();
   }, [skipDimensionCheck]);
 
+  // Update tooltip position when showing
+  useEffect(() => {
+    if (showTooltip && infoIconRef.current) {
+      const rect = infoIconRef.current.getBoundingClientRect();
+      setTooltipPosition({
+        top: rect.top - 8, // Position above the icon
+        left: rect.left + rect.width / 2, // Center horizontally
+      });
+    }
+  }, [showTooltip]);
+
   return (
     <div className={`p-3 rounded-lg border ${styles.border} bg-white/80`}>
       <div className="flex items-center gap-2 mb-2">
         <Icon className={`w-3.5 h-3.5 ${styles.iconColor}`} />
         <h3 className="text-xs font-semibold text-gray-700">{title}</h3>
+        {tooltip && (
+          <div className="relative">
+            <Info
+              ref={infoIconRef}
+              className="w-3 h-3 text-gray-400 hover:text-gray-600 cursor-help transition-colors"
+              onMouseEnter={() => setShowTooltip(true)}
+              onMouseLeave={() => setShowTooltip(false)}
+            />
+            {showTooltip && createPortal(
+              <div
+                className="fixed px-3 py-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg shadow-xl w-[280px] pointer-events-none"
+                style={{
+                  top: tooltipPosition.top,
+                  left: tooltipPosition.left,
+                  transform: 'translate(-50%, -100%)',
+                  zIndex: 99999,
+                }}
+              >
+                {tooltip}
+              </div>,
+              document.body
+            )}
+          </div>
+        )}
         {hint && <span className="text-[10px] text-gray-400 ml-auto">{hint}</span>}
       </div>
       <div ref={containerRef} style={{ width: '100%', height, minWidth: 1, minHeight: 1 }}>
@@ -241,6 +300,11 @@ export function ChartSection({
           </div>
         )}
       </div>
+      {xAxisHint && (
+        <div className="mt-1.5 pt-1.5 border-t border-gray-100 text-[11px] text-gray-500 text-center">
+          <span className="font-medium">Scale:</span> {xAxisHint}
+        </div>
+      )}
     </div>
   );
 }

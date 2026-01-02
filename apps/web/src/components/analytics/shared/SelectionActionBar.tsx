@@ -27,7 +27,7 @@ export function SelectionActionBar({
       animate={{ opacity: 1, y: 0 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, y: -10 }}
       transition={{ duration: prefersReducedMotion ? 0.01 : 0.2 }}
-      className="flex items-center gap-2 mt-2 p-2 bg-emerald-50/80 backdrop-blur-sm rounded-lg border border-emerald-200/50"
+      className="flex items-center gap-2 mt-2 p-2 bg-emerald-50/80 backdrop-blur-sm rounded-lg border border-emerald-200/50 relative z-50"
       role="toolbar"
       aria-label="Selection actions"
     >
