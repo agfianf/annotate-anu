@@ -741,6 +741,10 @@ export const projectImagesApi = {
     if (filters?.bbox_count_max !== undefined) queryParams.append('bbox_count_max', filters.bbox_count_max.toString());
     if (filters?.polygon_count_min !== undefined) queryParams.append('polygon_count_min', filters.polygon_count_min.toString());
     if (filters?.polygon_count_max !== undefined) queryParams.append('polygon_count_max', filters.polygon_count_max.toString());
+    // Quality issues filter
+    if (filters?.issues && filters.issues.length > 0) {
+      filters.issues.forEach((issue) => queryParams.append('issues', issue));
+    }
 
     const response: AxiosResponse<ApiResponse<ExploreResponse>> = await dataClient.get(
       `/api/v1/projects/${projectId}/explore?${queryParams.toString()}`
