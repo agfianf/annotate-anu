@@ -22,6 +22,9 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "aiofiles>=24.1.0",
     "pillow>=10.0.0",
+    "opencv-python-headless>=4.8.0",
+    "imagehash>=4.3.0",
+    "numpy>=1.26.0",
 ]
 
 [build-system]

@@ -121,7 +121,7 @@ export const AnalyticsPanelContainer = memo(function AnalyticsPanelContainer({
         initial={prefersReducedMotion ? {} : { opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: prefersReducedMotion ? 0.01 : 0.25 }}
-        className="w-full min-w-0 flex flex-col h-full glass-strong rounded-xl overflow-hidden"
+        className="w-full min-w-0 flex flex-col h-full glass-strong rounded-xl overflow-hidden border-l-2 border-gray-200/60 shadow-[-8px_0_24px_-12px_rgba(0,0,0,0.12)]"
         role="region"
         aria-label="Analytics panels"
       >

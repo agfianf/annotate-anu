@@ -502,3 +502,53 @@ class AnnotationSummaryRepository:
                 "polygons": polygons.get(shared_image_id, []) if include_polygons else None,
             }
         return result
+
+    @staticmethod
+    async def get_annotation_centers(
+        connection: AsyncConnection,
+        shared_image_ids: list[UUID],
+    ) -> list[dict]:
+        """
+        Get center points of all annotations for spatial heatmap.
+        Returns list of {x, y} normalized coordinates (0-1).
+
+        Calculates center of each detection bbox and segmentation bbox.
+        """
+        if not shared_image_ids:
+            return []
+
+        centers = []
+
+        # Get detection centers
+        det_stmt = (
+            select(
+                ((detections.c.x_min + detections.c.x_max) / 2).label("center_x"),
+                ((detections.c.y_min + detections.c.y_max) / 2).label("center_y"),
+            )
+            .select_from(
+                detections.join(images, detections.c.image_id == images.c.id)
+            )
+            .where(images.c.shared_image_id.in_(shared_image_ids))
+        )
+        det_result = await connection.execute(det_stmt)
+        for row in det_result.fetchall():
+            centers.append({"x": float(row.center_x), "y": float(row.center_y)})
+
+        # Get segmentation centers (from cached bbox)
+        seg_stmt = (
+            select(
+                ((segmentations.c.bbox_x_min + segmentations.c.bbox_x_max) / 2).label("center_x"),
+                ((segmentations.c.bbox_y_min + segmentations.c.bbox_y_max) / 2).label("center_y"),
+            )
+            .select_from(
+                segmentations.join(images, segmentations.c.image_id == images.c.id)
+            )
+            .where(images.c.shared_image_id.in_(shared_image_ids))
+            .where(segmentations.c.bbox_x_min.isnot(None))
+        )
+        seg_result = await connection.execute(seg_stmt)
+        for row in seg_result.fetchall():
+            if row.center_x is not None and row.center_y is not None:
+                centers.append({"x": float(row.center_x), "y": float(row.center_y)})
+
+        return centers

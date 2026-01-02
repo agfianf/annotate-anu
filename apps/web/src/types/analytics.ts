@@ -10,14 +10,14 @@ import type { ExploreFilters } from '@/lib/data-management-client';
  * Available panel types
  */
 export type PanelType =
-  | 'dataset-stats'
-  | 'annotation-coverage'
-  | 'spatial-heatmap'
-  | 'image-quality'
-  | 'prediction-analysis'
-  | 'embeddings-viewer'
-  | 'confusion-matrix'
-  | 'model-comparison';
+  | 'dataset-stats'           // Enhanced (combines: dataset-stats + dimension-insights + class-balance + image-quality)
+  | 'annotation-analysis'     // Combines annotation-coverage + spatial-heatmap
+  | 'model-analysis';         // Coming Soon: Combines prediction-analysis + confusion-matrix + model-comparison
+
+/**
+ * Panel categories for organization
+ */
+export type PanelCategory = 'active' | 'coming-soon';
 
 /**
  * Layout modes for panel arrangement
@@ -64,6 +64,8 @@ export interface PanelDefinition {
   description: string;
   icon: LucideIcon;
   component: React.LazyExoticComponent<React.ComponentType<PanelProps>>;
+  category: PanelCategory;             // Panel category for organization
+  features?: string[];                 // Features list for coming soon panels
   requiresJobFilter?: boolean;         // Show warning if no job selected
   requiresTaskFilter?: boolean;        // Show warning if no task selected
 }
@@ -189,6 +191,7 @@ export interface AnalyticsPanelContextValue {
 
 /**
  * Annotation Coverage API response
+ * Now counts actual detections/segmentations, not tags.
  */
 export interface AnnotationCoverageResponse {
   total_images: number;
@@ -197,6 +200,10 @@ export interface AnnotationCoverageResponse {
   coverage_percentage: number;
   density_histogram: DensityBucket[];
   coverage_by_category?: CoverageByCategory[];
+  // New fields for enhanced statistics
+  total_objects: number;                // Total annotations across all images
+  avg_objects_per_image: number;        // Average objects per image
+  median_objects_per_image: number;     // Median objects per image
 }
 
 export interface DensityBucket {
@@ -233,6 +240,7 @@ export interface ClassDistribution {
 
 /**
  * Spatial Heatmap API response
+ * Now includes grid density for Canvas-based heatmap rendering.
  */
 export interface SpatialHeatmapResponse {
   annotation_points: AnnotationPoint[];
@@ -240,6 +248,10 @@ export interface SpatialHeatmapResponse {
   spread: { x_std: number; y_std: number };
   clustering_score: number;            // 0-1
   total_annotations: number;
+  // Grid density for Canvas heatmap
+  grid_density: number[][];            // 2D array of counts per cell
+  grid_size: number;                   // Grid dimension (e.g., 10 for 10x10)
+  max_cell_count: number;              // Maximum count in any cell (for color scaling)
 }
 
 export interface AnnotationPoint {
@@ -280,4 +292,181 @@ export interface FlaggedImage {
   blur_score?: number;
   brightness?: number;
   contrast?: number;
+}
+
+// ============================================================================
+// Dimension Insights (Roboflow-style)
+// ============================================================================
+
+/**
+ * Dimension Insights API response
+ */
+export interface DimensionInsightsResponse {
+  // Median values
+  median_width: number;
+  median_height: number;
+  median_aspect_ratio: number;
+  // Range values
+  min_width: number;
+  max_width: number;
+  min_height: number;
+  max_height: number;
+  // Variance
+  dimension_variance: number;          // 0-1 (higher = more varied)
+  // Recommendation
+  recommended_resize: {
+    width: number;
+    height: number;
+    reason: string;
+  };
+  // Scatter plot data
+  scatter_data: DimensionScatterPoint[];
+  // Aspect ratio distribution
+  aspect_ratio_distribution: AspectRatioDistributionBucket[];
+}
+
+export interface DimensionScatterPoint {
+  image_id: string;
+  width: number;
+  height: number;
+  aspect_ratio: number;
+}
+
+export interface AspectRatioDistributionBucket {
+  bucket: string;                      // e.g., "Portrait (<0.9)"
+  count: number;
+  min: number;
+  max: number;
+}
+
+
+// ============================================================================
+// CONSOLIDATED ANALYTICS TYPES (Panel Consolidation)
+// ============================================================================
+
+/**
+ * Quality Status Counts
+ */
+export interface QualityStatusCounts {
+  pending: number;
+  processing: number;
+  completed: number;
+  failed: number;
+}
+
+/**
+ * Quality Metrics Averages
+ */
+export interface QualityMetricsAverages {
+  sharpness?: number;
+  brightness?: number;
+  contrast?: number;
+  uniqueness?: number;
+  red_avg?: number;
+  green_avg?: number;
+  blue_avg?: number;
+  overall_quality?: number;
+}
+
+/**
+ * Enhanced Issue Breakdown
+ */
+export interface IssueBreakdownEnhanced {
+  blur: number;
+  low_brightness: number;
+  high_brightness: number;
+  low_contrast: number;
+  duplicate: number;
+}
+
+/**
+ * Flagged Image Enhanced
+ */
+export interface FlaggedImageEnhanced {
+  shared_image_id: string;
+  filename: string;
+  file_path: string;
+  overall_quality: number;
+  sharpness?: number;
+  brightness?: number;
+  issues: string[];
+}
+
+/**
+ * Enhanced Dataset Stats Response (Consolidated)
+ * Combines: Dataset Stats + Dimension Insights + Class Balance + Image Quality
+ */
+export interface EnhancedDatasetStatsResponse {
+  // Original Dataset Stats
+  tag_distribution: TagDistribution[];
+  dimension_histogram: DimensionBucket[];
+  aspect_ratio_histogram: AspectRatioBucket[];
+  file_size_stats: FileSizeStats;
+
+  // From Dimension Insights
+  median_width: number;
+  median_height: number;
+  median_aspect_ratio: number;
+  min_width: number;
+  max_width: number;
+  min_height: number;
+  max_height: number;
+  dimension_variance: number;
+  recommended_resize?: {
+    width: number;
+    height: number;
+    reason: string;
+  };
+  scatter_data: DimensionScatterPoint[];
+  aspect_ratio_distribution: AspectRatioDistributionBucket[];
+
+  // From Class Balance
+  class_distribution: ClassDistribution[];
+  imbalance_score: number;
+  imbalance_level: 'balanced' | 'moderate' | 'severe';
+  class_recommendations: string[];
+
+  // Image Quality (NEW)
+  quality_status: 'complete' | 'partial' | 'pending';
+  quality_status_counts: QualityStatusCounts;
+  quality_averages?: QualityMetricsAverages;
+  quality_distribution: QualityBucket[];
+  issue_breakdown: IssueBreakdownEnhanced;
+  flagged_images: FlaggedImageEnhanced[];
+}
+
+/**
+ * Annotation Analysis Response (Consolidated)
+ * Combines: Annotation Coverage + Spatial Heatmap
+ */
+export interface AnnotationAnalysisResponse {
+  // From Annotation Coverage
+  total_images: number;
+  annotated_images: number;
+  unannotated_images: number;
+  coverage_percentage: number;
+  density_histogram: DensityBucket[];
+  total_objects: number;
+  avg_objects_per_image: number;
+  median_objects_per_image: number;
+
+  // From Spatial Heatmap
+  grid_density: number[][];
+  grid_size: number;
+  max_cell_count: number;
+  center_of_mass: { x: number; y: number };
+  spread: { x_std: number; y_std: number };
+  clustering_score: number;
+  total_annotations: number;
+  annotation_points: AnnotationPoint[];
+}
+
+/**
+ * Process Quality Response
+ */
+export interface ProcessQualityResponse {
+  processed: number;
+  failed: number;
+  skipped: number;
+  remaining: number;
 }

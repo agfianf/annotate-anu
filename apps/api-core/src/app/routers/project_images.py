@@ -3,7 +3,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.dependencies.auth import get_current_active_user
@@ -16,6 +16,8 @@ from app.repositories.shared_image import SharedImageRepository
 from app.repositories.shared_image_tag import SharedImageTagRepository
 from app.repositories.tag import TagRepository
 from app.schemas.auth import UserBase
+from app.services.image_quality_service import ImageQualityService
+from app.repositories.image_quality import ImageQualityRepository
 from app.schemas.data_management import (
     AddTagsRequest,
     AnnotationSummary,
@@ -123,7 +125,13 @@ async def add_images_to_pool(
     current_user: Annotated[UserBase, Depends(get_current_active_user)],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
-    """Add images to project pool."""
+    """Add images to project pool and trigger quality metrics computation.
+
+    This endpoint:
+    1. Adds images to the project pool
+    2. Creates pending quality metrics records
+    3. Dispatches a Celery task for background quality processing
+    """
     project_id = project["id"]
 
     images_added = await ProjectImageRepository.bulk_add_to_pool(
@@ -132,6 +140,30 @@ async def add_images_to_pool(
         shared_image_ids=payload.shared_image_ids,
         user_id=current_user.id,
     )
+
+    # Queue quality metrics computation for newly added images
+    if images_added > 0:
+        await ImageQualityRepository.bulk_create_pending(
+            connection, payload.shared_image_ids
+        )
+
+        # Dispatch Celery task for background processing (non-blocking)
+        # This will process ALL pending images in the project, including newly added ones
+        try:
+            from app.tasks.quality import process_quality_metrics_task
+
+            # Commit first so the pending records are visible to the worker
+            await connection.commit()
+
+            # Dispatch task without creating a job record (auto-triggered)
+            process_quality_metrics_task.delay(
+                job_id=None,  # No job tracking for auto-triggered processing
+                project_id=project_id,
+                batch_size=50,
+            )
+        except Exception:
+            # Don't fail the upload if Celery is unavailable
+            pass
 
     total = await ProjectImageRepository.get_pool_count(connection, project_id)
 
@@ -228,6 +260,8 @@ async def explore_project_images(
     file_size_max: int | None = Query(default=None, ge=0),
     aspect_ratio_min: float | None = Query(default=None, ge=0, description="Minimum aspect ratio (width/height)"),
     aspect_ratio_max: float | None = Query(default=None, ge=0, description="Maximum aspect ratio (width/height)"),
+    object_count_min: int | None = Query(default=None, ge=0, description="Minimum annotation count per image (detections + segmentations)"),
+    object_count_max: int | None = Query(default=None, ge=0, description="Maximum annotation count per image (detections + segmentations)"),
     filepath_pattern: str | None = Query(default=None, max_length=255),
     filepath_paths: list[str] | None = Query(default=None),
     image_uids: list[UUID] | None = Query(default=None),
@@ -269,6 +303,8 @@ async def explore_project_images(
         file_size_max=file_size_max,
         aspect_ratio_min=aspect_ratio_min,
         aspect_ratio_max=aspect_ratio_max,
+        object_count_min=object_count_min,
+        object_count_max=object_count_max,
         filepath_pattern=filepath_pattern,
         filepath_paths=filepath_paths,
         image_uids=image_uids,

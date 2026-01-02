@@ -6,17 +6,6 @@
 
 import { useMemo, useState, useRef, useEffect } from 'react';
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-  LabelList,
-} from 'recharts';
-import {
   Loader2,
   BarChart3,
   Ruler,
@@ -37,17 +26,9 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useChartClick } from '../shared/useChartClick';
 import { useChartMultiSelect } from '../shared/useChartMultiSelect';
 import { SelectionActionBar } from '../shared/SelectionActionBar';
-import {
-  CHART_CONFIG,
-  CHART_TOOLTIP_CLASSNAME,
-  getCellProps,
-  getBarProps,
-  getGridProps,
-  getXAxisProps,
-  getYAxisProps,
-  getTooltipCursorProps,
-} from '../shared/chartConfig';
-import { BarValueLabel, ChartSection } from '../shared/PanelComponents';
+import { CHART_TOOLTIP_CLASSNAME } from '../shared/chartConfig';
+import { ChartSection } from '../shared/PanelComponents';
+import { HistogramChart, HISTOGRAM_THEMES } from '../shared/HistogramChart';
 
 /**
  * Format file size to human-readable format
@@ -1045,73 +1026,16 @@ export default function DatasetStatsPanel({
             color="purple"
             height={160}
           >
-            <div
-              ref={dimensionChartClick.containerRef}
-              onClick={dimensionChartClick.handleContainerClick}
-              className="h-full cursor-pointer chart-clickable"
-            >
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <BarChart
-                  data={dimensionChartData}
-                  margin={CHART_CONFIG.marginCompact}
-                >
-                  <defs>
-                    <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.8} />
-                      <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.6} />
-                    </linearGradient>
-                    <linearGradient id="purpleGradientSelected" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#7C3AED" stopOpacity={1} />
-                      <stop offset="100%" stopColor="#6D28D9" stopOpacity={1} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid {...getGridProps()} />
-                  <XAxis dataKey="name" {...getXAxisProps(true)} />
-                  <YAxis {...getYAxisProps()} />
-                  <Tooltip content={<CustomTooltip />} cursor={getTooltipCursorProps()} />
-                  <Bar
-                    dataKey="count"
-                    {...getBarProps(!prefersReducedMotion)}
-                    background={(props: any) => {
-                      const index = props.index;
-                      const isSelected = dimensionMultiSelect.selectedIndices.has(index);
-                      const hasSelection = dimensionMultiSelect.hasSelection;
-
-                      if (!hasSelection) return null;
-
-                      return (
-                        <rect
-                          x={props.x}
-                          y={0}
-                          width={props.width}
-                          height={props.height + props.y}
-                          fill={
-                            isSelected
-                              ? 'rgba(139, 92, 246, 0.15)' // Purple glow for selected
-                              : 'rgba(60, 60, 60, 0.05)'    // Subtle gray for unselected
-                          }
-                        />
-                      );
-                    }}
-                  >
-                    {dimensionChartData.map((entry, index) => {
-                      const isSelected = dimensionMultiSelect.selectedIndices.has(index);
-                      const hasSelection = dimensionMultiSelect.hasSelection;
-                      return (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={isSelected ? 'url(#purpleGradientSelected)' : 'url(#purpleGradient)'}
-                          stroke={isSelected ? '#5B21B6' : 'none'}
-                          strokeWidth={isSelected ? 3 : 0}
-                          opacity={hasSelection ? (isSelected ? 1 : 0.25) : 0.85}
-                        />
-                      );
-                    })}
-                    <LabelList dataKey="count" content={<BarValueLabel />} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <HistogramChart
+              data={dimensionChartData}
+              xKey="name"
+              yKey="count"
+              tooltip={<CustomTooltip />}
+              multiSelect={dimensionMultiSelect}
+              chartClick={dimensionChartClick}
+              theme={HISTOGRAM_THEMES.purple}
+              prefersReducedMotion={prefersReducedMotion}
+            />
 
             <SelectionActionBar
               selectionCount={dimensionMultiSelect.selectionCount}
@@ -1137,73 +1061,16 @@ export default function DatasetStatsPanel({
             color="orange"
             height={160}
           >
-            <div
-              ref={aspectRatioChartClick.containerRef}
-              onClick={aspectRatioChartClick.handleContainerClick}
-              className="h-full cursor-pointer chart-clickable"
-            >
-              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-                <BarChart
-                  data={aspectRatioChartData}
-                  margin={CHART_CONFIG.marginCompact}
-                >
-                  <defs>
-                    <linearGradient id="orangeGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#F97316" stopOpacity={0.8} />
-                      <stop offset="100%" stopColor="#EA580C" stopOpacity={0.6} />
-                    </linearGradient>
-                    <linearGradient id="orangeGradientSelected" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#EA580C" stopOpacity={1} />
-                      <stop offset="100%" stopColor="#C2410C" stopOpacity={1} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid {...getGridProps()} />
-                  <XAxis dataKey="name" {...getXAxisProps(true)} />
-                  <YAxis {...getYAxisProps()} />
-                  <Tooltip content={<CustomTooltip />} cursor={getTooltipCursorProps()} />
-                  <Bar
-                    dataKey="count"
-                    {...getBarProps(!prefersReducedMotion)}
-                    background={(props: any) => {
-                      const index = props.index;
-                      const isSelected = aspectRatioMultiSelect.selectedIndices.has(index);
-                      const hasSelection = aspectRatioMultiSelect.hasSelection;
-
-                      if (!hasSelection) return null;
-
-                      return (
-                        <rect
-                          x={props.x}
-                          y={0}
-                          width={props.width}
-                          height={props.height + props.y}
-                          fill={
-                            isSelected
-                              ? 'rgba(249, 115, 22, 0.15)' // Orange glow for selected
-                              : 'rgba(60, 60, 60, 0.05)'   // Subtle gray for unselected
-                          }
-                        />
-                      );
-                    }}
-                  >
-                    {aspectRatioChartData.map((entry, index) => {
-                      const isSelected = aspectRatioMultiSelect.selectedIndices.has(index);
-                      const hasSelection = aspectRatioMultiSelect.hasSelection;
-                      return (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={isSelected ? 'url(#orangeGradientSelected)' : 'url(#orangeGradient)'}
-                          stroke={isSelected ? '#9A3412' : 'none'}
-                          strokeWidth={isSelected ? 3 : 0}
-                          opacity={hasSelection ? (isSelected ? 1 : 0.25) : 0.85}
-                        />
-                      );
-                    })}
-                    <LabelList dataKey="count" content={<BarValueLabel />} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <HistogramChart
+              data={aspectRatioChartData}
+              xKey="name"
+              yKey="count"
+              tooltip={<CustomTooltip />}
+              multiSelect={aspectRatioMultiSelect}
+              chartClick={aspectRatioChartClick}
+              theme={HISTOGRAM_THEMES.orange}
+              prefersReducedMotion={prefersReducedMotion}
+            />
 
             <SelectionActionBar
               selectionCount={aspectRatioMultiSelect.selectionCount}

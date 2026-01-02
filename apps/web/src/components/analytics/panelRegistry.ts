@@ -1,76 +1,63 @@
 /**
  * Panel Registry
  * Single source of truth for all available panel types
+ *
+ * ACTIVE PANELS:
+ * - dataset-stats: Enhanced panel with tabs (Overview, Dimensions, Class Balance, Quality)
+ * - annotation-analysis: Combined coverage + spatial heatmap
+ *
+ * COMING SOON:
+ * - model-analysis: Prediction analysis, confusion matrix, model comparison
  */
 
 import { lazy } from 'react';
-import { BarChart3, TrendingUp, Sparkles, Grid3X3, CheckCircle2, MapPin, Eye } from 'lucide-react';
-import type { PanelDefinition, PanelType } from '@/types/analytics';
+import { BarChart3, Target, Brain } from 'lucide-react';
+import type { PanelDefinition, PanelType, PanelCategory } from '@/types/analytics';
 
 /**
  * Panel registry - add new panel types here
  */
 export const PANEL_REGISTRY: Record<PanelType, PanelDefinition> = {
+  // ============================================================================
+  // ACTIVE PANELS
+  // ============================================================================
   'dataset-stats': {
     type: 'dataset-stats',
     name: 'Dataset Statistics',
-    description: 'Tag distribution, dimension stats, file sizes',
+    description: 'Comprehensive stats: tags, dimensions, class balance, quality',
     icon: BarChart3,
-    component: lazy(() => import('./panels/DatasetStatsPanel')),
+    component: lazy(() => import('./panels/EnhancedDatasetStatsPanel')),
+    category: 'active',
   },
-  'annotation-coverage': {
-    type: 'annotation-coverage',
-    name: 'Annotation Coverage',
-    description: 'Annotation completeness and density distribution',
-    icon: CheckCircle2,
-    component: lazy(() => import('./panels/AnnotationCoveragePanel')),
+  'annotation-analysis': {
+    type: 'annotation-analysis',
+    name: 'Annotation Analysis',
+    description: 'Coverage metrics and spatial distribution heatmap',
+    icon: Target,
+    component: lazy(() => import('./panels/AnnotationAnalysisPanel')),
+    category: 'active',
   },
-  'spatial-heatmap': {
-    type: 'spatial-heatmap',
-    name: 'Spatial Heatmap',
-    description: 'Annotation spatial distribution visualization',
-    icon: MapPin,
-    component: lazy(() => import('./panels/SpatialHeatmapPanel')),
-  },
-  'image-quality': {
-    type: 'image-quality',
-    name: 'Image Quality',
-    description: 'Image quality assessment and flagging',
-    icon: Eye,
-    component: lazy(() => import('./panels/ImageQualityPanel')),
-  },
-  'prediction-analysis': {
-    type: 'prediction-analysis',
-    name: 'Prediction Analysis',
-    description: 'Accuracy, precision/recall, error distribution',
-    icon: TrendingUp,
-    component: lazy(() => import('./panels/PredictionAnalysisPanel')),
-    requiresJobFilter: true,
-  },
-  'embeddings-viewer': {
-    type: 'embeddings-viewer',
-    name: 'Embeddings Viewer',
-    description: '2D scatter plot visualization (UMAP/t-SNE)',
-    icon: Sparkles,
-    component: lazy(() => import('./panels/EmbeddingsViewerPanel')),
-  },
-  'confusion-matrix': {
-    type: 'confusion-matrix',
-    name: 'Confusion Matrix',
-    description: 'Classification performance heatmap',
-    icon: Grid3X3,
-    component: lazy(() => import('./panels/ConfusionMatrixPanel')),
-    requiresJobFilter: true,
-  },
-  'model-comparison': {
-    type: 'model-comparison',
-    name: 'Model Comparison',
-    description: 'Side-by-side model performance comparison',
-    icon: TrendingUp,
-    component: lazy(() => import('./panels/ModelComparisonPanel')),
-    requiresJobFilter: true,
+
+  // ============================================================================
+  // COMING SOON PANELS
+  // ============================================================================
+  'model-analysis': {
+    type: 'model-analysis',
+    name: 'Model Analysis',
+    description: 'Advanced model performance analytics',
+    icon: Brain,
+    component: lazy(() => import('./panels/ComingSoonPanel')),
+    category: 'coming-soon',
+    features: ['Prediction Analysis', 'Confusion Matrix', 'Model Comparison'],
   },
 };
+
+/**
+ * Get recommended panels for new users (primary panels only)
+ */
+export function getRecommendedPanels(): PanelType[] {
+  return ['dataset-stats', 'annotation-analysis'];
+}
 
 /**
  * Get panel definition by type
@@ -91,4 +78,18 @@ export function getAllPanelTypes(): PanelType[] {
  */
 export function getAllPanelDefinitions(): PanelDefinition[] {
   return Object.values(PANEL_REGISTRY);
+}
+
+/**
+ * Get panels organized by category
+ */
+export function getPanelsByCategory(): {
+  active: PanelDefinition[];
+  comingSoon: PanelDefinition[];
+} {
+  const panels = Object.values(PANEL_REGISTRY);
+  return {
+    active: panels.filter(p => p.category === 'active'),
+    comingSoon: panels.filter(p => p.category === 'coming-soon'),
+  };
 }

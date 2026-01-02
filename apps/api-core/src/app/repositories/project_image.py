@@ -9,6 +9,7 @@ from app.models.data_management import project_images, shared_image_tags, shared
 from app.models.image import images
 from app.models.job import jobs
 from app.models.task import tasks
+from app.models.annotation import detections, segmentations
 
 
 class ProjectImageRepository:
@@ -226,6 +227,8 @@ class ProjectImageRepository:
         file_size_max: int | None = None,
         aspect_ratio_min: float | None = None,
         aspect_ratio_max: float | None = None,
+        object_count_min: int | None = None,
+        object_count_max: int | None = None,
         filepath_pattern: str | None = None,
         filepath_paths: list[str] | None = None,
         image_uids: list[UUID] | None = None,
@@ -267,6 +270,48 @@ class ProjectImageRepository:
             base_query = base_query.where(shared_images.c.aspect_ratio >= aspect_ratio_min)
         if aspect_ratio_max is not None:
             base_query = base_query.where(shared_images.c.aspect_ratio <= aspect_ratio_max)
+
+        # Object count filtering (detections + segmentations)
+        if object_count_min is not None or object_count_max is not None:
+            # Subquery to count total annotations per shared_image
+            det_count = (
+                select(
+                    images.c.shared_image_id,
+                    func.count(detections.c.id).label("det_count")
+                )
+                .select_from(detections.join(images, detections.c.image_id == images.c.id))
+                .where(images.c.shared_image_id.in_(select(shared_images.c.id)))
+                .group_by(images.c.shared_image_id)
+                .subquery()
+            )
+
+            seg_count = (
+                select(
+                    images.c.shared_image_id,
+                    func.count(segmentations.c.id).label("seg_count")
+                )
+                .select_from(segmentations.join(images, segmentations.c.image_id == images.c.id))
+                .where(images.c.shared_image_id.in_(select(shared_images.c.id)))
+                .group_by(images.c.shared_image_id)
+                .subquery()
+            )
+
+            # Join both counts and filter
+            total_count = (
+                func.coalesce(det_count.c.det_count, 0) +
+                func.coalesce(seg_count.c.seg_count, 0)
+            )
+
+            base_query = (
+                base_query
+                .outerjoin(det_count, shared_images.c.id == det_count.c.shared_image_id)
+                .outerjoin(seg_count, shared_images.c.id == seg_count.c.shared_image_id)
+            )
+
+            if object_count_min is not None:
+                base_query = base_query.where(total_count >= object_count_min)
+            if object_count_max is not None:
+                base_query = base_query.where(total_count <= object_count_max)
 
         if filepath_pattern:
             # Convert glob-style wildcards to SQL LIKE

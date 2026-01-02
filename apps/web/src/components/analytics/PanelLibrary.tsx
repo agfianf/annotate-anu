@@ -1,13 +1,13 @@
 /**
  * Panel Library Dropdown
- * Displays available panel types for selection
+ * Displays available panel types for selection with categorized sections
  */
 
 import { memo, useRef, useState, useEffect } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import { getAllPanelDefinitions } from './panelRegistry';
+import { getPanelsByCategory } from './panelRegistry';
 import { useAnalyticsPanels } from '@/hooks/useAnalyticsPanels';
 import type { PanelType } from '@/types/analytics';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -20,7 +20,7 @@ export const PanelLibrary = memo(function PanelLibrary({
   onSelectPanel,
 }: PanelLibraryProps) {
   const { addPanel, panelCount } = useAnalyticsPanels();
-  const panelDefinitions = getAllPanelDefinitions();
+  const { active: activePanels, comingSoon: comingSoonPanels } = getPanelsByCategory();
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -142,34 +142,77 @@ export const PanelLibrary = memo(function PanelLibrary({
                 aria-label="Available analytics panels"
               >
                 <div className="px-3 py-2 border-b border-gray-100">
-                  <div className="text-sm font-semibold text-gray-700">Analytics Panels</div>
+                  <div className="text-sm font-semibold text-gray-700">Add Analytics Panel</div>
                 </div>
-                {panelDefinitions.map((panel) => {
-                  const Icon = panel.icon;
-                  return (
-                    <button
-                      key={panel.type}
-                      onClick={() => handleSelectPanel(panel.type)}
-                      className="w-full flex items-start gap-3 p-3 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none transition-colors text-left"
-                      role="menuitem"
-                      aria-label={`Add ${panel.name} panel`}
-                    >
-                      <Icon className="w-5 h-5 mt-0.5 text-emerald-600 flex-shrink-0" aria-hidden="true" />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-gray-900">{panel.name}</div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          {panel.description}
-                        </div>
-                        {(panel.requiresJobFilter || panel.requiresTaskFilter) && (
-                          <div className="text-xs text-amber-600 mt-1">
-                            {panel.requiresJobFilter && 'Requires job filter'}
-                            {panel.requiresTaskFilter && ' Requires task filter'}
+
+                {/* Active Panels Section */}
+                <div className="p-2">
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">
+                    Available
+                  </h4>
+                  <div className="space-y-0.5">
+                    {activePanels.map((panel) => {
+                      const Icon = panel.icon;
+                      return (
+                        <button
+                          key={panel.type}
+                          onClick={() => handleSelectPanel(panel.type)}
+                          className="w-full flex items-start gap-3 p-3 rounded-lg hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none transition-colors text-left border border-transparent hover:border-emerald-200"
+                          role="menuitem"
+                          aria-label={`Add ${panel.name} panel`}
+                        >
+                          <div className="p-2 rounded-lg bg-emerald-50 flex-shrink-0">
+                            <Icon className="w-4 h-4 text-emerald-600" aria-hidden="true" />
                           </div>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm text-gray-900">{panel.name}</div>
+                            <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                              {panel.description}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Coming Soon Section */}
+                {comingSoonPanels.length > 0 && (
+                  <div className="p-2 pt-0">
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 px-1">
+                      Coming Soon
+                    </h4>
+                    <div className="space-y-0.5">
+                      {comingSoonPanels.map((panel) => {
+                        const Icon = panel.icon;
+                        return (
+                          <div
+                            key={panel.type}
+                            className="w-full flex items-start gap-3 p-3 rounded-lg bg-gray-50/50 cursor-not-allowed opacity-60"
+                            role="menuitem"
+                            aria-disabled="true"
+                          >
+                            <div className="p-2 rounded-lg bg-gray-100 flex-shrink-0">
+                              <Icon className="w-4 h-4 text-gray-400" aria-hidden="true" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-sm text-gray-900">{panel.name}</span>
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-medium rounded">
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  Soon
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                                {panel.description}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}

@@ -1066,6 +1066,17 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         panelFilters.aspect_ratio_max ?? 10
       );
     }
+    if (panelFilters.object_count_min !== undefined || panelFilters.object_count_max !== undefined) {
+      console.log('[ProjectExploreTab] Setting object count range:', {
+        min: panelFilters.object_count_min,
+        max: panelFilters.object_count_max
+      });
+      setFilters(prev => ({
+        ...prev,
+        object_count_min: panelFilters.object_count_min,
+        object_count_max: panelFilters.object_count_max,
+      }));
+    }
   }, [setFilters, setSidebarWidthRange, setSidebarHeightRange, setSidebarAspectRatioRange]);
 
   const renderProjectExploreContent = (
@@ -1626,15 +1637,24 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
           className={`relative flex-shrink-0 ${isPanelResizing ? '' : 'transition-[width] duration-200 ease-out'}`}
           style={{ width: `${panelWidth}px` }}
         >
-          {/* Resize Handle */}
+          {/* Enhanced Resize Handle with visible boundary */}
           <div
-            className={`absolute top-0 left-0 w-1.5 h-full cursor-col-resize hover:bg-emerald-400 active:bg-emerald-500 transition-colors group z-20 ${
-              isPanelResizing ? 'bg-emerald-500' : 'bg-transparent'
-            }`}
+            className="absolute left-0 top-0 bottom-0 w-3 z-20 cursor-col-resize group flex items-center justify-center"
             onMouseDown={startPanelResizing}
-            title="Drag to resize"
+            title="Drag to resize panels"
           >
-            <div className="absolute top-1/2 left-0 -translate-y-1/2 w-1.5 h-16 bg-emerald-300 opacity-0 group-hover:opacity-100 transition-opacity rounded-r" />
+            {/* Vertical divider line - always visible */}
+            <div className="absolute inset-y-0 left-0 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent" />
+
+            {/* Grip indicator - subtle when idle, prominent on hover */}
+            <div className={`w-1 rounded-full transition-all duration-200 ${
+              isPanelResizing
+                ? 'h-32 bg-emerald-500 shadow-lg shadow-emerald-500/30'
+                : 'h-24 bg-gray-200 group-hover:bg-emerald-400 group-hover:h-32 group-hover:shadow-lg group-hover:shadow-emerald-500/30'
+            }`} />
+
+            {/* Shadow edge for depth - always visible */}
+            <div className="absolute inset-y-0 left-0 w-4 bg-gradient-to-r from-black/5 to-transparent pointer-events-none" />
           </div>
 
           <AnalyticsPanelContainer

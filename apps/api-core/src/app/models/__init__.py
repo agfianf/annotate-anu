@@ -18,6 +18,7 @@ from app.models.data_management import (
     tags,
 )
 from app.models.export import exports, saved_filters
+from app.models.image_quality import image_quality_metrics, quality_jobs
 from app.models.history import annotation_events, version_snapshots
 from app.models.image import images
 from app.models.job import jobs
@@ -63,4 +64,7 @@ __all__ = [
     "exports",
     # BYOM
     "registered_models",
+    # Image Quality
+    "image_quality_metrics",
+    "quality_jobs",
 ]

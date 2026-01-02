@@ -9,6 +9,10 @@ import type {
   ClassBalanceResponse,
   SpatialHeatmapResponse,
   ImageQualityResponse,
+  DimensionInsightsResponse,
+  EnhancedDatasetStatsResponse,
+  AnnotationAnalysisResponse,
+  ProcessQualityResponse,
 } from '@/types/analytics';
 import type { ExploreFilters } from './data-management-client';
 import dataClient from './data-management-client';
@@ -128,4 +132,165 @@ export const analyticsApi = {
     }>(`/api/v1/projects/${projectId}/analytics/image-quality`, { params });
     return response.data.data;
   },
+
+  /**
+   * Get dimension insights analytics (Roboflow-style)
+   */
+  async getDimensionInsights(
+    projectId: string,
+    filters: ExploreFilters = {}
+  ): Promise<DimensionInsightsResponse> {
+    const params = buildFilterParams(filters);
+    const response = await dataClient.get<{
+      data: DimensionInsightsResponse;
+      message: string;
+      success: boolean;
+    }>(`/api/v1/projects/${projectId}/analytics/dimension-insights`, { params });
+    return response.data.data;
+  },
+
+  // ============================================================================
+  // CONSOLIDATED ENDPOINTS
+  // ============================================================================
+
+  /**
+   * Get enhanced dataset statistics (consolidated)
+   * Combines: Dataset Stats + Dimension Insights + Class Balance + Image Quality
+   */
+  async getEnhancedDatasetStats(
+    projectId: string,
+    filters: ExploreFilters = {},
+    category_id?: string | null
+  ): Promise<EnhancedDatasetStatsResponse> {
+    const params = buildFilterParams(filters);
+    if (category_id) {
+      params.category_id = category_id;
+    }
+    const response = await dataClient.get<{
+      data: EnhancedDatasetStatsResponse;
+      message: string;
+      success: boolean;
+    }>(`/api/v1/projects/${projectId}/analytics/enhanced-dataset-stats`, { params });
+    return response.data.data;
+  },
+
+  /**
+   * Get annotation analysis (consolidated)
+   * Combines: Annotation Coverage + Spatial Heatmap
+   */
+  async getAnnotationAnalysis(
+    projectId: string,
+    filters: ExploreFilters = {},
+    gridSize: number = 10
+  ): Promise<AnnotationAnalysisResponse> {
+    const params = buildFilterParams(filters);
+    params.grid_size = gridSize;
+    const response = await dataClient.get<{
+      data: AnnotationAnalysisResponse;
+      message: string;
+      success: boolean;
+    }>(`/api/v1/projects/${projectId}/analytics/annotation-analysis`, { params });
+    return response.data.data;
+  },
+
+  /**
+   * Sync quality metrics - find untracked images and create pending records
+   */
+  async syncQualityMetrics(
+    projectId: string
+  ): Promise<{ synced: number; pending: number; completed: number; total: number }> {
+    const response = await dataClient.post<{
+      data: { synced: number; pending: number; completed: number; total: number };
+      message: string;
+      success: boolean;
+    }>(`/api/v1/projects/${projectId}/analytics/sync-quality`);
+    return response.data.data;
+  },
+
+  /**
+   * Trigger quality metrics computation for pending images (DEPRECATED)
+   * Use startQualityJob for background processing with progress tracking.
+   */
+  async processQualityMetrics(
+    projectId: string,
+    batchSize: number = 50
+  ): Promise<ProcessQualityResponse> {
+    const response = await dataClient.post<{
+      data: ProcessQualityResponse;
+      message: string;
+      success: boolean;
+    }>(`/api/v1/projects/${projectId}/analytics/compute-quality?batch_size=${batchSize}`);
+    return response.data.data;
+  },
+
+  // ============================================================================
+  // QUALITY JOB ENDPOINTS (Background Processing with Progress Tracking)
+  // ============================================================================
+
+  /**
+   * Start a background quality metrics processing job
+   */
+  async startQualityJob(
+    projectId: string,
+    batchSize: number = 50
+  ): Promise<StartQualityJobResponse> {
+    const response = await dataClient.post<{
+      data: StartQualityJobResponse;
+      message: string;
+      success: boolean;
+    }>(`/api/v1/projects/${projectId}/analytics/start-quality-job?batch_size=${batchSize}`);
+    return response.data.data;
+  },
+
+  /**
+   * Get real-time quality processing progress
+   * Poll this every 2 seconds while processing is active.
+   */
+  async getQualityProgress(projectId: string): Promise<QualityProgressResponse> {
+    const response = await dataClient.get<{
+      data: QualityProgressResponse;
+      message: string;
+      success: boolean;
+    }>(`/api/v1/projects/${projectId}/analytics/quality-progress`);
+    return response.data.data;
+  },
+
+  /**
+   * Cancel an active quality processing job
+   */
+  async cancelQualityJob(projectId: string): Promise<CancelQualityJobResponse> {
+    const response = await dataClient.post<{
+      data: CancelQualityJobResponse;
+      message: string;
+      success: boolean;
+    }>(`/api/v1/projects/${projectId}/analytics/cancel-quality-job`);
+    return response.data.data;
+  },
 };
+
+// ============================================================================
+// TYPES FOR QUALITY JOB ENDPOINTS
+// ============================================================================
+
+export interface StartQualityJobResponse {
+  job_id: string;
+  total_images: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  message: string;
+}
+
+export interface QualityProgressResponse {
+  job_id: string | null;
+  total: number;
+  processed: number;
+  failed: number;
+  remaining: number;
+  status: 'idle' | 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  progress_pct: number;
+  started_at: string | null;
+}
+
+export interface CancelQualityJobResponse {
+  cancelled: boolean;
+  message: string;
+}

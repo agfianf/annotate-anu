@@ -177,6 +177,8 @@ export interface ExploreFilters {
   aspect_ratio_max?: number;
   file_size_min?: number;
   file_size_max?: number;
+  object_count_min?: number; // Filter by minimum annotation count per image
+  object_count_max?: number; // Filter by maximum annotation count per image
   filepath_pattern?: string;
   filepath_paths?: string[]; // Filter by specific directory paths (checkbox-based)
   include_annotations?: boolean;

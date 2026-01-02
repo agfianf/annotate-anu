@@ -39,29 +39,39 @@ export const PanelWrapper = memo(function PanelWrapper({
       animate={{ opacity: 1, y: 0 }}
       exit={prefersReducedMotion ? {} : { opacity: 0, y: -10 }}
       transition={{ duration: prefersReducedMotion ? 0.01 : 0.2 }}
-      className={`flex flex-col glass-strong rounded-xl overflow-hidden ${className}`}
+      className={`relative flex flex-col bg-white/80 backdrop-blur-xl rounded-xl overflow-hidden border border-gray-200/80 shadow-lg shadow-gray-900/5 ${className}`}
       role="article"
       aria-label={ariaLabel || definition.name}
     >
-      {/* Panel Header - compact style matching gallery header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-        <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-emerald-600" aria-hidden="true" />
-          <h3 className="font-medium text-xs text-gray-700" role="heading" aria-level={2}>
-            {definition.name}
-          </h3>
+      {/* Left accent bar */}
+      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-emerald-400 to-emerald-600" />
+
+      {/* Panel Header - enhanced with icon container */}
+      <div className="flex items-start justify-between gap-3 px-4 py-3 pl-5 border-b border-gray-100 bg-gradient-to-r from-gray-50/80 to-white/50">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-100 mt-0.5">
+            <Icon className="w-4 h-4 text-emerald-600" aria-hidden="true" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm text-gray-900" role="heading" aria-level={2}>
+              {definition.name}
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5 max-w-[200px]">
+              {definition.description}
+            </p>
+          </div>
         </div>
         <button
           onClick={handleClose}
-          className="h-5 w-5 flex items-center justify-center rounded hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
+          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
           aria-label={`Close ${definition.name} panel`}
         >
-          <X className="w-3.5 h-3.5" aria-hidden="true" />
+          <X className="w-4 h-4" aria-hidden="true" />
         </button>
       </div>
 
-      {/* Panel Content */}
-      <div className="flex-1 overflow-auto">
+      {/* Panel Content with better padding */}
+      <div className="flex-1 overflow-auto p-4">
         {children}
       </div>
     </motion.div>
