@@ -30,10 +30,34 @@ export const PanelLibrary = memo(function PanelLibrary({
   const handleOpen = () => {
     if (!isOpen && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      setPosition({
-        top: rect.bottom + 4,
-        left: rect.left,
-      });
+      const dropdownWidth = 320;
+      const dropdownHeight = 400; // max-height of dropdown
+      const padding = 8; // padding from viewport edges
+
+      // Calculate initial position
+      let top = rect.bottom + 4;
+      let left = rect.left;
+
+      // Check right overflow - align to right edge of button if needed
+      if (left + dropdownWidth > window.innerWidth - padding) {
+        left = rect.right - dropdownWidth;
+      }
+
+      // Check left overflow
+      if (left < padding) {
+        left = padding;
+      }
+
+      // Check bottom overflow - position above button if needed
+      if (top + dropdownHeight > window.innerHeight - padding) {
+        top = rect.top - dropdownHeight - 4;
+        // If still overflows top, just position at top of viewport
+        if (top < padding) {
+          top = padding;
+        }
+      }
+
+      setPosition({ top, left });
       setIsOpen(true);
     } else {
       setIsOpen(false);

@@ -53,6 +53,7 @@ import { MultiTaskSelect, VirtualizedImageGrid } from './explore';
 import { FullscreenImage } from './explore/FullscreenImage';
 import { UnifiedExploreSidebar } from './explore/sidebar/unified';
 import { ZoomControl } from './explore/ZoomControl';
+import { ExploreToolbar, useGridSize, GRID_SIZE_CONFIGS, type GridSize } from './explore/toolbar';
 import CategoryGroup from './CategoryGroup';
 import TagSelectorDropdown from './TagSelectorDropdown';
 import { getTextColorForBackground } from '@/lib/colors';
@@ -98,8 +99,11 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   // Full-view mode
   const { isFullView, toggleFullView, exitFullView } = useExploreView();
 
-  // Zoom level
+  // Zoom level (keeping for backward compatibility)
   const { zoomLevel, setZoomLevel, config: zoomConfig } = useZoomLevel();
+
+  // New grid size slider (5 stops: xs, s, m, l, xl)
+  const { size: gridSize, setSize: setGridSize, config: gridConfig } = useGridSize();
 
   // Track window width for responsive layout
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : true);
@@ -1204,507 +1208,93 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     panelCount: number
   ) => (
       <div className="h-full flex flex-col min-h-0 max-w-full overflow-hidden">
-      {/* Top Bar - Filters */}
-      <div className="glass-strong rounded-xl shadow-lg p-2 mb-1.5 relative z-20">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Search */}
-          <div className="relative flex-1 min-w-[200px] max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search by filename..."
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
-            />
-          </div>
-
-          {/* Multi-Task Filter */}
-          <MultiTaskSelect
-            tasks={tasks.map((t) => ({ id: t.id, name: t.name }))}
-            selectedTaskIds={selectedTaskIds}
-            onChange={setSelectedTaskIds}
-            placeholder="All Tasks"
-          />
-
-          {/* Annotated Filter */}
-          <div className="relative">
-            <select
-              value={isAnnotatedFilter === undefined ? '' : isAnnotatedFilter.toString()}
-              onChange={(e) => {
-                const val = e.target.value;
-                setIsAnnotatedFilter(val === '' ? undefined : val === 'true');
-              }}
-              className="appearance-none pl-3 pr-8 py-2 rounded-lg border border-gray-200 bg-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-            >
-              <option value="">All Status</option>
-              <option value="true">Annotated</option>
-              <option value="false">Not Annotated</option>
-            </select>
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-          </div>
-
-          {/* Refresh */}
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 transition-transform ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
-
-          {/* Export Button with Filtered Count */}
-          <div className="flex items-center gap-2">
-            {(hasSidebarFilters || debouncedSearch || selectedTaskIds.length > 0 || isAnnotatedFilter !== undefined) && (
-              <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                {images.length} images filtered
-              </span>
-            )}
-            <button
-              onClick={() => setShowExportWizard(true)}
-              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white rounded-lg transition-all flex items-center gap-2 text-sm font-medium shadow-sm hover:shadow-md"
-              title="Export filtered dataset"
-            >
-              <span>Export</span>
-              <span className="text-base">🚀</span>
-            </button>
-          </div>
-
-          {/* Analytics Panel Controls */}
-          <div className="flex items-center gap-2">
-            <PanelLibrary />
-
-            {/* Layout Mode Toggle - only shown when multiple panels on desktop */}
-            {isPanelsVisible && panelCount > 1 && (
-              <div className="hidden md:flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-                <button
-                  onClick={() => setLayoutMode('tabs')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    layoutMode === 'tabs'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  aria-label="Tab layout"
-                  title="Tab layout"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <LayoutPanelTop className="w-3.5 h-3.5" />
-                    <span>Tabs</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setLayoutMode('stacked')}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    layoutMode === 'stacked'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                  aria-label="Stacked layout"
-                  title="Stacked layout"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                    <span>Stacked</span>
-                  </div>
-                </button>
-              </div>
-            )}
-
-            {/* Panel Count - only shown when panels exist */}
-            {isPanelsVisible && (
-              <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                {panelCount} {panelCount === 1 ? 'panel' : 'panels'}
-              </div>
-            )}
-          </div>
-
-          {/* Zoom Control */}
-          <ZoomControl currentZoom={zoomLevel} onZoomChange={setZoomLevel} />
-
-          {/* Full View Toggle */}
-          <button
-            onClick={toggleFullView}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors ml-auto"
-            title={isFullView ? "Exit full view (ESC)" : "Enter full view"}
-            aria-label={isFullView ? "Exit full view" : "Enter full view"}
-          >
-            {isFullView ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {/* Active Filters Display */}
-        <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-gray-100">
-          <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
-            Active Filters:
-          </span>
-
-          {/* No filters message */}
-          {!(hasSidebarFilters || debouncedSearch || selectedTaskIds.length > 0 || isAnnotatedFilter !== undefined) && (
-            <span className="text-xs text-gray-400 italic">
-              No filters applied
-            </span>
-          )}
-
-          {/* Search filter */}
-          {debouncedSearch && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs">
-              <Search className="w-3 h-3" />
-              <span className="font-medium">Search: &quot;{debouncedSearch}&quot;</span>
-            </div>
-          )}
-
-          {/* Task filters */}
-          {selectedTaskIds.length > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs">
-              <span className="font-medium">
-                Tasks: {selectedTaskIds.length} selected
-              </span>
-            </div>
-          )}
-
-          {/* Annotated status filter */}
-          {isAnnotatedFilter !== undefined && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs">
-              <span className="font-medium">
-                {isAnnotatedFilter ? 'Annotated Only' : 'Not Annotated Only'}
-              </span>
-            </div>
-          )}
-
-          {/* Include tags with match mode */}
-          {getIncludedTagIds().length > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs border border-emerald-200">
-              <span className="font-semibold">Include ({sidebarFilters.includeMatchMode}):</span>
-              <div className="flex items-center gap-1">
-                {getIncludedTagIds().map((tagId) => {
-                  const tag = allTags.find(t => t.id === tagId);
-                  if (!tag) return null;
-                  return (
-                    <span
-                      key={tagId}
-                      className="px-2 py-0.5 rounded-full font-medium flex items-center gap-1 group"
-                      style={{
-                        backgroundColor: `${tag.color}30`,
-                        color: tag.color,
-                      }}
-                    >
-                      <span>{tag.name}</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeSidebarTag(tagId);
-                        }}
-                        className="hover:opacity-100 transition-opacity"
-                        title="Remove from filter"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Exclude tags with match mode */}
-          {getExcludedTagIds().length > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 text-red-700 rounded-full text-xs border border-red-200">
-              <span className="font-semibold">Exclude ({sidebarFilters.excludeMatchMode}):</span>
-              <div className="flex items-center gap-1">
-                {getExcludedTagIds().map((tagId) => {
-                  const tag = allTags.find(t => t.id === tagId);
-                  if (!tag) return null;
-                  return (
-                    <span
-                      key={tagId}
-                      className="px-2 py-0.5 rounded-full font-medium flex items-center gap-1 group"
-                      style={{
-                        backgroundColor: `${tag.color}30`,
-                        color: tag.color,
-                      }}
-                    >
-                      <span>{tag.name}</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeSidebarTag(tagId);
-                        }}
-                        className="hover:opacity-100 transition-opacity"
-                        title="Remove from filter"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Dimension filters */}
-          {sidebarFilters.widthRange && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs border border-purple-200">
-              <Ruler className="w-3 h-3" />
-              <span className="font-medium">
-                Width: {sidebarFilters.widthRange.min} - {sidebarFilters.widthRange.max}px
-              </span>
-              <button
-                onClick={() => setSidebarWidthRange(0, 10000)}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear width filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {sidebarFilters.heightRange && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs border border-purple-200">
-              <Ruler className="w-3 h-3" />
-              <span className="font-medium">
-                Height: {sidebarFilters.heightRange.min} - {sidebarFilters.heightRange.max}px
-              </span>
-              <button
-                onClick={() => setSidebarHeightRange(0, 10000)}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear height filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {/* Aspect ratio filter */}
-          {sidebarFilters.aspectRatioRange && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-orange-700 rounded-full text-xs border border-orange-200">
-              <Ratio className="w-3 h-3" />
-              <span className="font-medium">
-                Ratio: {sidebarFilters.aspectRatioRange.min.toFixed(2)} - {sidebarFilters.aspectRatioRange.max.toFixed(2)}
-              </span>
-              <button
-                onClick={() => setSidebarAspectRatioRange(0, 10)}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear aspect ratio filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {/* File size filter */}
-          {sidebarFilters.sizeRange && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs">
-              <span className="font-medium">
-                Size: {(sidebarFilters.sizeRange.min / (1024 * 1024)).toFixed(1)} - {(sidebarFilters.sizeRange.max / (1024 * 1024)).toFixed(1)} MB
-              </span>
-            </div>
-          )}
-
-          {/* Filepath pattern filter */}
-          {sidebarFilters.filepathPattern && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 text-teal-700 rounded-full text-xs">
-              <span className="font-medium">
-                Path: {sidebarFilters.filepathPattern}
-              </span>
-            </div>
-          )}
-
-          {/* Filepath paths filter (checkbox-based directories) */}
-          {sidebarFilters.filepathPaths && sidebarFilters.filepathPaths.length > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-teal-50 text-teal-700 rounded-full text-xs border border-teal-200">
-              <FolderOpen className="w-3 h-3" />
-              <span className="font-medium">
-                Directories: {sidebarFilters.filepathPaths.length} selected
-              </span>
-              <button
-                onClick={() => setSidebarFilepathPaths([])}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear directory filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {/* Image UIDs filter */}
-          {sidebarFilters.imageId && sidebarFilters.imageId.length > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-violet-50 text-violet-700 rounded-full text-xs border border-violet-200">
-              <ImageIcon className="w-3 h-3" />
-              <span className="font-medium">
-                Images: {sidebarFilters.imageId.length} selected
-              </span>
-              <button
-                onClick={() => setImageUids([])}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear image selection"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {/* Quality filters */}
-          {(sidebarFilters.quality_min !== undefined || sidebarFilters.quality_max !== undefined) && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs border border-emerald-200">
-              <Sparkles className="w-3 h-3" />
-              <span className="font-medium">
-                Quality: {sidebarFilters.quality_min?.toFixed(2) ?? '0'} - {sidebarFilters.quality_max?.toFixed(2) ?? '1'}
-              </span>
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, quality_min: undefined, quality_max: undefined }))}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear quality filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {(sidebarFilters.sharpness_min !== undefined || sidebarFilters.sharpness_max !== undefined) && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs border border-cyan-200">
-              <span className="font-medium">
-                Sharpness: {sidebarFilters.sharpness_min?.toFixed(2) ?? '0'} - {sidebarFilters.sharpness_max?.toFixed(2) ?? '1'}
-              </span>
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, sharpness_min: undefined, sharpness_max: undefined }))}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear sharpness filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {(sidebarFilters.brightness_min !== undefined || sidebarFilters.brightness_max !== undefined) && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs border border-amber-200">
-              <span className="font-medium">
-                Brightness: {sidebarFilters.brightness_min?.toFixed(2) ?? '0'} - {sidebarFilters.brightness_max?.toFixed(2) ?? '1'}
-              </span>
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, brightness_min: undefined, brightness_max: undefined }))}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear brightness filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {(sidebarFilters.contrast_min !== undefined || sidebarFilters.contrast_max !== undefined) && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs border border-blue-200">
-              <span className="font-medium">
-                Contrast: {sidebarFilters.contrast_min?.toFixed(2) ?? '0'} - {sidebarFilters.contrast_max?.toFixed(2) ?? '1'}
-              </span>
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, contrast_min: undefined, contrast_max: undefined }))}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear contrast filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {(sidebarFilters.uniqueness_min !== undefined || sidebarFilters.uniqueness_max !== undefined) && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs border border-purple-200">
-              <span className="font-medium">
-                Uniqueness: {sidebarFilters.uniqueness_min?.toFixed(2) ?? '0'} - {sidebarFilters.uniqueness_max?.toFixed(2) ?? '1'}
-              </span>
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, uniqueness_min: undefined, uniqueness_max: undefined }))}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear uniqueness filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {sidebarFilters.issues && sidebarFilters.issues.length > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-xs border border-amber-200">
-              <AlertTriangle className="w-3 h-3" />
-              <span className="font-medium">
-                Issues: {sidebarFilters.issues.map(i => i.replace(/_/g, ' ')).join(', ')}
-              </span>
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, issues: undefined }))}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear issues filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {(sidebarFilters.object_count_min !== undefined || sidebarFilters.object_count_max !== undefined) && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs border border-indigo-200">
-              <span className="font-medium">
-                Objects/Image: {sidebarFilters.object_count_min ?? 0} - {sidebarFilters.object_count_max ?? '∞'}
-              </span>
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, object_count_min: undefined, object_count_max: undefined }))}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear objects per image filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {(sidebarFilters.bbox_count_min !== undefined || sidebarFilters.bbox_count_max !== undefined) && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-orange-700 rounded-full text-xs border border-orange-200">
-              <span className="font-medium">
-                BBox/Image: {sidebarFilters.bbox_count_min ?? 0} - {sidebarFilters.bbox_count_max ?? '∞'}
-              </span>
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, bbox_count_min: undefined, bbox_count_max: undefined }))}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear bbox count filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {(sidebarFilters.polygon_count_min !== undefined || sidebarFilters.polygon_count_max !== undefined) && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 rounded-full text-xs border border-purple-200">
-              <span className="font-medium">
-                Polygon/Image: {sidebarFilters.polygon_count_min ?? 0} - {sidebarFilters.polygon_count_max ?? '∞'}
-              </span>
-              <button
-                onClick={() => setFilters(prev => ({ ...prev, polygon_count_min: undefined, polygon_count_max: undefined }))}
-                className="hover:opacity-100 transition-opacity ml-1"
-                title="Clear polygon count filter"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          )}
-
-          {/* Clear all filters button - Liquid Glass Red */}
-          {(hasSidebarFilters || debouncedSearch || selectedTaskIds.length > 0 || isAnnotatedFilter !== undefined) && (
-            <button
-              onClick={() => {
-                clearSidebarFilters();
-                setSearchInput('');
-                setSelectedTaskIds([]);
-                setIsAnnotatedFilter(undefined);
-              }}
-              className="px-3 py-1 text-xs font-medium text-white rounded-full flex items-center gap-1 transition-all ml-auto shadow-lg hover:shadow-xl"
-              style={{
-                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.85) 0%, rgba(220, 38, 38, 0.9) 100%)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                border: '1px solid rgba(239, 68, 68, 0.5)',
-                boxShadow: '0 4px 16px rgba(239, 68, 68, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.1) inset'
-              }}
-            >
-              <X className="w-3 h-3" />
-              Clear All Filters
-            </button>
-          )}
-        </div>
+      {/* New Explore Toolbar */}
+      <div className="mb-1.5">
+      <ExploreToolbar
+        // Filter Zone props
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        tasks={tasks.map((t) => ({ id: t.id, name: t.name }))}
+        selectedTaskIds={selectedTaskIds}
+        onTasksChange={setSelectedTaskIds}
+        isAnnotatedFilter={isAnnotatedFilter}
+        onAnnotatedFilterChange={setIsAnnotatedFilter}
+        // View Zone props
+        gridSize={gridSize}
+        onGridSizeChange={setGridSize}
+        isFullView={isFullView}
+        onToggleFullView={toggleFullView}
+        // Action Zone props
+        onExport={() => setShowExportWizard(true)}
+        // Status Bar props
+        sidebarFilters={{
+          tagFilters: sidebarFilters.tagFilters,
+          includeMatchMode: sidebarFilters.includeMatchMode,
+          excludeMatchMode: sidebarFilters.excludeMatchMode,
+          widthRange: sidebarFilters.widthRange,
+          heightRange: sidebarFilters.heightRange,
+          aspectRatioRange: sidebarFilters.aspectRatioRange,
+          sizeRange: sidebarFilters.sizeRange,
+          filepathPattern: sidebarFilters.filepathPattern,
+          filepathPaths: sidebarFilters.filepathPaths,
+          imageIds: sidebarFilters.imageId,
+          quality_min: sidebarFilters.quality_min,
+          quality_max: sidebarFilters.quality_max,
+          sharpness_min: sidebarFilters.sharpness_min,
+          sharpness_max: sidebarFilters.sharpness_max,
+          brightness_min: sidebarFilters.brightness_min,
+          brightness_max: sidebarFilters.brightness_max,
+          contrast_min: sidebarFilters.contrast_min,
+          contrast_max: sidebarFilters.contrast_max,
+          uniqueness_min: sidebarFilters.uniqueness_min,
+          uniqueness_max: sidebarFilters.uniqueness_max,
+          quality_issues: sidebarFilters.issues,
+          object_count_min: sidebarFilters.object_count_min,
+          object_count_max: sidebarFilters.object_count_max,
+          bbox_count_min: sidebarFilters.bbox_count_min,
+          bbox_count_max: sidebarFilters.bbox_count_max,
+          polygon_count_min: sidebarFilters.polygon_count_min,
+          polygon_count_max: sidebarFilters.polygon_count_max,
+        }}
+        allTags={allTags.map(t => ({ id: t.id, name: t.name, color: t.color }))}
+        onClearSearch={() => setSearchInput('')}
+        onClearTasks={() => setSelectedTaskIds([])}
+        onClearAnnotatedFilter={() => setIsAnnotatedFilter(undefined)}
+        onRemoveTag={removeSidebarTag}
+        onClearWidthRange={() => setSidebarWidthRange(0, 10000)}
+        onClearHeightRange={() => setSidebarHeightRange(0, 10000)}
+        onClearAspectRatioRange={() => setSidebarAspectRatioRange(0, 10)}
+        onClearSizeRange={() => setSidebarSizeRange(0, 100 * 1024 * 1024)}
+        onClearFilepathPattern={() => setSidebarFilepathFilter('')}
+        onClearFilepathPaths={() => setSidebarFilepathPaths([])}
+        onClearImageIds={() => setImageUids([])}
+        onClearQualityFilters={() => setFilters(prev => ({
+          ...prev,
+          quality_min: undefined,
+          quality_max: undefined,
+          sharpness_min: undefined,
+          sharpness_max: undefined,
+          brightness_min: undefined,
+          brightness_max: undefined,
+          contrast_min: undefined,
+          contrast_max: undefined,
+          uniqueness_min: undefined,
+          uniqueness_max: undefined,
+          issues: undefined,
+        }))}
+        onClearObjectCount={() => setFilters(prev => ({ ...prev, object_count_min: undefined, object_count_max: undefined }))}
+        onClearBboxCount={() => setFilters(prev => ({ ...prev, bbox_count_min: undefined, bbox_count_max: undefined }))}
+        onClearPolygonCount={() => setFilters(prev => ({ ...prev, polygon_count_min: undefined, polygon_count_max: undefined }))}
+        onClearAll={() => {
+          clearSidebarFilters();
+          setSearchInput('');
+          setSelectedTaskIds([]);
+          setIsAnnotatedFilter(undefined);
+        }}
+        annotationDisplay={visibilityState.visibility.annotationDisplay}
+        filteredCount={images.length}
+        totalCount={total}
+      />
       </div>
 
       {/* Floating Selection Actions Bar */}
@@ -1835,8 +1425,8 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               selectedImages={selectedImages}
               onToggleImage={handleToggleImage}
               onImageDoubleClick={setShowImageModal}
-              targetRowHeight={zoomConfig.targetRowHeight}
-              thumbnailSize={zoomConfig.thumbnailSize}
+              targetRowHeight={gridConfig.targetRowHeight}
+              thumbnailSize={gridConfig.thumbnailSize}
               spacing={2}
               hasNextPage={hasNextPage}
               isFetchingNextPage={isFetchingNextPage}
