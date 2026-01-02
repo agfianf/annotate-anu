@@ -59,6 +59,7 @@ import TagSelectorDropdown from './TagSelectorDropdown';
 import { getTextColorForBackground } from '@/lib/colors';
 import { ExportWizardModal } from './export';
 import type { FilterSnapshot } from '@/types/export';
+import { PixelGridLoader } from '@/components/ui/animate';
 // Analytics Panel System
 import { AnalyticsPanelContext, AnalyticsPanelProvider } from '@/contexts/AnalyticsPanelContext';
 import { AnalyticsPanelContainer, PanelLibrary } from './analytics';
@@ -1446,7 +1447,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 }}
               >
                 <div
-                  className="rounded-2xl px-6 py-4 flex items-center gap-3 shadow-xl border"
+                  className="rounded-2xl px-6 py-5 flex flex-col items-center gap-4 shadow-xl border"
                   style={{
                     background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(240, 253, 244, 0.95) 100%)',
                     backdropFilter: 'blur(16px)',
@@ -1455,10 +1456,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                     boxShadow: '0 8px 32px rgba(16, 185, 129, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.5) inset'
                   }}
                 >
-                  <div className="relative">
-                    <div className="w-8 h-8 rounded-full border-2 border-emerald-200 border-t-emerald-500 animate-spin" />
-                    <div className="absolute inset-0 w-8 h-8 rounded-full border-2 border-transparent border-b-emerald-300 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }} />
-                  </div>
+                  <PixelGridLoader rows={5} cols={5} pixelSize={8} gap={4} pattern="diagonal" />
                   <span className="text-sm font-medium text-emerald-700">Updating gallery...</span>
                 </div>
               </div>

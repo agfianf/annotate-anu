@@ -3,7 +3,7 @@
  * Uses TanStack Query's useInfiniteQuery for smooth infinite scroll
  */
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, keepPreviousData } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import {
   projectImagesApi,
@@ -65,6 +65,7 @@ export function useInfiniteExploreImages({
     enabled: enabled && !!projectId,
     staleTime: 30000, // 30 seconds before refetch
     gcTime: 5 * 60 * 1000, // 5 minutes garbage collection
+    placeholderData: keepPreviousData, // Keep showing old images while filtering
   });
 
   // Flatten all pages into a single array

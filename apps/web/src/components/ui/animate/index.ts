@@ -30,7 +30,9 @@ export { PulseGlow } from './PulseGlow';
 // Success & Loading states
 export { ParticleEffect } from './ParticleEffect';
 export { SkeletonLoader, SkeletonCard, SkeletonImage, SkeletonAvatar } from './SkeletonLoader';
+export { PixelGridLoader } from './PixelGridLoader';
 
 // Type exports
 export type { FadeInProps } from './FadeIn';
 export type { SlideInProps } from './SlideIn';
+export type { PixelGridLoaderProps } from './PixelGridLoader';
