@@ -154,8 +154,10 @@ const authenticatedRoute = createRoute({
     if (context.auth.isLoading) {
       return
     }
-    // Redirect to login if not authenticated
-    if (!context.auth.isAuthenticated) {
+    // Check both React state AND localStorage (for immediate post-login navigation)
+    // This handles the race condition where setUser() hasn't updated yet but token is saved
+    const hasToken = !!localStorage.getItem('access_token');
+    if (!context.auth.isAuthenticated && !hasToken) {
       throw redirect({
         to: '/login',
         search: { redirect: location.href },
