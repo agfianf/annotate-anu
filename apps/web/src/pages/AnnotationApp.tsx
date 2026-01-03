@@ -13,6 +13,8 @@ import { ColorPickerPopup } from '../components/ui/ColorPickerPopup'
 import { LoadingScreen } from '../components/ui/LoadingScreen'
 import { Modal } from '../components/ui/Modal'
 import ShortcutsHelpModal from '../components/ui/ShortcutsHelpModal'
+import { UnsavedChangesDialog } from '../components/ui/UnsavedChangesDialog'
+import ConfirmationModal from '../components/ConfirmationModal'
 import { useHistory } from '../hooks/useHistory'
 import { useImagePreloader } from '../hooks/useImagePreloader'
 import { useJobStorage } from '../hooks/useJobStorage'
@@ -34,6 +36,9 @@ const DEFAULT_APPEARANCE_SETTINGS = {
   showPolygons: true,
   showRectangles: true,
   showHoverTooltips: true,
+  highlightMode: false,  // dim non-annotated areas
+  dimLevel: 'medium' as const,  // light, subtle, medium, strong, very-strong
+  tinyThreshold: 2,      // annotations < this % of image area are flagged as tiny
 }
 
 // Thumbnail component to prevent re-creating blob URLs on every render
@@ -207,6 +212,13 @@ function AnnotationApp() {
   const [labelToDelete, setLabelToDelete] = useState<{ id: string; name: string; count: number } | null>(null)
   const [deleteReassignTarget, setDeleteReassignTarget] = useState<string | null>(null)
 
+  // Unsaved changes dialog state (for navigation guard)
+  const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false)
+  const pendingNavigationRef = useRef<(() => void) | null>(null)
+
+  // Keyboard delete confirmation state
+  const [showKeyboardDeleteConfirm, setShowKeyboardDeleteConfirm] = useState(false)
+
   // Zoom and pan state
   const [zoomLevel, setZoomLevel] = useState(1)
   const [stagePosition, setStagePosition] = useState({ x: 0, y: 0 })
@@ -355,6 +367,52 @@ function AnnotationApp() {
       }
     }
   }, [annotations, labels, loading, showOrphanRecoveryModal])
+
+  /**
+   * Handle back navigation with unsaved changes check
+   */
+  const handleBackNavigation = () => {
+    if (pendingCount > 0) {
+      // Store the navigation action to execute after user confirms
+      pendingNavigationRef.current = () => window.history.back()
+      setShowUnsavedChangesDialog(true)
+    } else {
+      window.history.back()
+    }
+  }
+
+  /**
+   * Handle save and leave action from unsaved changes dialog
+   */
+  const handleSaveAndLeave = async () => {
+    if (syncNow) {
+      await syncNow()
+    }
+    setShowUnsavedChangesDialog(false)
+    if (pendingNavigationRef.current) {
+      pendingNavigationRef.current()
+      pendingNavigationRef.current = null
+    }
+  }
+
+  /**
+   * Handle discard changes action from unsaved changes dialog
+   */
+  const handleDiscardAndLeave = () => {
+    setShowUnsavedChangesDialog(false)
+    if (pendingNavigationRef.current) {
+      pendingNavigationRef.current()
+      pendingNavigationRef.current = null
+    }
+  }
+
+  /**
+   * Handle cancel action from unsaved changes dialog
+   */
+  const handleCancelNavigation = () => {
+    setShowUnsavedChangesDialog(false)
+    pendingNavigationRef.current = null
+  }
 
   const handleImageUpload = async (files: FileList) => {
     const filesArray = Array.from(files)
@@ -620,6 +678,28 @@ function AnnotationApp() {
     } catch (error) {
       console.error('Failed to change label:', error)
       toast.error('Failed to change label')
+    }
+  }
+
+  const handleUpdateAnnotationAttributes = async (
+    annotationId: string,
+    attributes: Record<string, string | number | boolean>
+  ) => {
+    try {
+      const annotation = annotations.find(a => a.id === annotationId)
+      if (!annotation) return
+
+      const updatedAnnotation = {
+        ...annotation,
+        attributes,
+        updatedAt: Date.now(),
+      }
+
+      await updateAnnotation(updatedAnnotation)
+      toast.success('Attributes updated')
+    } catch (error) {
+      console.error('Failed to update attributes:', error)
+      toast.error('Failed to update attributes')
     }
   }
 
@@ -1005,13 +1085,9 @@ function AnnotationApp() {
   useKeyboardShortcuts({
     onSelectTool: setSelectedTool,
     onDelete: () => {
-      // Delete all selected annotations
+      // Show confirmation dialog before deleting
       if (selectedAnnotations.length > 0) {
-        if (selectedAnnotations.length === 1) {
-          handleDeleteAnnotation(selectedAnnotations[0])
-        } else {
-          handleBulkDeleteAnnotations(selectedAnnotations)
-        }
+        setShowKeyboardDeleteConfirm(true)
       }
     },
     onNewAnnotation: () => {
@@ -1060,7 +1136,7 @@ function AnnotationApp() {
           {isJobMode ? (
             // Job mode: Back button - swaps logo for back arrow on hover
             <button
-              onClick={() => window.history.back()}
+              onClick={handleBackNavigation}
               className="relative h-10 min-w-[180px] flex items-center group"
               title="Back to job list"
               aria-label="Back to job list"
@@ -1325,6 +1401,11 @@ function AnnotationApp() {
                 showPolygons={appearanceSettings.showPolygons}
                 showRectangles={appearanceSettings.showRectangles}
                 showHoverTooltips={appearanceSettings.showHoverTooltips}
+                highlightMode={appearanceSettings.highlightMode}
+                dimLevel={appearanceSettings.dimLevel}
+                onDeleteAnnotation={handleDeleteAnnotation}
+                onLabelChange={handleLabelChange}
+                onUpdateAnnotationAttributes={handleUpdateAnnotationAttributes}
               />
               {/* Auto-apply loading overlay */}
               {isAutoApplyLoading && (
@@ -1531,6 +1612,9 @@ function AnnotationApp() {
             appearanceSettings={appearanceSettings}
             onAppearanceChange={setAppearanceSettings}
             appearanceDefaults={DEFAULT_APPEARANCE_SETTINGS}
+            imageWidth={currentImage?.width}
+            imageHeight={currentImage?.height}
+            onUpdateAnnotationAttributes={handleUpdateAnnotationAttributes}
           />
       </div>
 
@@ -2140,6 +2224,37 @@ function AnnotationApp() {
         images={images}
         annotations={annotations}
         labels={labels}
+      />
+
+      {/* Unsaved Changes Dialog (Job Mode) */}
+      {isJobMode && (
+        <UnsavedChangesDialog
+          isOpen={showUnsavedChangesDialog}
+          pendingCount={pendingCount}
+          isSyncing={syncStatus === 'syncing'}
+          onSave={handleSaveAndLeave}
+          onDiscard={handleDiscardAndLeave}
+          onCancel={handleCancelNavigation}
+        />
+      )}
+
+      {/* Keyboard Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showKeyboardDeleteConfirm}
+        onClose={() => setShowKeyboardDeleteConfirm(false)}
+        onConfirm={() => {
+          if (selectedAnnotations.length === 1) {
+            handleDeleteAnnotation(selectedAnnotations[0])
+          } else {
+            handleBulkDeleteAnnotations(selectedAnnotations)
+          }
+          setShowKeyboardDeleteConfirm(false)
+        }}
+        title="Delete Annotations"
+        message={`Are you sure you want to delete ${selectedAnnotations.length} annotation${selectedAnnotations.length !== 1 ? 's' : ''}? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous={true}
       />
 
       {/* Toast Notifications */}

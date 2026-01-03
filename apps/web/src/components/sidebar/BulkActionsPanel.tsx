@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Trash2, X } from 'lucide-react';
 import type { BulkActionsPanelProps } from './types';
+import ConfirmationModal from '../ConfirmationModal';
 
 export function BulkActionsPanel({
   selectedCount,
@@ -16,6 +17,7 @@ export function BulkActionsPanel({
   onBulkToggleVisibility,
 }: BulkActionsPanelProps) {
   const [selectedLabelId, setSelectedLabelId] = useState<string>('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleApplyLabel = () => {
     if (selectedLabelId) {
@@ -95,7 +97,7 @@ export function BulkActionsPanel({
 
         {/* Delete */}
         <button
-          onClick={onBulkDelete}
+          onClick={() => setShowDeleteConfirm(true)}
           className="
             flex-1 px-2 py-1.5 text-xs font-medium rounded transition-colors
             bg-red-500 hover:bg-red-600 text-white
@@ -107,6 +109,21 @@ export function BulkActionsPanel({
           Delete
         </button>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          onBulkDelete();
+          setShowDeleteConfirm(false);
+        }}
+        title="Delete Annotations"
+        message={`Are you sure you want to delete ${selectedCount} annotation${selectedCount !== 1 ? 's' : ''}? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        isDangerous={true}
+      />
     </div>
   );
 }

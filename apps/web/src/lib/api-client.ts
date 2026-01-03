@@ -58,12 +58,29 @@ export interface ProjectDetail extends Project {
 }
 
 
+// Label attribute definition (schema for annotation attributes)
+export type AttributeType = 'text' | 'number' | 'boolean' | 'select';
+
+export interface LabelAttributeDefinition {
+  id: string;
+  name: string;
+  type: AttributeType;
+  required?: boolean;
+  default_value?: string | number | boolean;
+  options?: string[]; // For 'select' type
+  description?: string;
+  min?: number; // For 'number' type
+  max?: number; // For 'number' type
+}
+
 export interface Label {
   id: string;
   name: string;
   color: string;
   project_id: number;
   created_at?: string;
+  // Backend field name is attributes_schema
+  attributes_schema?: LabelAttributeDefinition[];
 }
 
 
@@ -564,7 +581,11 @@ export const projectsApi = {
 // ============================================================================
 
 export const labelsApi = {
-  async create(projectId: number, data: { name: string; color: string }): Promise<Label> {
+  async create(projectId: number, data: {
+    name: string;
+    color: string;
+    attributes_schema?: LabelAttributeDefinition[];
+  }): Promise<Label> {
     const response = await apiClient.post<ApiResponse<Label>>(
       `/api/v1/projects/${projectId}/labels`,
       data
@@ -572,7 +593,11 @@ export const labelsApi = {
     return response.data.data;
   },
 
-  async update(projectId: number, labelId: string, data: { name?: string; color?: string }): Promise<Label> {
+  async update(projectId: number, labelId: string, data: {
+    name?: string;
+    color?: string;
+    attributes_schema?: LabelAttributeDefinition[];
+  }): Promise<Label> {
     const response = await apiClient.patch<ApiResponse<Label>>(
       `/api/v1/projects/${projectId}/labels/${labelId}`,
       data

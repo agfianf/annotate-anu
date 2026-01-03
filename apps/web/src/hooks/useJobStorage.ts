@@ -92,6 +92,8 @@ function backendLabelToLabel(backendLabel: BackendLabel): Label {
     name: backendLabel.name,
     color: backendLabel.color,
     createdAt: new Date(backendLabel.created_at || Date.now()).getTime(),
+    // Map backend attributes_schema to frontend attributeDefinitions
+    attributeDefinitions: backendLabel.attributes_schema || [],
   }
 }
 

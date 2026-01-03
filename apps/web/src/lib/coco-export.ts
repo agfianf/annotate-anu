@@ -59,11 +59,15 @@ export function exportToCOCO(
     const imageId = imageIdMap.get(ann.imageId) || 0
     const categoryId = labelIdMap.get(ann.labelId) || 0
 
+    // Include attributes if present
+    const hasAttributes = ann.attributes && Object.keys(ann.attributes).length > 0
+
     const baseAnnotation = {
       id: index + 1,
       image_id: imageId,
       category_id: categoryId,
       iscrowd: 0 as const,
+      ...(hasAttributes ? { attributes: ann.attributes } : {}),
     }
 
     if (ann.type === 'rectangle') {

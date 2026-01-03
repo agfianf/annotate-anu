@@ -1,9 +1,13 @@
 import Konva from 'konva'
 import React, { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Stage, Text, Transformer } from 'react-konva'
+import { Circle, Group, Image as KonvaImage, Layer, Line, Rect, Shape, Stage, Text, Transformer } from 'react-konva'
 import type { Annotation, Label, PolygonAnnotation, RectangleAnnotation, Tool } from '../types/annotations'
+import type { LabelAttributeDefinition } from '../lib/api-client'
+import type { DimLevel } from './sidebar/types'
+import { DIM_LEVEL_MAP } from './sidebar/types'
 import { AnnotationTooltip } from './canvas/AnnotationTooltip'
+import { AnnotationContextMenu } from './canvas/AnnotationContextMenu'
 
 // Disable hover effects above this count to avoid expensive re-renders.
 const HOVER_DISABLE_THRESHOLD = 300
@@ -43,6 +47,7 @@ interface StaticRectAnnotationProps {
   onClick: (id: string) => void
   onMouseEnter?: (annotation: Annotation, e: any) => void
   onMouseLeave?: () => void
+  onContextMenu?: (annotation: Annotation, e: any) => void
 }
 
 const StaticRectAnnotation = React.memo(function StaticRectAnnotation({
@@ -60,6 +65,7 @@ const StaticRectAnnotation = React.memo(function StaticRectAnnotation({
   onClick,
   onMouseEnter,
   onMouseLeave,
+  onContextMenu,
 }: StaticRectAnnotationProps) {
   const LABEL_VISIBILITY_ZOOM_THRESHOLD = 0.5
   const ANNOTATION_STROKE_OPACITY = 0.9
@@ -92,6 +98,7 @@ const StaticRectAnnotation = React.memo(function StaticRectAnnotation({
         onTap={() => onClick(annotation.id)}
         onMouseEnter={onMouseEnter ? (e) => onMouseEnter(annotation, e) : undefined}
         onMouseLeave={onMouseLeave}
+        onContextMenu={onContextMenu ? (e) => onContextMenu(annotation, e) : undefined}
       />
       {showLabels && zoomLevel >= LABEL_VISIBILITY_ZOOM_THRESHOLD && (
         <Text
@@ -125,6 +132,7 @@ interface StaticPolygonAnnotationProps {
   onClick: (id: string) => void
   onMouseEnter?: (annotation: Annotation, e: any) => void
   onMouseLeave?: () => void
+  onContextMenu?: (annotation: Annotation, e: any) => void
 }
 
 const StaticPolygonAnnotation = React.memo(function StaticPolygonAnnotation({
@@ -142,6 +150,7 @@ const StaticPolygonAnnotation = React.memo(function StaticPolygonAnnotation({
   onClick,
   onMouseEnter,
   onMouseLeave,
+  onContextMenu,
 }: StaticPolygonAnnotationProps) {
   const LABEL_VISIBILITY_ZOOM_THRESHOLD = 0.5
   const ANNOTATION_STROKE_OPACITY = 0.9
@@ -175,6 +184,7 @@ const StaticPolygonAnnotation = React.memo(function StaticPolygonAnnotation({
         onTap={() => onClick(annotation.id)}
         onMouseEnter={onMouseEnter ? (e) => onMouseEnter(annotation, e) : undefined}
         onMouseLeave={onMouseLeave}
+        onContextMenu={onContextMenu ? (e) => onContextMenu(annotation, e) : undefined}
       />
       {showLabels && firstPoint && zoomLevel >= LABEL_VISIBILITY_ZOOM_THRESHOLD && (
         <Text
@@ -220,6 +230,13 @@ interface CanvasProps {
   showPolygons?: boolean     // default true
   showRectangles?: boolean   // default true
   showHoverTooltips?: boolean // default true
+  // Highlight mode settings
+  highlightMode?: boolean    // dim non-annotated areas
+  dimLevel?: DimLevel        // light, subtle, medium, strong, very-strong
+  // Context menu handlers
+  onDeleteAnnotation?: (id: string) => void
+  onLabelChange?: (annotationId: string, newLabelId: string) => void
+  onUpdateAnnotationAttributes?: (annotationId: string, attributes: Record<string, string | number | boolean>) => void
 }
 
 const Canvas = React.memo(function Canvas({
@@ -248,6 +265,11 @@ const Canvas = React.memo(function Canvas({
   showPolygons = true,
   showRectangles = true,
   showHoverTooltips = true,
+  highlightMode = false,
+  dimLevel = 'medium',
+  onDeleteAnnotation,
+  onLabelChange,
+  onUpdateAnnotationAttributes,
 }: CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
@@ -321,6 +343,11 @@ const Canvas = React.memo(function Canvas({
   // Cache container bounds to avoid getBoundingClientRect() on every hover (performance optimization)
   const containerBoundsRef = useRef<DOMRect | null>(null)
   const freezeVisibilityRef = useRef(false)
+  // Context menu state
+  const [contextMenuState, setContextMenuState] = useState<{
+    annotation: Annotation
+    position: { x: number; y: number }
+  } | null>(null)
   // State trigger to force visibility recalculation after zoom ends
   // (refs don't trigger useMemo recalculation, so we need a state variable)
   const [visibilityVersion, setVisibilityVersion] = useState(0)
@@ -1524,6 +1551,41 @@ const Canvas = React.memo(function Canvas({
     }
   }, [isShiftPressed, selectedIds, commitSelection])
 
+  // Handle right-click context menu on annotations
+  const handleAnnotationContextMenu = useCallback((annotation: Annotation, e: Konva.KonvaEventObject<PointerEvent | MouseEvent>) => {
+    // Prevent the browser's native context menu
+    e.evt.preventDefault()
+    e.cancelBubble = true
+
+    // Get the screen coordinates of the click
+    const stage = stageRef.current
+    if (!stage) return
+
+    const container = stage.container()
+    const containerRect = container.getBoundingClientRect()
+    const pointerPosition = stage.getPointerPosition()
+
+    if (!pointerPosition) return
+
+    // Convert stage position to screen coordinates
+    const screenX = containerRect.left + pointerPosition.x
+    const screenY = containerRect.top + pointerPosition.y
+
+    // Close any open tooltip
+    setHoveredAnnotation(null)
+
+    // Open context menu
+    setContextMenuState({
+      annotation,
+      position: { x: screenX, y: screenY }
+    })
+  }, [])
+
+  // Close context menu
+  const handleCloseContextMenu = useCallback(() => {
+    setContextMenuState(null)
+  }, [])
+
   // Pre-compute annotation bounds for tooltip positioning (performance optimization)
   // This avoids expensive calculations on every hover event
   const annotationBoundsMap = useMemo(() => {
@@ -2354,6 +2416,66 @@ const Canvas = React.memo(function Canvas({
               listening={false}
             />
           )}
+
+          {/* Highlight mode overlay - dims only OUTSIDE annotation areas (spotlight effect) */}
+          {/* Uses offscreen canvas compositing to correctly handle overlapping annotations */}
+          {highlightMode && dimLevel !== 'none' && konvaImage && (
+            <Shape
+              key="highlight-overlay"
+              listening={false}
+              sceneFunc={(context, shape) => {
+                const dimOpacity = DIM_LEVEL_MAP[dimLevel] || 0.5
+                const ctx = context._context as CanvasRenderingContext2D
+                const w = dimensions.width
+                const h = dimensions.height
+
+                // Create an offscreen canvas for proper compositing
+                // This isolates the destination-out operation from affecting the main layer
+                const offscreen = document.createElement('canvas')
+                offscreen.width = w
+                offscreen.height = h
+                const offCtx = offscreen.getContext('2d')
+                if (!offCtx) return
+
+                // First, fill the offscreen canvas with dim color
+                offCtx.fillStyle = `rgba(0, 0, 0, ${dimOpacity})`
+                offCtx.fillRect(0, 0, w, h)
+
+                // Use destination-out to cut holes for annotations
+                // This correctly handles overlapping areas (union of all shapes)
+                offCtx.globalCompositeOperation = 'destination-out'
+                offCtx.fillStyle = 'rgba(0, 0, 0, 1)' // Fully opaque for clean cutout
+
+                annotations.forEach((ann) => {
+                  // Skip hidden annotations
+                  if (ann.hidden) return
+                  if (ann.isVisible === false) return
+                  // Skip based on visibility filters
+                  if (ann.type === 'polygon' && !showPolygons) return
+                  if (ann.type === 'rectangle' && !showRectangles) return
+
+                  offCtx.beginPath()
+                  if (ann.type === 'rectangle') {
+                    const rect = ann as RectangleAnnotation
+                    offCtx.rect(rect.x * scale, rect.y * scale, rect.width * scale, rect.height * scale)
+                  } else if (ann.type === 'polygon') {
+                    const poly = ann as PolygonAnnotation
+                    if (poly.points.length > 2) {
+                      offCtx.moveTo(poly.points[0].x * scale, poly.points[0].y * scale)
+                      for (let i = 1; i < poly.points.length; i++) {
+                        offCtx.lineTo(poly.points[i].x * scale, poly.points[i].y * scale)
+                      }
+                      offCtx.closePath()
+                    }
+                  }
+                  offCtx.fill()
+                })
+
+                // Draw the composited offscreen canvas onto the main canvas
+                ctx.drawImage(offscreen, 0, 0)
+              }}
+            />
+          )}
         </Layer>
       </Stage>
 
@@ -2399,6 +2521,7 @@ const Canvas = React.memo(function Canvas({
                   onClick={handleAnnotationClick}
                   onMouseEnter={hoverEnabled ? handleAnnotationMouseEnter : undefined}
                   onMouseLeave={hoverEnabled ? handleAnnotationMouseLeave : undefined}
+                  onContextMenu={handleAnnotationContextMenu}
                 />
               )
             } else if (annotation.type === 'polygon') {
@@ -2419,6 +2542,7 @@ const Canvas = React.memo(function Canvas({
                   onClick={handleAnnotationClick}
                   onMouseEnter={hoverEnabled ? handleAnnotationMouseEnter : undefined}
                   onMouseLeave={hoverEnabled ? handleAnnotationMouseLeave : undefined}
+                  onContextMenu={handleAnnotationContextMenu}
                 />
               )
             }
@@ -2474,6 +2598,7 @@ const Canvas = React.memo(function Canvas({
                     onTransformEnd={(e) => handleTransformEnd(annotation, e)}
                     onMouseEnter={hoverEnabled ? (e) => handleAnnotationMouseEnter(annotation, e) : undefined}
                     onMouseLeave={hoverEnabled ? handleAnnotationMouseLeave : undefined}
+                    onContextMenu={(e) => handleAnnotationContextMenu(annotation, e)}
                   />
                   {/* Label text above rectangle - hide during drag and when zoomed out */}
                   {showLabels && !shouldHideLabel && renderZoomLevel >= LABEL_VISIBILITY_ZOOM_THRESHOLD && (
@@ -2546,6 +2671,7 @@ const Canvas = React.memo(function Canvas({
                     onTap={() => handleAnnotationClick(annotation.id)}
                     onMouseEnter={hoverEnabled ? (e) => handleAnnotationMouseEnter(annotation, e) : undefined}
                     onMouseLeave={hoverEnabled ? handleAnnotationMouseLeave : undefined}
+                    onContextMenu={(e) => handleAnnotationContextMenu(annotation, e)}
                   />
                   {/* Label text above polygon - hide during drag and when zoomed out */}
                   {showLabels && displayPoints.length > 0 && !shouldHideLabel && renderZoomLevel >= LABEL_VISIBILITY_ZOOM_THRESHOLD && (
@@ -2988,6 +3114,28 @@ const Canvas = React.memo(function Canvas({
             imageHeight={konvaImage?.height || 1}
             onMouseEnter={handleTooltipMouseEnter}
             onMouseLeave={handleTooltipMouseLeave}
+          />
+        )
+      })()}
+
+      {/* Annotation Context Menu (Right-click) */}
+      {contextMenuState && (() => {
+        const label = labelMap.get(contextMenuState.annotation.labelId)
+        // Get attribute definitions from the label (if available)
+        // Use attributeDefinitions (frontend) or attributes_schema (backend) for compatibility
+        const attributeDefinitions: LabelAttributeDefinition[] =
+          label?.attributeDefinitions || (label as any)?.attributes_schema || []
+        return (
+          <AnnotationContextMenu
+            annotation={contextMenuState.annotation}
+            label={label}
+            position={contextMenuState.position}
+            onClose={handleCloseContextMenu}
+            onDelete={onDeleteAnnotation}
+            onLabelChange={onLabelChange}
+            onAttributeChange={onUpdateAnnotationAttributes}
+            labels={labels}
+            attributeDefinitions={attributeDefinitions}
           />
         )
       })()}

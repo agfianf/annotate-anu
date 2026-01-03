@@ -3,11 +3,11 @@
  * Shows project configuration including labels and settings with proper color picker
  */
 
-import { Crown, Edit2, Eye, Loader2, Palette, Plus, Save, Settings, Shield, Sparkles, Trash2, UserPlus, Users, Wrench, X } from 'lucide-react';
+import { Crown, Edit2, Eye, Loader2, Palette, Plus, Save, Settings, Settings2, Shield, Sparkles, Trash2, UserPlus, Users, Wrench, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
-import type { Label, ProjectDetail, ProjectMember } from '../lib/api-client';
+import type { Label, LabelAttributeDefinition, ProjectDetail, ProjectMember } from '../lib/api-client';
 import { labelsApi, membersApi, projectsApi } from '../lib/api-client';
 import { byomClient } from '../lib/byom-client';
 import type { RegisteredModel } from '../types/byom';
@@ -15,6 +15,7 @@ import { DEFAULT_LABEL_COLOR, PRESET_COLORS } from '../lib/colors';
 import GlassDropdown from './ui/GlassDropdown';
 import GlassMultiSelect from './ui/GlassMultiSelect';
 import { FadeIn } from './ui/animate';
+import LabelAttributesEditor from './ui/LabelAttributesEditor';
 
 interface ProjectConfigurationTabProps {
   project: ProjectDetail;
@@ -29,8 +30,10 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
   const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
   const [newLabelName, setNewLabelName] = useState('');
   const [newLabelColor, setNewLabelColor] = useState<string>(DEFAULT_LABEL_COLOR);
+  const [newLabelAttributes, setNewLabelAttributes] = useState<LabelAttributeDefinition[]>([]);
   const [editLabelName, setEditLabelName] = useState('');
   const [editLabelColor, setEditLabelColor] = useState('');
+  const [editLabelAttributes, setEditLabelAttributes] = useState<LabelAttributeDefinition[]>([]);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showEditColorPicker, setShowEditColorPicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -151,10 +154,12 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
       await labelsApi.create(project.id, {
         name: newLabelName.trim(),
         color: newLabelColor,
+        attributes_schema: newLabelAttributes.length > 0 ? newLabelAttributes : undefined,
       });
       toast.success(`Label "${newLabelName}" created`);
       setNewLabelName('');
       setNewLabelColor(DEFAULT_LABEL_COLOR);
+      setNewLabelAttributes([]);
       setIsAddingLabel(false);
       onUpdate?.();
     } catch (err) {
@@ -169,6 +174,7 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
     setEditingLabelId(label.id);
     setEditLabelName(label.name);
     setEditLabelColor(label.color);
+    setEditLabelAttributes(label.attributes_schema || []);
   };
 
   const handleSaveEdit = async (labelId: string) => {
@@ -182,9 +188,11 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
       await labelsApi.update(project.id, labelId, {
         name: editLabelName.trim(),
         color: editLabelColor,
+        attributes_schema: editLabelAttributes.length > 0 ? editLabelAttributes : undefined,
       });
       toast.success('Label updated');
       setEditingLabelId(null);
+      setEditLabelAttributes([]);
       onUpdate?.();
     } catch (err) {
       console.error('Failed to update label:', err);
@@ -377,7 +385,7 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
                   className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   onKeyDown={(e) => e.key === 'Enter' && handleAddLabel()}
                 />
-                
+
                 {/* Color Picker Button */}
                 <div className="relative">
                   <button
@@ -412,12 +420,19 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
                   onClick={() => {
                     setIsAddingLabel(false);
                     setShowColorPicker(false);
+                    setNewLabelAttributes([]);
                   }}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium rounded-lg transition-all"
                 >
                   Cancel
                 </button>
               </div>
+
+              {/* Attributes Editor for New Label */}
+              <LabelAttributesEditor
+                attributes={newLabelAttributes}
+                onChange={setNewLabelAttributes}
+              />
             </div>
           )}
 
@@ -437,53 +452,62 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
                 >
                   {editingLabelId === label.id ? (
                     // Edit Mode
-                    <div className="flex gap-3 items-center">
-                      <input
-                        type="text"
-                        value={editLabelName}
-                        onChange={(e) => setEditLabelName(e.target.value)}
-                        className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                        onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(label.id)}
-                      />
-                      
-                      {/* Edit Color Picker Button */}
-                      <div className="relative">
-                        <button
-                          ref={editColorButtonRef}
-                          type="button"
-                          onClick={() => setShowEditColorPicker(!showEditColorPicker)}
-                          className="flex items-center gap-2 px-2 py-1.5 border border-gray-200 rounded-lg hover:border-emerald-300 transition-all"
-                        >
-                          <div
-                            className="w-5 h-5 rounded border border-gray-300"
-                            style={{ backgroundColor: editLabelColor }}
-                          />
-                        </button>
-                        <ColorPicker
-                          selectedColor={editLabelColor}
-                          onColorChange={setEditLabelColor}
-                          isOpen={showEditColorPicker}
-                          onClose={() => setShowEditColorPicker(false)}
-                          anchorRef={editColorButtonRef}
+                    <div className="space-y-2">
+                      <div className="flex gap-3 items-center">
+                        <input
+                          type="text"
+                          value={editLabelName}
+                          onChange={(e) => setEditLabelName(e.target.value)}
+                          className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit(label.id)}
                         />
+
+                        {/* Edit Color Picker Button */}
+                        <div className="relative">
+                          <button
+                            ref={editColorButtonRef}
+                            type="button"
+                            onClick={() => setShowEditColorPicker(!showEditColorPicker)}
+                            className="flex items-center gap-2 px-2 py-1.5 border border-gray-200 rounded-lg hover:border-emerald-300 transition-all"
+                          >
+                            <div
+                              className="w-5 h-5 rounded border border-gray-300"
+                              style={{ backgroundColor: editLabelColor }}
+                            />
+                          </button>
+                          <ColorPicker
+                            selectedColor={editLabelColor}
+                            onColorChange={setEditLabelColor}
+                            isOpen={showEditColorPicker}
+                            onClose={() => setShowEditColorPicker(false)}
+                            anchorRef={editColorButtonRef}
+                          />
+                        </div>
+
+                        <button
+                          onClick={() => handleSaveEdit(label.id)}
+                          disabled={isSubmitting}
+                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-all"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingLabelId(null);
+                            setShowEditColorPicker(false);
+                            setEditLabelAttributes([]);
+                          }}
+                          className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-sm font-medium rounded-lg transition-all"
+                        >
+                          Cancel
+                        </button>
                       </div>
 
-                      <button
-                        onClick={() => handleSaveEdit(label.id)}
-                        disabled={isSubmitting}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-all"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingLabelId(null);
-                          setShowEditColorPicker(false);
-                        }}
-                        className="px-3 py-1.5 text-gray-600 hover:text-gray-800 text-sm font-medium rounded-lg transition-all"
-                      >
-                        Cancel
-                      </button>
+                      {/* Attributes Editor for Editing Label */}
+                      <LabelAttributesEditor
+                        attributes={editLabelAttributes}
+                        onChange={setEditLabelAttributes}
+                      />
                     </div>
                   ) : (
                     // Display Mode
@@ -495,6 +519,13 @@ export default function ProjectConfigurationTab({ project, onUpdate }: ProjectCo
                         />
                         <span className="font-medium text-gray-800">{label.name}</span>
                         <span className="text-xs font-mono text-gray-400">{label.color}</span>
+                        {/* Attribute count indicator */}
+                        {(label.attributes_schema?.length || 0) > 0 && (
+                          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-medium flex items-center gap-1">
+                            <Settings2 className="w-3 h-3" />
+                            {label.attributes_schema?.length} attrs
+                          </span>
+                        )}
                       </div>
                       {canEdit && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

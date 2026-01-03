@@ -141,6 +141,22 @@ export function useAutoSave(
   }, [])
 
   /**
+   * Warn user before leaving page with unsaved changes
+   */
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (pendingChangesRef.current.size > 0) {
+        e.preventDefault()
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
+        return e.returnValue
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [])
+
+  /**
    * Mark an annotation for creation
    */
   const markCreate = useCallback(

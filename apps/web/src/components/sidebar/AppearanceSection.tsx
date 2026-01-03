@@ -3,8 +3,18 @@
  * Collapsible section for canvas appearance settings
  */
 
-import { ChevronDown, Palette, RotateCcw } from 'lucide-react';
-import type { AppearanceSectionProps } from './types';
+import { ChevronDown, Palette, RotateCcw, Sun, AlertTriangle } from 'lucide-react';
+import type { AppearanceSectionProps, DimLevel } from './types';
+
+// Dim level labels for display
+const DIM_LEVEL_LABELS: Record<DimLevel, string> = {
+  'none': 'None',
+  'light': 'Light',
+  'subtle': 'Subtle',
+  'medium': 'Medium',
+  'strong': 'Strong',
+  'very-strong': 'Very Strong',
+};
 
 export function AppearanceSection({
   settings,
@@ -108,7 +118,7 @@ export function AppearanceSection({
 
       {/* Section Content */}
       {isExpanded && (
-        <div className="px-3 pb-3 space-y-3">
+        <div className="px-3 pb-3 space-y-3 max-h-80 overflow-y-auto">
           {/* Fill Opacity Slider */}
           <Slider
             label="Fill Opacity"
@@ -166,6 +176,90 @@ export function AppearanceSection({
             checked={settings.showHoverTooltips}
             onToggle={() => onChange({ ...settings, showHoverTooltips: !settings.showHoverTooltips })}
           />
+
+          {/* Divider */}
+          <div className="border-t border-gray-200 pt-3">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 mb-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+              Tiny Annotation Detection
+            </div>
+
+            {/* Tiny Threshold Input */}
+            <div>
+              <label className="text-xs text-gray-600 flex justify-between mb-1">
+                <span>Tiny Threshold</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  step={0.1}
+                  value={settings.tinyThreshold}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value)
+                    if (!isNaN(val) && val > 0) {
+                      onChange({ ...settings, tinyThreshold: val })
+                    }
+                  }}
+                  className={`w-20 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                    settings.tinyThreshold < 0.1 || settings.tinyThreshold > 10
+                      ? 'border-amber-400 bg-amber-50'
+                      : 'border-gray-200'
+                  }`}
+                />
+                <span className="text-xs text-gray-600">%</span>
+              </div>
+              {(settings.tinyThreshold < 0.1 || settings.tinyThreshold > 10) && (
+                <p className="text-[10px] text-amber-600 mt-1">
+                  Recommended range: 0.1% - 10%
+                </p>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-500 mt-1">
+              Annotations smaller than this % of image area are flagged
+            </p>
+          </div>
+
+          {/* Highlight Mode Section */}
+          <div className="border-t border-gray-200 pt-3">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 mb-2">
+              <Sun className="w-3.5 h-3.5 text-amber-500" />
+              Highlight Mode
+            </div>
+
+            <Toggle
+              label="Enable Highlight Mode"
+              checked={settings.highlightMode}
+              onToggle={() => onChange({ ...settings, highlightMode: !settings.highlightMode })}
+            />
+
+            {/* Dim Level Selector - only shown when highlight mode is enabled */}
+            {settings.highlightMode && (
+              <div className="mt-2 space-y-1.5">
+                <span className="text-xs text-gray-600">Dim Level</span>
+                <div className="flex flex-wrap gap-1">
+                  {(['light', 'subtle', 'medium', 'strong', 'very-strong'] as const).map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => onChange({ ...settings, dimLevel: level })}
+                      className={`
+                        px-2 py-1 text-[10px] rounded transition-colors
+                        ${settings.dimLevel === level
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }
+                      `}
+                    >
+                      {DIM_LEVEL_LABELS[level]}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-gray-500">
+                  Dims non-annotated areas to highlight annotations
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* Reset Button */}
           <button

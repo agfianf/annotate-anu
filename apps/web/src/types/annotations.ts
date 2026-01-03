@@ -17,6 +17,22 @@ export interface LabelGroup {
   createdAt: number
 }
 
+// Attribute type for label attribute definitions
+export type AttributeType = 'text' | 'number' | 'boolean' | 'select';
+
+// Label attribute definition (schema for annotation attributes)
+export interface LabelAttributeDefinition {
+  id: string
+  name: string
+  type: AttributeType
+  required?: boolean
+  defaultValue?: AttributeValue
+  options?: string[] // For 'select' type - available options
+  description?: string
+  min?: number // For 'number' type - minimum value
+  max?: number // For 'number' type - maximum value
+}
+
 // Label definition
 export interface Label {
   id: string
@@ -27,7 +43,12 @@ export interface Label {
   groupId?: string // Parent group ID (null/undefined = ungrouped)
   isVisible?: boolean // Individual label visibility toggle (default: true)
   sortOrder?: number // Custom ordering within group
+  // Attribute schema for annotations with this label
+  attributeDefinitions?: LabelAttributeDefinition[]
 }
+
+// Attribute value type (supports text, number, boolean)
+export type AttributeValue = string | number | boolean;
 
 // Base annotation interface
 export interface BaseAnnotation {
@@ -42,6 +63,7 @@ export interface BaseAnnotation {
   isVisible?: boolean // Individual annotation visibility toggle (default: true)
   backendId?: string // Backend annotation ID (for synced annotations in team mode)
   originalFrontendId?: string // Original frontend ID that never changes (used to prevent ID corruption during sync)
+  attributes?: Record<string, AttributeValue> // Custom key-value attributes (like CVAT)
 }
 
 // Rectangle annotation
@@ -131,6 +153,7 @@ export interface COCOAnnotation {
   segmentation?: number[][] // polygon points
   area?: number
   iscrowd: 0 | 1
+  attributes?: Record<string, string | number | boolean> // Custom annotation attributes
 }
 
 export interface COCODataset {
