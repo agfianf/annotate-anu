@@ -203,8 +203,8 @@ export const ImageThumbnail = memo(function ImageThumbnail({
         />
       )}
 
-      {/* Interactive zones gradient overlay (shows on hover) */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+      {/* Interactive zones gradient overlay (shows on hover) - z-50 for highest priority */}
+      <div className="absolute inset-0 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
         {/* Top half - Select zone */}
         <div className="absolute inset-0 bottom-1/2 bg-gradient-to-b from-emerald-500/0 via-emerald-500/8 to-emerald-500/15 flex items-center justify-center">
           <MousePointer2 className="w-5 h-5 text-white drop-shadow-lg" />
@@ -228,7 +228,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
 
       {/* Selection checkbox */}
       <div
-        className={`absolute top-1 left-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+        className={`absolute top-1 left-1 z-30 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
           isSelected
             ? 'bg-emerald-500 border-emerald-500'
             : 'bg-white/80 border-gray-300 opacity-0 group-hover:opacity-100'
@@ -239,7 +239,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
 
       {/* Annotation count badge */}
       {annotationCount > 0 && (
-        <div className="absolute top-1 right-1 bg-black text-white text-[10px] px-1.5 py-0.5 rounded-full font-medium">
+        <div className="absolute top-1 right-1 z-20 bg-black text-white text-[10px] px-1.5 py-0.5 rounded-full font-medium">
           {annotationCount}
         </div>
       )}
@@ -249,7 +249,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
         <>
           {/* Default state: Show first 2 tags with text, rest as dots */}
           <div
-            className="absolute bottom-1 left-1 right-1 flex flex-wrap items-center group-hover:hidden"
+            className="absolute bottom-1 left-1 right-1 z-20 flex flex-wrap items-center group-hover:hidden"
             style={{ gap: `${tagStyles.gap}px` }}
           >
             {/* First 2 tags with text */}
@@ -316,7 +316,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
 
           {/* Hover state: Show all tags with removal buttons */}
           <div
-            className="absolute bottom-1 left-1 right-1 hidden group-hover:flex flex-wrap"
+            className="absolute bottom-1 left-1 right-1 z-20 hidden group-hover:flex flex-wrap"
             style={{ gap: `${tagStyles.gap}px` }}
           >
             {visibleTags.map((tag) => {
@@ -373,7 +373,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
       {/* Metadata badges - positioned at top-left */}
       {visibleMetadata.length > 0 && (
         <div
-          className="absolute top-1 left-1 flex flex-col items-start pointer-events-none"
+          className="absolute top-1 left-1 z-20 flex flex-col items-start pointer-events-none"
           style={{ gap: `${Math.round(2 * scaleFactor)}px` }}
         >
           {visibleMetadata.map(({ field, color }) => (
