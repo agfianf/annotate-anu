@@ -560,14 +560,25 @@ class ProjectImageRepository:
             base_query = base_query.where(shared_images.c.id.in_(job_images_subquery))
 
             if is_annotated is not None:
-                # Need to check annotation status in job's images
-                annotated_subquery = (
+                # Count actual annotations using subquery join approach
+                from sqlalchemy import or_
+                # Get shared_image_ids that have annotations in this job
+                annotated_in_job = (
                     select(images.c.shared_image_id)
+                    .select_from(
+                        images
+                        .outerjoin(detections, detections.c.image_id == images.c.id)
+                        .outerjoin(segmentations, segmentations.c.image_id == images.c.id)
+                    )
                     .where(images.c.job_id == job_id)
-                    .where(images.c.is_annotated == is_annotated)
                     .where(images.c.shared_image_id.isnot(None))
+                    .where(or_(detections.c.id.isnot(None), segmentations.c.id.isnot(None)))
+                    .distinct()
                 )
-                base_query = base_query.where(shared_images.c.id.in_(annotated_subquery))
+                if is_annotated:
+                    base_query = base_query.where(shared_images.c.id.in_(annotated_in_job))
+                else:
+                    base_query = base_query.where(shared_images.c.id.notin_(annotated_in_job))
 
         elif task_ids is not None and len(task_ids) > 0:
             # Filter to images in ANY of the specified tasks (OR logic)
@@ -580,14 +591,45 @@ class ProjectImageRepository:
             base_query = base_query.where(shared_images.c.id.in_(task_images_subquery))
 
             if is_annotated is not None:
-                annotated_subquery = (
+                # Get shared_image_ids that have annotations in selected tasks
+                from sqlalchemy import or_
+                annotated_in_tasks = (
                     select(images.c.shared_image_id)
-                    .join(jobs, images.c.job_id == jobs.c.id)
+                    .select_from(
+                        images
+                        .join(jobs, images.c.job_id == jobs.c.id)
+                        .outerjoin(detections, detections.c.image_id == images.c.id)
+                        .outerjoin(segmentations, segmentations.c.image_id == images.c.id)
+                    )
                     .where(jobs.c.task_id.in_(task_ids))
-                    .where(images.c.is_annotated == is_annotated)
                     .where(images.c.shared_image_id.isnot(None))
+                    .where(or_(detections.c.id.isnot(None), segmentations.c.id.isnot(None)))
+                    .distinct()
                 )
-                base_query = base_query.where(shared_images.c.id.in_(annotated_subquery))
+                if is_annotated:
+                    base_query = base_query.where(shared_images.c.id.in_(annotated_in_tasks))
+                else:
+                    base_query = base_query.where(shared_images.c.id.notin_(annotated_in_tasks))
+
+        # Handle is_annotated filter when no task/job filter is specified (All Tasks)
+        elif is_annotated is not None:
+            # Check annotations across ALL images linked to shared_images
+            from sqlalchemy import or_
+            annotated_shared_ids = (
+                select(images.c.shared_image_id)
+                .select_from(
+                    images
+                    .outerjoin(detections, detections.c.image_id == images.c.id)
+                    .outerjoin(segmentations, segmentations.c.image_id == images.c.id)
+                )
+                .where(images.c.shared_image_id.isnot(None))
+                .where(or_(detections.c.id.isnot(None), segmentations.c.id.isnot(None)))
+                .distinct()
+            )
+            if is_annotated:
+                base_query = base_query.where(shared_images.c.id.in_(annotated_shared_ids))
+            else:
+                base_query = base_query.where(shared_images.c.id.notin_(annotated_shared_ids))
 
         # Count total
         count_stmt = select(func.count()).select_from(base_query.subquery())
