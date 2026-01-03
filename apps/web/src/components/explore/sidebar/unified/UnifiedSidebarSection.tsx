@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, HelpCircle, Plus } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
 interface UnifiedSidebarSectionProps {
@@ -18,6 +18,8 @@ interface UnifiedSidebarSectionProps {
   showAddButton?: boolean;
   /** Callback when add button clicked */
   onAddClick?: () => void;
+  /** Optional tooltip/hint text to explain the section */
+  tooltip?: string;
 }
 
 export function UnifiedSidebarSection({
@@ -29,6 +31,7 @@ export function UnifiedSidebarSection({
   children,
   showAddButton = false,
   onAddClick,
+  tooltip,
 }: UnifiedSidebarSectionProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
@@ -66,6 +69,14 @@ export function UnifiedSidebarSection({
             <span className="font-bold">{title}</span>
             {count !== undefined && (
               <span className={`text-[10px] ${countColor} font-normal`}>[{count}]</span>
+            )}
+            {tooltip && (
+              <span
+                className={`${countColor} opacity-60 hover:opacity-100 cursor-help`}
+                title={tooltip}
+              >
+                <HelpCircle className="w-3 h-3" />
+              </span>
             )}
           </div>
           {isExpanded ? (

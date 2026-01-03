@@ -43,6 +43,43 @@ See `docs/architecture/annotation-sync.md` for details.
 
 See `docs/features/export-workflow.md` for details.
 
+## Data Management: Labels and Tags
+
+The system organizes image tagging through a hierarchical Labels/Tags structure with
+a constraint that enforces data quality.
+
+### Label Hierarchy
+
+- **Labels** (formerly "Categories") are top-level groupings for tags (e.g., "Weather", "Scene Type")
+- **Tags** belong to exactly one Label (e.g., "Sunny", "Cloudy" under "Weather")
+- A special **Uncategorized** Label exists for tags that don't fit a specific grouping
+
+### One Tag Per Label Constraint
+
+To prevent conflicting classifications, the system enforces a rule:
+**Only one tag from each Label can be applied to an image** (except Uncategorized).
+
+For example, if an image has the tag "Sunny" from the "Weather" Label, adding "Cloudy"
+from the same Label will automatically replace "Sunny".
+
+### Implementation
+
+The constraint is optimized for O(1) conflict detection through denormalization:
+
+```
+shared_image_tags
+├── shared_image_id (FK)
+├── tag_id (FK)
+├── category_id (FK, denormalized)  ← Enables fast conflict lookup
+└── Composite index: (project_id, shared_image_id, category_id)
+```
+
+- **Single tag operations**: Auto-replace with toast notification
+- **Bulk operations**: Preview conflicts before confirmation
+- The `is_uncategorized` flag on Labels exempts Uncategorized tags from the constraint
+
+See `docs/architecture/database-schema.dbml` for the full schema.
+
 ## Related Docs
 
 - Annotation sync: `docs/architecture/annotation-sync.md`

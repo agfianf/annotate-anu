@@ -5,12 +5,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update, union_all, literal_column
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.dependencies.auth import get_admin_user
 from app.dependencies.database import get_async_transaction_conn
 from app.helpers.response_api import JsonResponse
+from app.models.job import jobs
+from app.models.task import tasks
 from app.models.user import users
 from app.schemas.auth import UserBase, UserResponse
 
@@ -30,6 +32,26 @@ class ActiveUpdate(BaseModel):
     """Schema for toggling user active status."""
 
     is_active: bool
+
+
+class RecentActivityItem(BaseModel):
+    """Schema for a recent activity item."""
+
+    id: int
+    type: str  # 'task' or 'job'
+    name: str
+    status: str
+    updated_at: str
+
+
+class UserActivityResponse(BaseModel):
+    """Schema for user activity response."""
+
+    assigned_tasks: int
+    assigned_jobs: int
+    completed_jobs: int
+    completion_rate: int
+    recent_items: list[RecentActivityItem]
 
 
 # ============================================================================
@@ -230,5 +252,113 @@ async def delete_user(
     return JsonResponse(
         data={"deleted": True},
         message="User deleted",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.get("/users/{user_id}/activity", response_model=JsonResponse[UserActivityResponse, None])
+async def get_user_activity(
+    user_id: UUID,
+    current_user: Annotated[UserBase, Depends(get_admin_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """Get user activity stats. Admin only.
+
+    Parameters
+    ----------
+    user_id : UUID
+        User ID to get activity for
+
+    Returns
+    -------
+    JsonResponse[UserActivityResponse, None]
+        User activity stats including assigned tasks, jobs, and completion rate
+    """
+    # Count assigned tasks
+    task_count_result = await connection.execute(
+        select(func.count()).select_from(tasks).where(tasks.c.assignee_id == user_id)
+    )
+    assigned_tasks = task_count_result.scalar() or 0
+
+    # Count assigned jobs
+    job_count_result = await connection.execute(
+        select(func.count()).select_from(jobs).where(jobs.c.assignee_id == user_id)
+    )
+    assigned_jobs = job_count_result.scalar() or 0
+
+    # Count completed jobs
+    completed_result = await connection.execute(
+        select(func.count())
+        .select_from(jobs)
+        .where(
+            jobs.c.assignee_id == user_id,
+            jobs.c.status.in_(["completed", "approved"]),
+        )
+    )
+    completed_jobs = completed_result.scalar() or 0
+
+    # Calculate completion rate
+    completion_rate = (
+        int((completed_jobs / assigned_jobs) * 100) if assigned_jobs > 0 else 0
+    )
+
+    # Get recent tasks
+    recent_tasks_query = (
+        select(
+            tasks.c.id,
+            literal_column("'task'").label("type"),
+            tasks.c.name,
+            tasks.c.status,
+            tasks.c.updated_at,
+        )
+        .where(tasks.c.assignee_id == user_id)
+        .order_by(tasks.c.updated_at.desc())
+        .limit(5)
+    )
+
+    # Get recent jobs (construct name from task_id and sequence)
+    recent_jobs_query = (
+        select(
+            jobs.c.id,
+            literal_column("'job'").label("type"),
+            func.concat("Job #", jobs.c.id).label("name"),
+            jobs.c.status,
+            jobs.c.updated_at,
+        )
+        .where(jobs.c.assignee_id == user_id)
+        .order_by(jobs.c.updated_at.desc())
+        .limit(5)
+    )
+
+    # Union and sort by updated_at
+    combined_query = (
+        union_all(recent_tasks_query, recent_jobs_query)
+        .order_by(literal_column("updated_at").desc())
+        .limit(10)
+    )
+
+    recent_result = await connection.execute(combined_query)
+    recent_rows = recent_result.mappings().all()
+
+    recent_items = [
+        RecentActivityItem(
+            id=row["id"],
+            type=row["type"],
+            name=row["name"],
+            status=row["status"],
+            updated_at=row["updated_at"].isoformat() if row["updated_at"] else "",
+        )
+        for row in recent_rows
+    ]
+
+    return JsonResponse(
+        data=UserActivityResponse(
+            assigned_tasks=assigned_tasks,
+            assigned_jobs=assigned_jobs,
+            completed_jobs=completed_jobs,
+            completion_rate=completion_rate,
+            recent_items=recent_items,
+        ),
+        message="User activity retrieved",
         status_code=status.HTTP_200_OK,
     )

@@ -42,16 +42,19 @@ export default function Toggle({
             <div className="relative flex items-center">
                 <input
                     type="checkbox"
-                    className="sr-only"
+                    role="switch"
+                    aria-checked={checked}
+                    className="sr-only peer"
                     checked={checked}
                     onChange={(e) => !disabled && onChange(e.target.checked)}
                     disabled={disabled}
                 />
                 <div
                     className={`
-                        ${sizes.container} 
+                        ${sizes.container}
                         rounded-full shadow-inner transition-colors duration-300 ease-in-out
                         ${checked ? 'bg-emerald-500' : 'bg-gray-200'}
+                        peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-500 peer-focus-visible:ring-offset-2
                     `}
                 ></div>
                 <motion.div
@@ -59,6 +62,7 @@ export default function Toggle({
                         absolute left-1 bg-white rounded-full shadow-md
                         ${sizes.knob}
                     `}
+                    initial={false}
                     animate={{
                         x: checked ? sizes.translateX : 0
                     }}

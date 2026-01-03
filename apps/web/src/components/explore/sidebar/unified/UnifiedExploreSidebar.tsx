@@ -612,6 +612,7 @@ export function UnifiedExploreSidebar({
               count={categories?.filter(cat => cat.id !== null).length}
               showAddButton
               onAddClick={() => setActiveForm('category')}
+              tooltip="Only one tag from each Label can be applied per image. Adding a new tag will replace the existing one."
             >
               {categories && categories.length > 0 ? (
                 <div className="space-y-0.5 max-h-96 overflow-y-auto">

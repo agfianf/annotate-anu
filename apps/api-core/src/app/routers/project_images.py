@@ -20,8 +20,11 @@ from app.services.image_quality_service import ImageQualityService
 from app.repositories.image_quality import ImageQualityRepository
 from app.schemas.data_management import (
     AddTagsRequest,
+    AddTagsResponse,
     AnnotationSummary,
     BboxPreview,
+    BulkTagPreviewRequest,
+    BulkTagPreviewResponse,
     BulkTagRequest,
     BulkTagResponse,
     ExploreFilter,
@@ -31,6 +34,7 @@ from app.schemas.data_management import (
     ProjectImageRemove,
     ProjectPoolListResponse,
     ProjectPoolResponse,
+    ReplacedTagInfo,
     SharedImageResponse,
     SharedImageWithAnnotations,
     TagResponse,
@@ -578,7 +582,7 @@ async def get_sidebar_aggregations(
 # Image Tagging (Project-Scoped)
 # ============================================================================
 @router.post(
-    "/{project_id}/images/{image_id}/tags", response_model=JsonResponse[list[TagResponse], None]
+    "/{project_id}/images/{image_id}/tags", response_model=JsonResponse[AddTagsResponse, None]
 )
 async def add_tags_to_image(
     image_id: UUID,
@@ -587,7 +591,15 @@ async def add_tags_to_image(
     current_user: Annotated[UserBase, Depends(get_current_active_user)],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
-    """Add tags to an image in this project."""
+    """
+    Add tags to an image in this project.
+
+    Enforces the 1-tag-per-label rule: only one tag from each non-uncategorized
+    label can exist on an image at a time. Adding a new tag from a label will
+    automatically replace the existing tag (auto-replacement).
+
+    Uncategorized tags are exempt from this rule and can have multiple tags.
+    """
     project_id = project["id"]
 
     # Verify image exists and is in project pool
@@ -615,17 +627,35 @@ async def add_tags_to_image(
                 detail=f"Tag {tag_id} not found in this project",
             )
 
-    # Add tags
+    # Add tags with automatic replacement (1-tag-per-label rule)
+    replaced_tags = []
     for tag_id in payload.tag_ids:
-        await SharedImageTagRepository.add_tag(
+        new_link, replaced_info = await SharedImageTagRepository.add_tag_with_replacement(
             connection, project_id, image_id, tag_id, current_user.id
         )
+        if replaced_info:
+            replaced_tags.append(
+                ReplacedTagInfo(
+                    tag_id=replaced_info["tag_id"],
+                    tag_name=replaced_info["tag_name"],
+                    label_id=replaced_info["category_id"],
+                    label_name=replaced_info["category_name"],
+                )
+            )
 
-    # Return updated tag list
+    # Return updated tag list and any replaced tags
     tags = await SharedImageTagRepository.get_tags_for_image(connection, project_id, image_id)
+
+    message = "Tags added"
+    if replaced_tags:
+        message = f"Added tags (replaced {len(replaced_tags)} existing tag(s) due to 1-per-label rule)"
+
     return JsonResponse(
-        data=[TagResponse(**t) for t in tags],
-        message="Tags added",
+        data=AddTagsResponse(
+            tags=[TagResponse(**t) for t in tags],
+            replaced_tags=replaced_tags,
+        ),
+        message=message,
         status_code=status.HTTP_200_OK,
     )
 
@@ -662,6 +692,43 @@ async def remove_tag_from_image(
     )
 
 
+@router.post(
+    "/{project_id}/images/bulk-tag/preview",
+    response_model=JsonResponse[BulkTagPreviewResponse, None],
+)
+async def preview_bulk_tag(
+    payload: BulkTagPreviewRequest,
+    project: Annotated[dict, Depends(ProjectPermission("annotator"))],
+    connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+):
+    """
+    Preview a bulk tag operation to show how many tags would be replaced.
+
+    Use this endpoint before bulk_tag_images to show the user a confirmation
+    dialog when tags from the same label would be replaced.
+    """
+    project_id = project["id"]
+
+    # Get preview stats
+    preview = await SharedImageTagRepository.get_bulk_tag_preview(
+        connection,
+        project_id,
+        payload.shared_image_ids,
+        payload.tag_ids,
+    )
+
+    return JsonResponse(
+        data=BulkTagPreviewResponse(
+            total_images=preview["total_images"],
+            total_tags_to_add=preview["total_tags_to_add"],
+            tags_to_replace=preview["tags_to_replace"],
+            conflicts_by_label=preview["conflicts_by_label"],
+        ),
+        message="Bulk tag preview",
+        status_code=status.HTTP_200_OK,
+    )
+
+
 @router.post("/{project_id}/images/bulk-tag", response_model=JsonResponse[BulkTagResponse, None])
 async def bulk_tag_images(
     payload: BulkTagRequest,
@@ -669,7 +736,16 @@ async def bulk_tag_images(
     current_user: Annotated[UserBase, Depends(get_current_active_user)],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
-    """Add tags to multiple images in this project."""
+    """
+    Add tags to multiple images in this project.
+
+    Enforces the 1-tag-per-label rule: only one tag from each non-uncategorized
+    label can exist on an image at a time. Adding a new tag from a label will
+    automatically replace the existing tag.
+
+    Use the preview endpoint first to show a confirmation dialog to the user
+    when replacements would occur.
+    """
     project_id = project["id"]
 
     # Verify all tags belong to this project
@@ -690,7 +766,8 @@ async def bulk_tag_images(
                 detail=f"Image {image_id} is not in this project's pool",
             )
 
-    tags_added = await SharedImageTagRepository.bulk_add_tags(
+    # Bulk add tags with automatic replacement (1-tag-per-label rule)
+    result = await SharedImageTagRepository.bulk_add_tags_with_replacement(
         connection,
         project_id,
         payload.shared_image_ids,
@@ -698,12 +775,26 @@ async def bulk_tag_images(
         current_user.id,
     )
 
+    # Get conflicts by label for response
+    preview = await SharedImageTagRepository.get_bulk_tag_preview(
+        connection,
+        project_id,
+        payload.shared_image_ids,
+        payload.tag_ids,
+    )
+
+    message = f"Added {result['tags_added']} tag(s) to {result['images_affected']} image(s)"
+    if result["tags_replaced"] > 0:
+        message += f" (replaced {result['tags_replaced']} existing tag(s))"
+
     return JsonResponse(
         data=BulkTagResponse(
-            tags_added=tags_added,
-            images_affected=len(payload.shared_image_ids),
+            tags_added=result["tags_added"],
+            tags_replaced=result["tags_replaced"],
+            images_affected=result["images_affected"],
+            conflicts_by_label=preview["conflicts_by_label"],
         ),
-        message=f"Added {tags_added} tag(s) to {len(payload.shared_image_ids)} image(s)",
+        message=message,
         status_code=status.HTTP_200_OK,
     )
 

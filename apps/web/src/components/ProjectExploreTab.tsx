@@ -43,6 +43,7 @@ import {
     sharedImagesApi,
     tagCategoriesApi,
     tagsApi,
+    type BulkTagPreviewResponse,
     type ExploreFilters,
     type JobAssociation,
     type SharedImage,
@@ -243,6 +244,13 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const [showImageModal, setShowImageModal] = useState<SharedImage | null>(null);
   const [showExportWizard, setShowExportWizard] = useState(false);
 
+  // Bulk tag confirmation state (1 tag per label rule)
+  const [pendingBulkTag, setPendingBulkTag] = useState<{
+    imageIds: string[];
+    tagIds: string[];
+    preview: BulkTagPreviewResponse;
+  } | null>(null);
+
   // Job association state for image modal
   const [selectedJobIdForAnnotation, setSelectedJobIdForAnnotation] = useState<number | null>(null);
   const [jobsData, setJobsData] = useState<JobAssociation[] | null>(null);
@@ -404,7 +412,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const bulkTagMutation = useMutation({
     mutationFn: ({ imageIds, tagIds }: { imageIds: string[]; tagIds: string[] }) =>
       projectImagesApi.bulkTag(Number(projectId), imageIds, tagIds),
-    onSuccess: (_, variables) => {
+    onSuccess: (result, variables) => {
       // If adding to currently open modal image, fetch updated image data
       if (showImageModal && variables.imageIds.includes(showImageModal.id)) {
         // Refetch to get updated tags
@@ -419,7 +427,16 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       queryClient.invalidateQueries({ queryKey: ['tags', projectId] }); // Update tag counts
       setSelectedImages(new Set());
       setShowAddTagModal(false);
-      toast.success('Tags added');
+
+      // Show toast with replacement info if applicable
+      if (result.tags_replaced > 0) {
+        toast.success(
+          `Added ${result.tags_added} tag(s) (replaced ${result.tags_replaced} existing)`,
+          { duration: 4000 }
+        );
+      } else {
+        toast.success(`Tags added (${result.tags_added})`);
+      }
     },
     onError: (error: any) => {
       console.error('Failed to add tags:', error);
@@ -544,12 +561,52 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
   };
 
-  const handleBulkAddTags = (tagIds: string[]) => {
+  const handleBulkAddTags = async (tagIds: string[]) => {
     if (selectedImages.size === 0 || tagIds.length === 0) return;
+
+    const imageIds = Array.from(selectedImages);
+
+    // First, preview the operation to check for conflicts
+    try {
+      const preview = await projectImagesApi.bulkTagPreview(
+        Number(projectId),
+        imageIds,
+        tagIds
+      );
+
+      // If there are tags to replace, show confirmation dialog
+      if (preview.tags_to_replace > 0) {
+        setPendingBulkTag({
+          imageIds,
+          tagIds,
+          preview,
+        });
+        setShowAddTagModal(false); // Close the tag selection modal
+        return;
+      }
+
+      // No conflicts, proceed directly
+      bulkTagMutation.mutate({ imageIds, tagIds });
+    } catch (error: any) {
+      console.error('Failed to preview bulk tag:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to preview tag operation';
+      toast.error(errorMessage);
+    }
+  };
+
+  // Confirm the pending bulk tag operation (after user sees preview)
+  const handleConfirmBulkTag = () => {
+    if (!pendingBulkTag) return;
     bulkTagMutation.mutate({
-      imageIds: Array.from(selectedImages),
-      tagIds,
+      imageIds: pendingBulkTag.imageIds,
+      tagIds: pendingBulkTag.tagIds,
     });
+    setPendingBulkTag(null);
+  };
+
+  // Cancel the pending bulk tag operation
+  const handleCancelBulkTag = () => {
+    setPendingBulkTag(null);
   };
 
   const handleBulkRemoveTags = (tagIds: string[]) => {
@@ -1593,6 +1650,64 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
           toast.success(`Export created: ${exportId.slice(0, 8)}...`);
         }}
       />
+
+      {/* Bulk Tag Confirmation Modal (1 tag per label rule) */}
+      {pendingBulkTag && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-[480px] max-w-[90vw] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Confirm Tag Replacement</h3>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-gray-600 mb-4">
+                Adding these tags will replace <span className="font-semibold text-amber-600">{pendingBulkTag.preview.tags_to_replace}</span> existing tag(s) due to the <span className="font-medium">1 tag per Label</span> rule.
+              </p>
+              {Object.keys(pendingBulkTag.preview.conflicts_by_label).length > 0 && (
+                <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Replacements by Label:</p>
+                  <ul className="space-y-1">
+                    {Object.entries(pendingBulkTag.preview.conflicts_by_label).map(([label, count]) => (
+                      <li key={label} className="text-sm text-gray-600 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
+                        <span className="font-medium">{label}:</span>
+                        <span>{count} image(s)</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="text-sm text-gray-500">
+                {pendingBulkTag.preview.total_images} image(s) will be affected.
+              </p>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={handleCancelBulkTag}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmBulkTag}
+                disabled={bulkTagMutation.isPending}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                {bulkTagMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Replacing...
+                  </>
+                ) : (
+                  <>Replace & Add Tags</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Image Detail Modal */}
       {showImageModal && (

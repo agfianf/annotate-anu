@@ -180,10 +180,34 @@ Table shared_images {
   }
 }
 
+Table tag_categories {
+  id uuid [pk, default: `gen_random_uuid()`, note: 'UUID primary key']
+  project_id int [not null, ref: > projects.id, note: 'Reference to project']
+  name varchar(100) [not null, note: 'Category name (unique per project, lowercase)']
+  display_name varchar(255) [note: 'Human-readable display name']
+  color varchar(7) [default: '#6B7280', note: 'Hex color code for UI display']
+  sidebar_order int [default: 0, note: 'Order in sidebar (-1 for uncategorized)']
+  is_uncategorized boolean [not null, default: false, note: 'True for the special uncategorized category (exempt from 1-per-label rule)']
+  created_by uuid [ref: > users.id, note: 'User who created this category']
+  created_at timestamptz [not null, default: `now()`]
+
+  Note: '''
+  Tag categories (Labels) organize tags into logical groups.
+  The 1-tag-per-label rule enforces that only one tag from each
+  non-uncategorized category can be applied to an image at a time.
+  '''
+
+  indexes {
+    project_id [name: 'ix_tag_categories_project_id']
+    (project_id, name) [unique, name: 'ix_tag_categories_project_name']
+  }
+}
+
 Table tags {
   id uuid [pk, default: `gen_random_uuid()`, note: 'UUID primary key']
   project_id int [not null, ref: > projects.id, note: 'Reference to project']
-  name varchar(100) [not null, note: 'Tag name (unique per project)']
+  category_id uuid [not null, ref: > tag_categories.id, note: 'Parent category (Label)']
+  name varchar(100) [not null, note: 'Tag name (unique per project+category)']
   description varchar(500) [note: 'Tag description']
   color varchar(7) [default: '#6B7280', note: 'Hex color code for UI display']
   created_by uuid [ref: > users.id, note: 'User who created this tag']
@@ -191,8 +215,8 @@ Table tags {
 
   indexes {
     project_id [name: 'ix_tags_project_id']
-    name [name: 'ix_tags_name']
-    (project_id, name) [unique, name: 'ix_tags_unique']
+    category_id [name: 'ix_tags_category_id']
+    (project_id, category_id, name) [unique, name: 'ix_tags_unique_per_category']
   }
 }
 
@@ -201,14 +225,23 @@ Table shared_image_tags {
   project_id int [not null, ref: > projects.id, note: 'Reference to project']
   shared_image_id uuid [not null, ref: > shared_images.id, note: 'Parent shared image']
   tag_id uuid [not null, ref: > tags.id, note: 'Applied tag']
+  category_id uuid [not null, ref: > tag_categories.id, note: 'Denormalized category for 1-per-label constraint enforcement']
   created_by uuid [ref: > users.id, note: 'User who tagged the image']
   created_at timestamptz [not null, default: `now()`]
+
+  Note: '''
+  Junction table linking images to tags within a project.
+  The category_id is denormalized from tags for efficient 1-per-label
+  constraint checking. The composite index on (project_id, shared_image_id, category_id)
+  enables O(1) conflict detection when adding tags.
+  '''
 
   indexes {
     project_id [name: 'ix_shared_image_tags_project']
     shared_image_id [name: 'ix_shared_image_tags_image']
     tag_id [name: 'ix_shared_image_tags_tag']
     (project_id, shared_image_id, tag_id) [unique, name: 'ix_shared_image_tags_unique']
+    (project_id, shared_image_id, category_id) [name: 'ix_shared_image_tags_category_lookup', note: 'Efficient lookup for 1-per-label constraint']
   }
 }
 

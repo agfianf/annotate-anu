@@ -213,7 +213,71 @@ class BulkTagResponse(BaseModel):
     """Response for bulk tagging."""
 
     tags_added: int
+    tags_replaced: int = 0
     images_affected: int
+    conflicts_by_label: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of replacements per label: {label_name: count}",
+    )
+
+
+# ============================================================================
+# Label Constraint Schemas (1 tag per label per image)
+# ============================================================================
+class TagConflictInfo(BaseModel):
+    """Information about a tag conflict on an image."""
+
+    image_id: UUID
+    existing_tag_id: UUID
+    existing_tag_name: str
+    new_tag_id: UUID
+    new_tag_name: str
+    label_id: UUID = Field(..., description="Category/Label ID")
+    label_name: str = Field(..., description="Category/Label display name")
+
+
+class ReplacedTagInfo(BaseModel):
+    """Information about a replaced tag."""
+
+    tag_id: UUID
+    tag_name: str
+    label_id: UUID
+    label_name: str
+
+
+class AddTagsResponse(BaseModel):
+    """Response for adding tags, including any replacements made."""
+
+    tags: list["TagResponse"]
+    replaced_tags: list[ReplacedTagInfo] = Field(
+        default_factory=list,
+        description="Tags that were replaced due to 1-per-label rule",
+    )
+
+
+class BulkTagPreviewRequest(BaseModel):
+    """Schema for previewing bulk tag operation."""
+
+    shared_image_ids: list[UUID] = Field(
+        ..., min_length=1, max_length=500, description="Image IDs to preview"
+    )
+    tag_ids: list[UUID] = Field(
+        ..., min_length=1, max_length=50, description="Tag IDs to preview"
+    )
+
+
+class BulkTagPreviewResponse(BaseModel):
+    """Preview response showing what would happen if bulk tags were added."""
+
+    total_images: int = Field(..., description="Total images in request")
+    total_tags_to_add: int = Field(..., description="Total tag assignments")
+    tags_to_replace: int = Field(
+        ..., description="Tags that will be replaced due to 1-per-label rule"
+    )
+    conflicts_by_label: dict[str, int] = Field(
+        default_factory=dict,
+        description="Replacements per label: {label_name: count}",
+    )
 
 
 # ============================================================================
@@ -638,3 +702,4 @@ class DatasetStatsResponse(BaseModel):
 SharedImageResponse.model_rebuild()
 SharedImageWithAnnotations.model_rebuild()
 TagCategoryResponse.model_rebuild()
+AddTagsResponse.model_rebuild()

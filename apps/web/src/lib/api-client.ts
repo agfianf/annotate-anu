@@ -17,6 +17,38 @@ export interface User {
   created_at: string;
 }
 
+// User Activity types (for admin panel)
+export interface RecentActivityItem {
+  id: number;
+  type: 'task' | 'job';
+  name: string;
+  status: string;
+  updatedAt: string;
+}
+
+export interface UserActivity {
+  assignedTasks: number;
+  assignedJobs: number;
+  completedJobs: number;
+  completionRate: number;
+  recentItems: RecentActivityItem[];
+}
+
+// Backend response format (snake_case)
+interface UserActivityResponse {
+  assigned_tasks: number;
+  assigned_jobs: number;
+  completed_jobs: number;
+  completion_rate: number;
+  recent_items: {
+    id: number;
+    type: string;
+    name: string;
+    status: string;
+    updated_at: string;
+  }[];
+}
+
 export interface TokenResponse {
   access_token: string;
   refresh_token: string;
@@ -486,6 +518,26 @@ export const adminApi = {
 
   async deleteUser(userId: string): Promise<void> {
     await apiClient.delete(`/api/v1/admin/users/${userId}`);
+  },
+
+  async getUserActivity(userId: string): Promise<UserActivity> {
+    const response = await apiClient.get<ApiResponse<UserActivityResponse>>(
+      `/api/v1/admin/users/${userId}/activity`
+    );
+    const data = response.data.data;
+    return {
+      assignedTasks: data.assigned_tasks,
+      assignedJobs: data.assigned_jobs,
+      completedJobs: data.completed_jobs,
+      completionRate: data.completion_rate,
+      recentItems: data.recent_items.map((item) => ({
+        id: item.id,
+        type: item.type as 'task' | 'job',
+        name: item.name,
+        status: item.status,
+        updatedAt: item.updated_at,
+      })),
+    };
   },
 };
 

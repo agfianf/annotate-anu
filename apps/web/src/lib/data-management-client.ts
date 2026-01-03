@@ -97,7 +97,49 @@ export interface BulkRegisterResponse {
 
 export interface BulkTagResponse {
   tags_added: number;
+  tags_replaced: number;
   images_affected: number;
+  conflicts_by_label: Record<string, number>;
+}
+
+// ============================================================================
+// Label Constraint Types (1 tag per label per image)
+// ============================================================================
+
+/**
+ * Information about a tag that was replaced due to the 1-per-label rule.
+ */
+export interface ReplacedTagInfo {
+  tag_id: string;
+  tag_name: string;
+  label_id: string;
+  label_name: string;
+}
+
+/**
+ * Response for adding tags, including any replacements made.
+ */
+export interface AddTagsResponse {
+  tags: Tag[];
+  replaced_tags: ReplacedTagInfo[];
+}
+
+/**
+ * Request for previewing bulk tag operation.
+ */
+export interface BulkTagPreviewRequest {
+  shared_image_ids: string[];
+  tag_ids: string[];
+}
+
+/**
+ * Preview response showing what would happen if bulk tags were added.
+ */
+export interface BulkTagPreviewResponse {
+  total_images: number;
+  total_tags_to_add: number;
+  tags_to_replace: number;
+  conflicts_by_label: Record<string, number>;
 }
 
 export interface ProjectPoolResponse {
@@ -753,10 +795,16 @@ export const projectImagesApi = {
   },
 
   /**
-   * Add tags to an image in the project
+   * Add tags to an image in the project.
+   *
+   * Enforces the 1-tag-per-label rule: only one tag from each non-uncategorized
+   * label can exist on an image at a time. Adding a new tag from a label will
+   * automatically replace the existing tag.
+   *
+   * @returns AddTagsResponse with current tags and any replaced tags
    */
-  async addTags(projectId: number, imageId: string, tagIds: string[]): Promise<Tag[]> {
-    const response: AxiosResponse<ApiResponse<Tag[]>> = await dataClient.post(
+  async addTags(projectId: number, imageId: string, tagIds: string[]): Promise<AddTagsResponse> {
+    const response: AxiosResponse<ApiResponse<AddTagsResponse>> = await dataClient.post(
       `/api/v1/projects/${projectId}/images/${imageId}/tags`,
       { tag_ids: tagIds }
     );
@@ -774,7 +822,31 @@ export const projectImagesApi = {
   },
 
   /**
-   * Bulk add tags to multiple images in the project
+   * Preview a bulk tag operation to show how many tags would be replaced.
+   *
+   * Use this before bulkTag to show a confirmation dialog when tags from
+   * the same label would be replaced.
+   */
+  async bulkTagPreview(
+    projectId: number,
+    imageIds: string[],
+    tagIds: string[]
+  ): Promise<BulkTagPreviewResponse> {
+    const response: AxiosResponse<ApiResponse<BulkTagPreviewResponse>> = await dataClient.post(
+      `/api/v1/projects/${projectId}/images/bulk-tag/preview`,
+      { shared_image_ids: imageIds, tag_ids: tagIds }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Bulk add tags to multiple images in the project.
+   *
+   * Enforces the 1-tag-per-label rule: only one tag from each non-uncategorized
+   * label can exist on an image at a time. Adding a new tag from a label will
+   * automatically replace the existing tag.
+   *
+   * Use bulkTagPreview first to show a confirmation dialog when replacements would occur.
    */
   async bulkTag(projectId: number, imageIds: string[], tagIds: string[]): Promise<BulkTagResponse> {
     const response: AxiosResponse<ApiResponse<BulkTagResponse>> = await dataClient.post(

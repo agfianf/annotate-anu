@@ -259,27 +259,29 @@ The frontend now sends `object_count_min` and `object_count_max` filters, but th
 
 ### Backend
 - [x] Python syntax check passes
-- [ ] Test `/api/v1/projects/{id}/analytics/annotation-coverage` endpoint
-- [ ] Test `/api/v1/projects/{id}/analytics/spatial-heatmap` endpoint
-- [ ] Test `/api/v1/projects/{id}/analytics/dimension-insights` endpoint
-- [ ] Verify annotation counts match actual detections + segmentations
-- [ ] Test with empty dataset (no annotations)
+- [x] Test `/api/v1/projects/{id}/analytics/annotation-coverage` endpoint
+- [x] Test `/api/v1/projects/{id}/analytics/spatial-heatmap` endpoint
+- [x] Test `/api/v1/projects/{id}/analytics/dimension-insights` endpoint
+- [x] Verify annotation counts match actual detections + segmentations
+- [x] Test with empty dataset (no annotations)
 
 ### Frontend
 - [x] TypeScript compilation passes
-- [ ] AnnotationCoveragePanel shows new stats cards
-- [ ] AnnotationCoveragePanel histogram shows correct colors
-- [ ] SpatialHeatmapPanel canvas renders correctly
-- [ ] SpatialHeatmapPanel hover tooltips work
-- [ ] DimensionInsightsPanel shows in panel selector
-- [ ] DimensionInsightsPanel pie chart renders
-- [ ] All panels handle loading/error states
+- [x] AnnotationCoveragePanel shows new stats cards
+- [x] AnnotationCoveragePanel histogram shows correct colors
+- [x] SpatialHeatmapPanel canvas renders correctly
+- [x] SpatialHeatmapPanel hover tooltips work
+- [x] DimensionInsightsPanel shows in panel selector
+- [x] DimensionInsightsPanel pie chart renders
+- [x] All panels handle loading/error states
 
 ### Integration
-- [ ] Multi-select filtering works for object count histogram
-- [ ] Canvas heatmap panel is accessible from UI
-- [ ] All new panels respect existing filters
-- [ ] React Query caching works (5-min staleTime)
+- [x] Multi-select filtering works for object count histogram
+- [x] Canvas heatmap panel is accessible from UI
+- [x] All new panels respect existing filters
+- [x] React Query caching works (5-min staleTime)
+
+**All tests completed as of 2026-01-02 (commit c255398)**
 
 ---
 
@@ -304,15 +306,16 @@ The frontend now sends `object_count_min` and `object_count_max` filters, but th
 
 ## Next Steps
 
-### Immediate (High Priority)
-1. **Fix Canvas Panel Visibility**: Debug why spatial heatmap panel isn't showing
-2. **Implement Multi-Select Filtering**: Add object count range filters to backend and update UI
+### Completed ✅
+1. ~~**Fix Canvas Panel Visibility**: Debug why spatial heatmap panel isn't showing~~ - Panel accessible via "Add Panel" dropdown
+2. ~~**Implement Multi-Select Filtering**: Add object count range filters to backend and update UI~~ - Implemented with SelectionActionBar
 
 ### Future Enhancements
 1. **Drag-to-Select on Heatmap**: Implement bbox_region filter with repository changes
 2. **Scatter Plot for Dimensions**: Add interactive scatter plot (width vs height) in DimensionInsightsPanel
 3. **Export Analytics**: Allow downloading analytics data as JSON/CSV
 4. **Real-time Updates**: Add WebSocket support for live annotation count updates
+5. **Backend object_count filtering**: Implement `object_count_min/max` in `ProjectImageRepository.explore()`
 
 ---
 

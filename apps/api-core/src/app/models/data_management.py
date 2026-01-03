@@ -2,6 +2,7 @@
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     DateTime,
     Float,
@@ -171,6 +172,13 @@ tag_categories = Table(
         nullable=False,
         server_default=text("now()"),
     ),
+    Column(
+        "is_uncategorized",
+        Boolean,
+        nullable=False,
+        server_default=text("false"),
+        comment="True for uncategorized category (exempt from 1-per-label rule)",
+    ),
     # Indexes
     Index("ix_tag_categories_project_id", "project_id"),
     Index("ix_tag_categories_project_name", "project_id", "name", unique=True),
@@ -280,6 +288,13 @@ shared_image_tags = Table(
         comment="Reference to tag",
     ),
     Column(
+        "category_id",
+        UUID(as_uuid=True),
+        ForeignKey("tag_categories.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="Denormalized category_id for 1-per-label constraint enforcement",
+    ),
+    Column(
         "created_by",
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -297,6 +312,8 @@ shared_image_tags = Table(
     Index("ix_shared_image_tags_image", "shared_image_id"),
     Index("ix_shared_image_tags_tag", "tag_id"),
     Index("ix_shared_image_tags_unique", "project_id", "shared_image_id", "tag_id", unique=True),
+    # Composite index for efficient 1-per-label conflict detection
+    Index("ix_shared_image_tags_category_lookup", "project_id", "shared_image_id", "category_id"),
 )
 
 
