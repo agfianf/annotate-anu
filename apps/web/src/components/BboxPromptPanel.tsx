@@ -41,6 +41,7 @@ export function BboxPromptPanel({
 }: BboxPromptPanelProps) {
   const [threshold, setThreshold] = useState(0.5)
   const [maskThreshold, setMaskThreshold] = useState(0.5)
+  const [simplifyTolerance, setSimplifyTolerance] = useState(1.5)
   const [annotationType, setAnnotationType] = useState<AnnotationType>('polygon')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -107,6 +108,7 @@ export function BboxPromptPanel({
           bounding_boxes: bboxesForAPI,
           threshold,
           mask_threshold: maskThreshold,
+          simplify_tolerance: simplifyTolerance,
           return_visualization: false,
         })
 
@@ -376,6 +378,29 @@ export function BboxPromptPanel({
             />
             <p className="mt-1 text-xs text-gray-600">
               Controls segmentation mask precision
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="simplifyTolerance" className="block text-sm font-medium text-gray-700 mb-2">
+              Polygon Simplification: {simplifyTolerance.toFixed(1)}
+            </label>
+            <input
+              type="range"
+              id="simplifyTolerance"
+              min="0"
+              max="10"
+              step="0.5"
+              value={simplifyTolerance}
+              onChange={(e) => setSimplifyTolerance(parseFloat(e.target.value))}
+              className="w-full slider-blue"
+              style={{
+                background: `linear-gradient(to right, rgb(37, 99, 235) 0%, rgb(37, 99, 235) ${simplifyTolerance * 10}%, rgb(209, 213, 219) ${simplifyTolerance * 10}%, rgb(209, 213, 219) 100%)`
+              }}
+              disabled={isLoading}
+            />
+            <p className="mt-1 text-xs text-gray-600">
+              Reduces polygon points while preserving shape (higher = simpler polygons)
             </p>
           </div>
         </div>
