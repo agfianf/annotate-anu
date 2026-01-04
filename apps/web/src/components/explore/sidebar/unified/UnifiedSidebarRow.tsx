@@ -1,7 +1,8 @@
-import { ChevronDown, ChevronRight, Eye, EyeOff, Minus, MoreVertical, Plus, Settings } from 'lucide-react';
+import { ChevronDown, ChevronRight, Minus, MoreVertical, Plus, Settings } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';
+import { VisibilityToggleButton } from '@/components/ui/VisibilityToggleButton';
 
 export interface RowAction {
   label: string;
@@ -80,11 +81,6 @@ export function UnifiedSidebarRow({
     if (onToggleFilter) {
       onToggleFilter();
     }
-  };
-
-  const handleVisibilityClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onToggleVisibility();
   };
 
   const handleExpandClick = () => {
@@ -220,17 +216,13 @@ export function UnifiedSidebarRow({
         )}
 
         {/* Visibility Eye */}
-        <button
-          onClick={handleVisibilityClick}
-          className={`p-0.5 rounded flex-shrink-0 transition-all ${
-            isVisible
-              ? 'text-emerald-500 hover:bg-emerald-100'
-              : 'text-gray-300 hover:bg-gray-100'
-          }`}
-          title={isVisible ? 'Hide on thumbnails' : 'Show on thumbnails'}
-        >
-          {isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-        </button>
+        <VisibilityToggleButton
+          isVisible={isVisible}
+          onToggle={onToggleVisibility}
+          size="sm"
+          visibleTitle="Hide on thumbnails"
+          hiddenTitle="Show on thumbnails"
+        />
 
         {/* Color Dot */}
         <span

@@ -493,6 +493,134 @@ export function useExploreVisibility(projectId: string) {
     }));
   }, []);
 
+  // ============================================
+  // SECTION-LEVEL & CASCADING VISIBILITY TOGGLES
+  // ============================================
+
+  /**
+   * Toggle visibility for a category AND cascade to all its child tags.
+   * This syncs the visibility state of all children with the parent.
+   */
+  const toggleCategoryWithChildren = useCallback(
+    (categoryId: string, tagIds: string[]) => {
+      setVisibility((prev) => {
+        // Determine new state: if category is currently visible (or not set), hide it; otherwise show it
+        const newCategoryVisible = prev.categories[categoryId] === false ? true : false;
+        const newTags = { ...prev.tags };
+        tagIds.forEach((id) => {
+          newTags[id] = newCategoryVisible;
+        });
+        return {
+          ...prev,
+          categories: { ...prev.categories, [categoryId]: newCategoryVisible },
+          tags: newTags,
+        };
+      });
+    },
+    []
+  );
+
+  /**
+   * Toggle visibility for all uncategorized tags (TAGS section).
+   * If any tag is visible, hide all; otherwise show all.
+   */
+  const toggleTagsSection = useCallback((tagIds: string[]) => {
+    setVisibility((prev) => {
+      // Check if any tag is visible (not explicitly set to false)
+      const anyVisible = tagIds.some((id) => prev.tags[id] !== false);
+      const newTags = { ...prev.tags };
+      tagIds.forEach((id) => {
+        newTags[id] = !anyVisible;
+      });
+      return { ...prev, tags: newTags };
+    });
+  }, []);
+
+  /**
+   * Toggle visibility for all categories and their child tags (LABELS section).
+   * If any category is visible, hide all; otherwise show all.
+   */
+  const toggleLabelsSection = useCallback(
+    (categories: Array<{ id: string; tagIds: string[] }>) => {
+      setVisibility((prev) => {
+        // Check if any category is visible (not explicitly set to false)
+        const anyVisible = categories.some(
+          (cat) => prev.categories[cat.id] !== false
+        );
+        const newCategories = { ...prev.categories };
+        const newTags = { ...prev.tags };
+        categories.forEach((cat) => {
+          newCategories[cat.id] = !anyVisible;
+          cat.tagIds.forEach((tagId) => {
+            newTags[tagId] = !anyVisible;
+          });
+        });
+        return { ...prev, categories: newCategories, tags: newTags };
+      });
+    },
+    []
+  );
+
+  /**
+   * Toggle visibility for all metadata fields (METADATA section).
+   * If any field is visible, hide all; otherwise show all.
+   */
+  const toggleMetadataSection = useCallback(() => {
+    setVisibility((prev) => {
+      const fields: MetadataFieldKey[] = ['filename', 'width', 'height', 'fileSize', 'imageId', 'filepath'];
+      const anyVisible = fields.some((f) => prev.metadata[f]?.visible);
+      const newMetadata = { ...prev.metadata };
+      fields.forEach((f) => {
+        newMetadata[f] = { ...newMetadata[f], visible: !anyVisible };
+      });
+      return { ...prev, metadata: newMetadata };
+    });
+  }, []);
+
+  /**
+   * Check visibility state for TAGS section (uncategorized tags).
+   * Returns true if all visible, false if all hidden, 'partial' if mixed.
+   */
+  const isTagsSectionVisible = useCallback(
+    (tagIds: string[]): boolean | 'partial' => {
+      if (tagIds.length === 0) return true;
+      const visibleCount = tagIds.filter((id) => visibility.tags[id] !== false).length;
+      if (visibleCount === tagIds.length) return true;
+      if (visibleCount === 0) return false;
+      return 'partial';
+    },
+    [visibility]
+  );
+
+  /**
+   * Check visibility state for LABELS section (all categories).
+   * Returns true if all visible, false if all hidden, 'partial' if mixed.
+   */
+  const isLabelsSectionVisible = useCallback(
+    (categoryIds: string[]): boolean | 'partial' => {
+      if (categoryIds.length === 0) return true;
+      const visibleCount = categoryIds.filter(
+        (id) => visibility.categories[id] !== false
+      ).length;
+      if (visibleCount === categoryIds.length) return true;
+      if (visibleCount === 0) return false;
+      return 'partial';
+    },
+    [visibility]
+  );
+
+  /**
+   * Check visibility state for METADATA section.
+   * Returns true if all visible, false if all hidden, 'partial' if mixed.
+   */
+  const isMetadataSectionVisible = useCallback((): boolean | 'partial' => {
+    const fields: MetadataFieldKey[] = ['filename', 'width', 'height', 'fileSize', 'imageId', 'filepath'];
+    const visibleCount = fields.filter((f) => visibility.metadata[f]?.visible).length;
+    if (visibleCount === fields.length) return true;
+    if (visibleCount === 0) return false;
+    return 'partial';
+  }, [visibility]);
+
   return {
     visibility,
     setVisibility,
@@ -524,6 +652,14 @@ export function useExploreVisibility(projectId: string) {
     setFillOpacity,
     toggleHighlightMode,
     setDimLevel,
+    // Section-level & cascading visibility toggles
+    toggleCategoryWithChildren,
+    toggleTagsSection,
+    toggleLabelsSection,
+    toggleMetadataSection,
+    isTagsSectionVisible,
+    isLabelsSectionVisible,
+    isMetadataSectionVisible,
   };
 }
 

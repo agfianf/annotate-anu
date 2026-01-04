@@ -566,6 +566,9 @@ export function UnifiedExploreSidebar({
               count={uncategorizedTags?.length}
               showAddButton
               onAddClick={() => setActiveForm('tag')}
+              showVisibilityToggle
+              isVisible={visibility.isTagsSectionVisible(uncategorizedTags?.map(t => t.id) || [])}
+              onToggleVisibility={() => visibility.toggleTagsSection(uncategorizedTags?.map(t => t.id) || [])}
             >
               {uncategorizedTags && uncategorizedTags.length > 0 ? (
                 <div className="space-y-0.5 max-h-96 overflow-y-auto">
@@ -613,6 +616,16 @@ export function UnifiedExploreSidebar({
               showAddButton
               onAddClick={() => setActiveForm('category')}
               tooltip="Only one tag from each Label can be applied per image. Adding a new tag will replace the existing one."
+              showVisibilityToggle
+              isVisible={visibility.isLabelsSectionVisible(
+                categories?.filter(c => c.id && c.name !== 'uncategorized').map(c => c.id!) || []
+              )}
+              onToggleVisibility={() => visibility.toggleLabelsSection(
+                categories?.filter(c => c.id && c.name !== 'uncategorized').map(c => ({
+                  id: c.id!,
+                  tagIds: c.tags?.map(t => t.id) || []
+                })) || []
+              )}
             >
               {categories && categories.length > 0 ? (
                 <div className="space-y-0.5 max-h-96 overflow-y-auto">
@@ -633,7 +646,10 @@ export function UnifiedExploreSidebar({
                           filterMode={getTagFilterMode(category.tags) as any}
                           isVisible={visibility.isCategoryVisible(categoryId)}
                           onToggleFilter={() => handleToggleCategoryFilter(category.tags)}
-                          onToggleVisibility={() => visibility.toggleCategory(categoryId)}
+                          onToggleVisibility={() => visibility.toggleCategoryWithChildren(
+                            categoryId,
+                            category.tags?.map(t => t.id) || []
+                          )}
                           expandable={true}
                           showAddButton={true}
                           onAddClick={() => setActiveForm(`cat-${categoryId}`)}
@@ -727,6 +743,9 @@ export function UnifiedExploreSidebar({
               icon={<Database className="h-3.5 w-3.5 text-emerald-500" />}
               color="#10B981"
               defaultExpanded={true}
+              showVisibilityToggle
+              isVisible={visibility.isMetadataSectionVisible()}
+              onToggleVisibility={() => visibility.toggleMetadataSection()}
             >
               <div className="space-y-4 px-2 py-2">
                 {/* Image UID Selector */}
