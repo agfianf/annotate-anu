@@ -179,6 +179,9 @@ export const byomClient = {
     if (params.return_visualization !== undefined) {
       formData.append('return_visualization', params.return_visualization.toString())
     }
+    if (params.simplify_tolerance !== undefined) {
+      formData.append('simplify_tolerance', params.simplify_tolerance.toString())
+    }
 
     // Mode-specific parameters
     if (mode === 'text' && 'text_prompt' in params) {

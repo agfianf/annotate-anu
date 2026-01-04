@@ -40,6 +40,7 @@ class InferenceProxyService:
         text_prompt: str,
         threshold: float,
         mask_threshold: float,
+        simplify_tolerance: float,
         return_visualization: bool,
     ) -> InferenceResponse:
         """Proxy text prompt inference.
@@ -71,7 +72,7 @@ class InferenceProxyService:
         if model.id == "sam3":
             return await self._sam3_text_prompt(
                 image_bytes, image_filename, image_content_type,
-                text_prompt, threshold, mask_threshold, return_visualization
+                text_prompt, threshold, mask_threshold, simplify_tolerance, return_visualization
             )
         else:
             return await self._byom_inference(
@@ -83,6 +84,7 @@ class InferenceProxyService:
                 text_prompt=text_prompt,
                 threshold=threshold,
                 mask_threshold=mask_threshold,
+                simplify_tolerance=simplify_tolerance,
                 return_visualization=return_visualization,
             )
 
@@ -95,6 +97,7 @@ class InferenceProxyService:
         bounding_boxes: list[list[float]],
         threshold: float,
         mask_threshold: float,
+        simplify_tolerance: float,
         return_visualization: bool,
     ) -> InferenceResponse:
         """Proxy bounding box prompt inference.
@@ -126,7 +129,7 @@ class InferenceProxyService:
         if model.id == "sam3":
             return await self._sam3_bbox_prompt(
                 image_bytes, image_filename, image_content_type,
-                bounding_boxes, threshold, mask_threshold, return_visualization
+                bounding_boxes, threshold, mask_threshold, simplify_tolerance, return_visualization
             )
         else:
             return await self._byom_inference(
@@ -138,6 +141,7 @@ class InferenceProxyService:
                 bounding_boxes=bounding_boxes,
                 threshold=threshold,
                 mask_threshold=mask_threshold,
+                simplify_tolerance=simplify_tolerance,
                 return_visualization=return_visualization,
             )
 
@@ -202,6 +206,7 @@ class InferenceProxyService:
         text_prompt: str,
         threshold: float,
         mask_threshold: float,
+        simplify_tolerance: float,
         return_visualization: bool,
     ) -> InferenceResponse:
         """Call SAM3 text prompt endpoint.
@@ -237,6 +242,7 @@ class InferenceProxyService:
             "text_prompt": text_prompt,
             "threshold": str(threshold),
             "mask_threshold": str(mask_threshold),
+            "simplify_tolerance": str(simplify_tolerance),
             "return_visualization": str(return_visualization).lower(),
         }
 
@@ -261,6 +267,7 @@ class InferenceProxyService:
         bounding_boxes: list[list[float]],
         threshold: float,
         mask_threshold: float,
+        simplify_tolerance: float,
         return_visualization: bool,
     ) -> InferenceResponse:
         """Call SAM3 bbox prompt endpoint.
@@ -296,6 +303,7 @@ class InferenceProxyService:
             "bounding_boxes": json.dumps(bounding_boxes),
             "threshold": str(threshold),
             "mask_threshold": str(mask_threshold),
+            "simplify_tolerance": str(simplify_tolerance),
             "return_visualization": str(return_visualization).lower(),
         }
 

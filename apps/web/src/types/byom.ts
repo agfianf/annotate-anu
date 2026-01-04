@@ -96,6 +96,7 @@ export interface BaseInferenceParams {
   threshold?: number
   mask_threshold?: number
   return_visualization?: boolean
+  simplify_tolerance?: number
 }
 
 export interface TextPromptParams extends BaseInferenceParams {

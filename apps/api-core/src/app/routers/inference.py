@@ -56,7 +56,7 @@ def _get_sam3_model(sam3_url: str) -> ModelBase:
 async def get_model_by_id(
     model_id: str,
     request: Request,
-    connection: AsyncConnection,
+    connection: AsyncConnection | None,
 ) -> ModelBase:
     """Get model by ID or return SAM3 builtin.
 
@@ -84,6 +84,11 @@ async def get_model_by_id(
         return _get_sam3_model(proxy.sam3_url)
 
     # Get from database
+    if connection is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Database connection required for BYOM models",
+        )
     try:
         model = await ModelAsyncRepositories.get_by_id(connection, model_id)
         if not model.is_active:
@@ -108,8 +113,9 @@ async def inference_text(
     text_prompt: str = Form(..., description="Text description of objects to segment"),
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
     mask_threshold: float = Form(0.5, ge=0.0, le=1.0, description="Mask generation threshold"),
+    simplify_tolerance: float = Form(1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance"),
     return_visualization: bool = Form(False, description="Return visualization image"),
-    connection: Annotated[AsyncConnection, Depends(get_async_conn)] = None,
+    connection: Annotated[AsyncConnection | None, Depends(get_async_conn)] = None,
 ):
     """Proxy text prompt inference to model backend.
 
@@ -168,6 +174,7 @@ async def inference_text(
             text_prompt=text_prompt,
             threshold=threshold,
             mask_threshold=mask_threshold,
+            simplify_tolerance=simplify_tolerance,
             return_visualization=return_visualization,
         )
 
@@ -192,8 +199,9 @@ async def inference_bbox(
     bounding_boxes: str = Form(..., description="JSON array of [x1, y1, x2, y2, label] boxes"),
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
     mask_threshold: float = Form(0.5, ge=0.0, le=1.0, description="Mask generation threshold"),
+    simplify_tolerance: float = Form(1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance"),
     return_visualization: bool = Form(False, description="Return visualization image"),
-    connection: Annotated[AsyncConnection, Depends(get_async_conn)] = None,
+    connection: Annotated[AsyncConnection | None, Depends(get_async_conn)] = None,
 ):
     """Proxy bounding box prompt inference to model backend.
 
@@ -261,6 +269,7 @@ async def inference_bbox(
             bounding_boxes=boxes,
             threshold=threshold,
             mask_threshold=mask_threshold,
+            simplify_tolerance=simplify_tolerance,
             return_visualization=return_visualization,
         )
 
@@ -285,7 +294,7 @@ async def inference_auto(
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
     class_filter: str | None = Form(None, description="JSON array of class names to filter"),
     return_visualization: bool = Form(False, description="Return visualization image"),
-    connection: Annotated[AsyncConnection, Depends(get_async_conn)] = None,
+    connection: Annotated[AsyncConnection | None, Depends(get_async_conn)] = None,
 ):
     """Proxy auto-detection inference to model backend.
 
