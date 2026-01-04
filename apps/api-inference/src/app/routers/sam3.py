@@ -25,6 +25,7 @@ async def inference_text(
     text_prompt: str = Form(..., description="Text description of objects to segment"),
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
     mask_threshold: float = Form(0.5, ge=0.0, le=1.0, description="Mask generation threshold"),
+    simplify_tolerance: float = Form(1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance"),
     return_visualization: bool = Form(False, description="Generate visualization image"),
 ):
     """Run text-based inference on uploaded image.
@@ -43,6 +44,8 @@ async def inference_text(
         Detection confidence threshold
     mask_threshold : float
         Mask generation threshold
+    simplify_tolerance : float
+        Polygon simplification tolerance
     return_visualization : bool
         Whether to generate visualization
 
@@ -61,6 +64,7 @@ async def inference_text(
             text_prompt=text_prompt,
             threshold=threshold,
             mask_threshold=mask_threshold,
+            simplify_tolerance=simplify_tolerance,
             return_visualization=return_visualization,
         )
 
@@ -96,6 +100,7 @@ async def inference_bbox(
     bounding_boxes: str = Form(..., description="JSON array of bounding boxes: [[x1,y1,x2,y2,label], ...]"),
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
     mask_threshold: float = Form(0.5, ge=0.0, le=1.0, description="Mask generation threshold"),
+    simplify_tolerance: float = Form(1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance"),
     return_visualization: bool = Form(False, description="Generate visualization image"),
 ):
     """Run bounding box-based inference on uploaded image.
@@ -114,6 +119,8 @@ async def inference_bbox(
         Detection confidence threshold
     mask_threshold : float
         Mask generation threshold
+    simplify_tolerance : float
+        Polygon simplification tolerance
     return_visualization : bool
         Whether to generate visualization
 
@@ -143,6 +150,7 @@ async def inference_bbox(
             box_labels=labels,
             threshold=threshold,
             mask_threshold=mask_threshold,
+            simplify_tolerance=simplify_tolerance,
             return_visualization=return_visualization,
         )
 
@@ -178,6 +186,7 @@ async def inference_batch(
     text_prompts: str = Form(..., description="JSON array of text prompts (one per image, null for none)"),
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
     mask_threshold: float = Form(0.5, ge=0.0, le=1.0, description="Mask generation threshold"),
+    simplify_tolerance: float = Form(1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance"),
     return_visualizations: bool = Form(False, description="Generate visualization images"),
 ):
     """Run batch inference on multiple images.
@@ -196,6 +205,8 @@ async def inference_batch(
         Detection confidence threshold
     mask_threshold : float
         Mask generation threshold
+    simplify_tolerance : float
+        Polygon simplification tolerance
     return_visualizations : bool
         Whether to generate visualizations
 
@@ -224,6 +235,7 @@ async def inference_batch(
             text_prompts=prompts_list,
             threshold=threshold,
             mask_threshold=mask_threshold,
+            simplify_tolerance=simplify_tolerance,
             return_visualizations=return_visualizations,
         )
 

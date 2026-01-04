@@ -93,6 +93,7 @@ export function TextPromptPanel({
   const [labelId, setLabelId] = useState(selectedLabelId || '')
   const [threshold, setThreshold] = useState(0.25)
   const [maskThreshold, setMaskThreshold] = useState(0.25)
+  const [simplifyTolerance, setSimplifyTolerance] = useState(1.5)
   const [annotationType, setAnnotationType] = useState<AnnotationType>('polygon')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -278,6 +279,7 @@ export function TextPromptPanel({
         text_prompt: textPrompt,
         threshold,
         mask_threshold: maskThreshold,
+        simplify_tolerance: simplifyTolerance,
         return_visualization: false,
       })
       console.log(`Manual API response:`, result)
@@ -367,6 +369,7 @@ export function TextPromptPanel({
           text_prompt: textPrompt,
           threshold,
           mask_threshold: maskThreshold,
+          simplify_tolerance: simplifyTolerance,
           return_visualization: false,
         })
 
@@ -585,6 +588,29 @@ export function TextPromptPanel({
             />
             <p className="mt-1 text-xs text-gray-600">
               Controls segmentation mask precision
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="simplifyTolerance" className="block text-sm font-medium text-gray-700 mb-2">
+              Polygon Simplification: {simplifyTolerance.toFixed(1)}
+            </label>
+            <input
+              type="range"
+              id="simplifyTolerance"
+              min="0"
+              max="10"
+              step="0.5"
+              value={simplifyTolerance}
+              onChange={(e) => setSimplifyTolerance(parseFloat(e.target.value))}
+              className="w-full slider-purple"
+              style={{
+                background: `linear-gradient(to right, rgb(147, 51, 234) 0%, rgb(147, 51, 234) ${simplifyTolerance * 10}%, rgb(209, 213, 219) ${simplifyTolerance * 10}%, rgb(209, 213, 219) 100%)`
+              }}
+              disabled={isLoading}
+            />
+            <p className="mt-1 text-xs text-gray-600">
+              Reduces polygon points while preserving shape (higher = simpler polygons)
             </p>
           </div>
         </div>

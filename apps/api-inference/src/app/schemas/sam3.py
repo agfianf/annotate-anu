@@ -79,6 +79,7 @@ class TextInferenceParams(BaseModel):
     text_prompt: str = Field(..., description="Text description of objects to segment")
     threshold: float = Field(0.5, ge=0.0, le=1.0, description="Detection confidence threshold")
     mask_threshold: float = Field(0.5, ge=0.0, le=1.0, description="Mask generation threshold")
+    simplify_tolerance: float = Field(1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance (Douglas-Peucker epsilon). Higher values = simpler polygons with fewer points")
     return_visualization: bool = Field(False, description="Whether to generate visualization image")
 
 
@@ -88,4 +89,5 @@ class BboxInferenceParams(BaseModel):
     bounding_boxes: str = Field(..., description="JSON string of bounding boxes: [[x1,y1,x2,y2,label], ...]")
     threshold: float = Field(0.5, ge=0.0, le=1.0, description="Detection confidence threshold")
     mask_threshold: float = Field(0.5, ge=0.0, le=1.0, description="Mask generation threshold")
+    simplify_tolerance: float = Field(1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance (Douglas-Peucker epsilon). Higher values = simpler polygons with fewer points")
     return_visualization: bool = Field(False, description="Whether to generate visualization image")
