@@ -56,6 +56,7 @@ interface AutoAnnotateModalProps {
     masks: Array<{ polygons: Array<Array<[number, number]>>; area: number }>
     scores: number[]
     annotationType: 'bbox' | 'polygon'
+    modelId?: string
   }) => void
 }
 
@@ -120,8 +121,8 @@ export function AutoAnnotateModal({
           return
         }
 
-        // Pass results to parent component
-        onAnnotationsCreated({ boxes, masks, scores, annotationType })
+        // Pass results to parent component (hardcode 'sam3' as this modal uses sam3Client directly)
+        onAnnotationsCreated({ boxes, masks, scores, annotationType, modelId: 'sam3' })
 
         toast.success(`Successfully detected ${num_objects} object${num_objects > 1 ? 's' : ''}!`)
         onClose()

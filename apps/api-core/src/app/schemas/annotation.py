@@ -14,6 +14,7 @@ class ImageTagCreate(BaseModel):
 
     label_id: UUID = Field(..., description="Label to apply")
     confidence: float = Field(1.0, ge=0.0, le=1.0, description="Confidence score")
+    source: str = Field("manual", max_length=50, description="Source: manual, model:<id>, import")
     attributes: dict | None = Field(None, description="Per-annotation attributes")
 
 
@@ -24,6 +25,7 @@ class ImageTagResponse(BaseModel):
     image_id: UUID
     label_id: UUID
     confidence: float
+    source: str
     attributes: dict | None
     created_at: datetime
     updated_at: datetime
@@ -42,6 +44,7 @@ class DetectionCreate(BaseModel):
     y_max: float = Field(..., ge=0, le=1, description="Bottom edge (0-1)")
     rotation: float = Field(0.0, ge=0, lt=360, description="Rotation degrees")
     confidence: float = Field(1.0, ge=0.0, le=1.0)
+    source: str = Field("manual", max_length=50, description="Source: manual, model:<id>, import")
     attributes: dict | None = None
 
 
@@ -70,6 +73,7 @@ class DetectionResponse(BaseModel):
     y_max: float
     rotation: float | None
     confidence: float | None
+    source: str
     attributes: dict | None
     created_at: datetime
     updated_at: datetime
@@ -89,6 +93,7 @@ class SegmentationCreate(BaseModel):
     rle: dict | None = Field(None, description="RLE-encoded mask")
     area: float | None = None
     confidence: float = Field(1.0, ge=0.0, le=1.0)
+    source: str = Field("manual", max_length=50, description="Source: manual, model:<id>, import")
     attributes: dict | None = None
 
 
@@ -114,6 +119,7 @@ class SegmentationResponse(BaseModel):
     rle: dict | None
     area: float | None
     confidence: float | None
+    source: str
     attributes: dict | None
     created_at: datetime
     updated_at: datetime
@@ -129,6 +135,7 @@ class KeypointCreate(BaseModel):
     skeleton_id: UUID | None = Field(None, description="Pose skeleton definition")
     points: list[dict] = Field(..., description="[{name, x, y, visibility}, ...]")
     confidence: float = Field(1.0, ge=0.0, le=1.0)
+    source: str = Field("manual", max_length=50, description="Source: manual, model:<id>, import")
     attributes: dict | None = None
 
 
@@ -149,6 +156,7 @@ class KeypointResponse(BaseModel):
     skeleton_id: UUID | None
     points: list[dict]
     confidence: float | None
+    source: str
     attributes: dict | None
     created_at: datetime
     updated_at: datetime

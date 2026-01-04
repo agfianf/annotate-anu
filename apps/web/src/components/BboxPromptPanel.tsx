@@ -159,7 +159,8 @@ export function BboxPromptPanel({
             masks,
             scores,
             annotationType,
-            labelId // Pass the label for this group
+            labelId, // Pass the label for this group
+            modelId: selectedModel.id
           })
         }
       }

@@ -921,6 +921,7 @@ export interface DetectionCreate {
   y_max: number;
   rotation?: number;
   confidence?: number;
+  source?: string;  // 'manual' | 'model:{model_id}' | 'import'
   attributes?: Record<string, unknown>;
 }
 
@@ -945,6 +946,7 @@ export interface DetectionResponse {
   y_max: number;
   rotation: number | null;
   confidence: number | null;
+  source: string;
   attributes: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
@@ -958,6 +960,7 @@ export interface SegmentationCreate {
   rle?: Record<string, unknown>;
   area?: number;
   confidence?: number;
+  source?: string;  // 'manual' | 'model:{model_id}' | 'import'
   attributes?: Record<string, unknown>;
 }
 
@@ -979,6 +982,7 @@ export interface SegmentationResponse {
   rle: Record<string, unknown> | null;
   area: number | null;
   confidence: number | null;
+  source: string;
   attributes: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;

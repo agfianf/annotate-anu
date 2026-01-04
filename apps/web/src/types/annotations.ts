@@ -64,6 +64,7 @@ export interface BaseAnnotation {
   backendId?: string // Backend annotation ID (for synced annotations in team mode)
   originalFrontendId?: string // Original frontend ID that never changes (used to prevent ID corruption during sync)
   attributes?: Record<string, AttributeValue> // Custom key-value attributes (like CVAT)
+  source?: string // 'manual' | 'model:{model_id}' | 'import'
 }
 
 // Rectangle annotation

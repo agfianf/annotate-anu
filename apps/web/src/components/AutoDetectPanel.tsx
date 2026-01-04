@@ -116,6 +116,7 @@ export function AutoDetectPanel({
         annotationType,
         labelId: selectedLabelId || undefined,
         labels: result.labels,
+        modelId: selectedModel.id,
       })
 
       toast.success(`Detected ${result.num_objects} object(s)`)
