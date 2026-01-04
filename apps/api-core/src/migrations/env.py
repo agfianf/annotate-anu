@@ -36,8 +36,15 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set sqlalchemy.url from settings (sync version for Alembic)
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
+# Set sqlalchemy.url from settings unless running in test mode
+# Tests can set TESTING_DATABASE_URL env var to override
+import os
+
+testing_url = os.environ.get("TESTING_DATABASE_URL")
+if testing_url:
+    config.set_main_option("sqlalchemy.url", testing_url)
+else:
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
