@@ -323,7 +323,7 @@ class AnnotationSummaryRepository:
         if not shared_image_ids:
             return {}
 
-        # Query detections with label color and name (join with images and labels tables)
+        # Query detections with label info, confidence, and source (join with images and labels tables)
         det_stmt = (
             select(
                 images.c.shared_image_id,
@@ -333,6 +333,9 @@ class AnnotationSummaryRepository:
                 detections.c.y_max,
                 labels.c.color.label("label_color"),
                 labels.c.name.label("label_name"),
+                detections.c.label_id,
+                detections.c.confidence,
+                detections.c.source,
             )
             .select_from(
                 detections
@@ -344,7 +347,7 @@ class AnnotationSummaryRepository:
         det_result = await connection.execute(det_stmt)
         det_rows = det_result.fetchall()
 
-        # Query segmentations with cached bbox, label color and name
+        # Query segmentations with cached bbox, label info, confidence, and source
         seg_stmt = (
             select(
                 images.c.shared_image_id,
@@ -354,6 +357,9 @@ class AnnotationSummaryRepository:
                 segmentations.c.bbox_y_max,
                 labels.c.color.label("label_color"),
                 labels.c.name.label("label_name"),
+                segmentations.c.label_id,
+                segmentations.c.confidence,
+                segmentations.c.source,
             )
             .select_from(
                 segmentations
@@ -379,6 +385,9 @@ class AnnotationSummaryRepository:
                     "y_max": row.y_max,
                     "label_color": row.label_color or "#10B981",
                     "label_name": row.label_name,
+                    "label_id": str(row.label_id) if row.label_id else None,
+                    "confidence": row.confidence,
+                    "source": row.source,
                 })
 
         # Add segmentation bboxes
@@ -391,6 +400,9 @@ class AnnotationSummaryRepository:
                     "y_max": row.bbox_y_max,
                     "label_color": row.label_color or "#10B981",
                     "label_name": row.label_name,
+                    "label_id": str(row.label_id) if row.label_id else None,
+                    "confidence": row.confidence,
+                    "source": row.source,
                 })
 
         return result
@@ -415,13 +427,16 @@ class AnnotationSummaryRepository:
         if not shared_image_ids:
             return {}
 
-        # Query segmentations with polygon data, label color and name
+        # Query segmentations with polygon data, label info, confidence, and source
         seg_stmt = (
             select(
                 images.c.shared_image_id,
                 segmentations.c.polygon,
                 labels.c.color.label("label_color"),
                 labels.c.name.label("label_name"),
+                segmentations.c.label_id,
+                segmentations.c.confidence,
+                segmentations.c.source,
             )
             .select_from(
                 segmentations
@@ -449,6 +464,9 @@ class AnnotationSummaryRepository:
                     "points": polygon_points or [],
                     "label_color": row.label_color or "#10B981",
                     "label_name": row.label_name,
+                    "label_id": str(row.label_id) if row.label_id else None,
+                    "confidence": row.confidence,
+                    "source": row.source,
                 })
 
         return result

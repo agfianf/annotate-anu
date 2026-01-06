@@ -27,6 +27,10 @@ interface UnifiedSidebarSectionProps {
   isVisible?: VisibilityStateType;
   /** Callback when visibility toggle is clicked */
   onToggleVisibility?: () => void;
+  /** Optional header actions to render before visibility toggle */
+  headerActions?: ReactNode;
+  /** Override the visibility toggle color theme (otherwise derived from section color) */
+  visibilityColorTheme?: VisibilityColorTheme;
 }
 
 export function UnifiedSidebarSection({
@@ -42,6 +46,8 @@ export function UnifiedSidebarSection({
   showVisibilityToggle = false,
   isVisible = true,
   onToggleVisibility,
+  headerActions,
+  visibilityColorTheme: visibilityColorThemeOverride,
 }: UnifiedSidebarSectionProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
@@ -49,25 +55,73 @@ export function UnifiedSidebarSection({
   const isOrange = color === '#F97316';
   const isBlue = color === '#3B82F6';
   const isPurple = color === '#A855F7';
+  const isCyan = color === '#06B6D4';
 
-  // Derive color theme for visibility toggle
-  const visibilityColorTheme: VisibilityColorTheme = isOrange
-    ? 'orange'
+  // Derive color theme for visibility toggle (use override if provided)
+  const visibilityColorTheme: VisibilityColorTheme = visibilityColorThemeOverride
+    ?? (isOrange
+      ? 'orange'
+      : isBlue
+      ? 'blue'
+      : isPurple
+      ? 'purple'
+      : isCyan
+      ? 'cyan'
+      : 'emerald');
+  const hoverBg = isOrange
+    ? 'hover:bg-orange-50'
     : isBlue
-    ? 'blue'
+    ? 'hover:bg-blue-50'
+    : isCyan
+    ? 'hover:bg-cyan-50'
     : isPurple
-    ? 'purple'
-    : 'emerald';
-  const hoverBg = isOrange ? 'hover:bg-orange-50' : isBlue ? 'hover:bg-blue-50' : 'hover:bg-emerald-50';
-  const textColor = isOrange ? 'text-orange-900/80' : isBlue ? 'text-blue-900/80' : 'text-emerald-900/80';
-  const countColor = isOrange ? 'text-orange-600/60' : isBlue ? 'text-blue-600/60' : 'text-emerald-600/60';
-  const contentBg = isOrange ? 'bg-orange-50/20' : isBlue ? 'bg-blue-50/20' : 'bg-emerald-50/20';
+    ? 'hover:bg-purple-50'
+    : 'hover:bg-emerald-50';
+  const textColor = isOrange
+    ? 'text-orange-900/80'
+    : isBlue
+    ? 'text-blue-900/80'
+    : isCyan
+    ? 'text-cyan-900/80'
+    : isPurple
+    ? 'text-purple-900/80'
+    : 'text-emerald-900/80';
+  const countColor = isOrange
+    ? 'text-orange-600/60'
+    : isBlue
+    ? 'text-blue-600/60'
+    : isCyan
+    ? 'text-cyan-600/60'
+    : isPurple
+    ? 'text-purple-600/60'
+    : 'text-emerald-600/60';
+  const contentBg = isOrange
+    ? 'bg-orange-50/20'
+    : isBlue
+    ? 'bg-blue-50/20'
+    : isCyan
+    ? 'bg-cyan-50/20'
+    : isPurple
+    ? 'bg-purple-50/20'
+    : 'bg-emerald-50/20';
   const addButtonColors = isOrange
     ? 'text-orange-500/60 hover:text-orange-600 hover:bg-orange-50'
     : isBlue
     ? 'text-blue-500/60 hover:text-blue-600 hover:bg-blue-50'
+    : isCyan
+    ? 'text-cyan-500/60 hover:text-cyan-600 hover:bg-cyan-50'
+    : isPurple
+    ? 'text-purple-500/60 hover:text-purple-600 hover:bg-purple-50'
     : 'text-emerald-500/60 hover:text-emerald-600 hover:bg-emerald-50';
-  const chevronColor = isOrange ? 'text-orange-400' : isBlue ? 'text-blue-400' : 'text-emerald-400';
+  const chevronColor = isOrange
+    ? 'text-orange-400'
+    : isBlue
+    ? 'text-blue-400'
+    : isCyan
+    ? 'text-cyan-400'
+    : isPurple
+    ? 'text-purple-400'
+    : 'text-emerald-400';
 
   return (
     <div
@@ -111,6 +165,9 @@ export function UnifiedSidebarSection({
             <Plus className="w-3.5 h-3.5" />
           </button>
         )}
+
+        {/* Header actions slot */}
+        {headerActions}
 
         {/* Visibility toggle - before chevron */}
         {showVisibilityToggle && onToggleVisibility && (

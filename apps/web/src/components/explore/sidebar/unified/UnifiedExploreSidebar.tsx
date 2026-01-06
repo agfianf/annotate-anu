@@ -1,9 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Database, Droplet, Eye, EyeOff, Hexagon, Layers, Lightbulb, Paintbrush, RefreshCw, Square, Sun, Tag, Trash2, Type } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Droplet, Eye, EyeOff, Hexagon, Layers, Lightbulb, Paintbrush, Percent, RefreshCw, RotateCcw, Shapes, Square, Sun, Tag, Trash2, Type } from 'lucide-react';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import type { UseExploreVisibilityReturn } from '@/hooks/useExploreVisibility';
 import type { ExploreFiltersState } from '@/hooks/useExploreFilters';
+import type { UseAnnotationFiltersReturn } from '@/hooks/useAnnotationFilters';
+import type { Label } from '@/types/annotations';
 import { tagsApi, tagCategoriesApi, type NumericAggregation } from '@/lib/data-management-client';
 import { UnifiedSidebarRow } from './UnifiedSidebarRow';
 import { UnifiedSidebarSection } from './UnifiedSidebarSection';
@@ -11,6 +13,7 @@ import { TagCreationInline } from './TagCreationInline';
 import { CategoryCreationInline } from './CategoryCreationInline';
 import { CategoryConfigPanel } from './CategoryConfigPanel';
 import { FilterModeSelector } from './FilterModeSelector';
+import { AnnotationLabelRow } from './AnnotationLabelRow';
 import { ImageUidSelector } from '../ImageUidSelector';
 import { NumericRangeFilter } from '../NumericRangeFilter';
 import { FilepathFilter } from '../FilepathFilter';
@@ -32,6 +35,9 @@ interface UnifiedExploreSidebarProps {
   widthAggregation?: NumericAggregation;
   heightAggregation?: NumericAggregation;
   sizeAggregation?: NumericAggregation;
+  // Annotation filters (optional - only when project has labels)
+  projectLabels?: Label[];
+  annotationFilters?: UseAnnotationFiltersReturn;
   // Collapse state
   isCollapsed?: boolean;
   onCollapseChange?: (collapsed: boolean) => void;
@@ -104,6 +110,8 @@ export function UnifiedExploreSidebar({
   widthAggregation,
   heightAggregation,
   sizeAggregation,
+  projectLabels,
+  annotationFilters,
   isCollapsed: controlledCollapsed,
   onCollapseChange,
 }: UnifiedExploreSidebarProps) {
@@ -737,6 +745,67 @@ export function UnifiedExploreSidebar({
               )}
             </UnifiedSidebarSection>
 
+            {/* ANNOTATIONS Section - Per-label confidence filtering */}
+            {projectLabels && projectLabels.length > 0 && annotationFilters && (
+              <UnifiedSidebarSection
+                title="Annotations"
+                icon={<Shapes className="h-3.5 w-3.5 text-cyan-500" />}
+                color="#06B6D4"
+                count={projectLabels.length}
+                defaultExpanded={true}
+                tooltip="Filter annotations by label and confidence threshold"
+                showVisibilityToggle
+                isVisible={annotationFilters.isAnnotationsSectionVisible()}
+                onToggleVisibility={() => annotationFilters.toggleAnnotationsSection()}
+                visibilityColorTheme="cyan"
+              >
+                <div className="space-y-1 px-1">
+                  {projectLabels.map((label) => (
+                    <AnnotationLabelRow
+                      key={label.id}
+                      label={label}
+                      filter={annotationFilters.labelFilters[label.id]}
+                      onConfidenceRangeChange={(min, max) =>
+                        annotationFilters.setConfidenceRange(label.id, min, max)
+                      }
+                      onToggleVisibility={() =>
+                        annotationFilters.toggleLabelVisibility(label.id)
+                      }
+                    />
+                  ))}
+                  {projectLabels.length === 0 && (
+                    <p className="text-xs text-cyan-900/50 py-2 px-3">
+                      No annotation labels defined in project
+                    </p>
+                  )}
+
+                  {/* Reset Filters Button - only show when filters are active */}
+                  {annotationFilters.hasActiveFilters() && (
+                    <div className="pt-2 px-1">
+                      <button
+                        onClick={() => annotationFilters.resetAllFilters()}
+                        className="
+                          w-full flex items-center justify-center gap-1.5
+                          px-3 py-1.5
+                          text-xs font-medium text-cyan-600
+                          bg-cyan-50/60 backdrop-blur-sm
+                          border border-cyan-200/50 rounded-md
+                          hover:bg-cyan-100/80 hover:border-cyan-300/60
+                          hover:shadow-sm hover:shadow-cyan-200/30
+                          active:scale-[0.98]
+                          transition-all duration-150
+                        "
+                        title="Reset all annotation filters to default"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Reset Filters</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </UnifiedSidebarSection>
+            )}
+
             {/* METADATA Section */}
             <UnifiedSidebarSection
               title="Metadata"
@@ -950,6 +1019,32 @@ export function UnifiedExploreSidebar({
                   </div>
                 </div>
 
+                {/* Stroke Opacity Slider */}
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                    <Eye className="h-3 w-3 text-purple-500" />
+                    Stroke Opacity
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={0}
+                      max={4}
+                      value={['none', 'light', 'medium', 'strong', 'solid'].indexOf(
+                        visibility.visibility.annotationDisplay.strokeOpacity
+                      )}
+                      onChange={(e) => {
+                        const levels = ['none', 'light', 'medium', 'strong', 'solid'] as const;
+                        visibility.setStrokeOpacity(levels[parseInt(e.target.value)]);
+                      }}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    />
+                    <span className="text-xs text-gray-500 w-16 text-right capitalize">
+                      {visibility.visibility.annotationDisplay.strokeOpacity}
+                    </span>
+                  </div>
+                </div>
+
                 {/* Show Labels Toggle */}
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-medium text-gray-700 flex items-center gap-2">
@@ -973,6 +1068,32 @@ export function UnifiedExploreSidebar({
                     />
                   </button>
                 </div>
+
+                {/* Show Confidence Toggle - only shown when Show Labels is ON */}
+                {visibility.visibility.annotationDisplay.showLabels && (
+                  <div className="flex items-center justify-between ml-4 border-l-2 border-purple-200 pl-3">
+                    <label className="text-xs font-medium text-gray-700 flex items-center gap-2">
+                      <Percent className="h-3 w-3 text-purple-500" />
+                      Show Confidence
+                    </label>
+                    <button
+                      onClick={() => visibility.toggleShowConfidence()}
+                      className={`relative w-10 h-5 rounded-full transition-colors ${
+                        visibility.visibility.annotationDisplay.showConfidence
+                          ? 'bg-purple-500'
+                          : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${
+                          visibility.visibility.annotationDisplay.showConfidence
+                            ? 'translate-x-5'
+                            : ''
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
 
                 {/* Highlight Mode Toggle */}
                 <div className="flex items-center justify-between">

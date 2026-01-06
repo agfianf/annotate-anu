@@ -352,6 +352,9 @@ class BboxPreview(BaseModel):
     y_max: float = Field(..., description="Normalized y_max (0-1)")
     label_color: str = Field(default="#10B981", description="Label color for rendering")
     label_name: str | None = Field(None, description="Label name for display")
+    label_id: str | None = Field(None, description="Label ID for filtering")
+    confidence: float | None = Field(None, description="Confidence score (0-1)")
+    source: str | None = Field(None, description="Source: manual, model:<id>, import")
 
     @field_validator('x_min', 'y_min', 'x_max', 'y_max', mode='before')
     @classmethod
@@ -370,6 +373,9 @@ class PolygonPreview(BaseModel):
     )
     label_color: str = Field(default="#10B981", description="Label color for rendering")
     label_name: str | None = Field(None, description="Label name for display")
+    label_id: str | None = Field(None, description="Label ID for filtering")
+    confidence: float | None = Field(None, description="Confidence score (0-1)")
+    source: str | None = Field(None, description="Source: manual, model:<id>, import")
 
 
 class AnnotationSummary(BaseModel):

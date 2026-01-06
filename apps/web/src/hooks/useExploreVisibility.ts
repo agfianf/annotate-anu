@@ -24,6 +24,11 @@ export type StrokeWidthLevel = 'thin' | 'normal' | 'medium' | 'thick' | 'extra-t
 export type FillOpacityLevel = 'none' | 'light' | 'medium' | 'strong' | 'solid';
 
 /**
+ * Stroke opacity levels for annotation overlay
+ */
+export type StrokeOpacityLevel = 'none' | 'light' | 'medium' | 'strong' | 'solid';
+
+/**
  * Dim levels for highlight mode (image dimming)
  */
 export type DimLevel = 'subtle' | 'medium' | 'strong';
@@ -33,7 +38,9 @@ export type DimLevel = 'subtle' | 'medium' | 'strong';
  */
 export interface AnnotationDisplayState {
   strokeWidth: StrokeWidthLevel;
+  strokeOpacity: StrokeOpacityLevel;
   showLabels: boolean;
+  showConfidence: boolean;
   showBboxes: boolean;
   showPolygons: boolean;
   fillOpacity: FillOpacityLevel;
@@ -72,7 +79,9 @@ const defaultMetadataState: Record<MetadataFieldKey, MetadataFieldState> = {
 
 const defaultAnnotationDisplay: AnnotationDisplayState = {
   strokeWidth: 'normal',
+  strokeOpacity: 'solid',
   showLabels: false,
+  showConfidence: false,
   showBboxes: true,
   showPolygons: true,
   fillOpacity: 'none',
@@ -493,6 +502,32 @@ export function useExploreVisibility(projectId: string) {
     }));
   }, []);
 
+  /**
+   * Toggle show confidence percentages on annotation labels
+   */
+  const toggleShowConfidence = useCallback(() => {
+    setVisibility((prev) => ({
+      ...prev,
+      annotationDisplay: {
+        ...prev.annotationDisplay,
+        showConfidence: !prev.annotationDisplay.showConfidence,
+      },
+    }));
+  }, []);
+
+  /**
+   * Set stroke opacity level for annotation outlines
+   */
+  const setStrokeOpacity = useCallback((level: StrokeOpacityLevel) => {
+    setVisibility((prev) => ({
+      ...prev,
+      annotationDisplay: {
+        ...prev.annotationDisplay,
+        strokeOpacity: level,
+      },
+    }));
+  }, []);
+
   // ============================================
   // SECTION-LEVEL & CASCADING VISIBILITY TOGGLES
   // ============================================
@@ -646,7 +681,9 @@ export function useExploreVisibility(projectId: string) {
     hideAll,
     // Annotation display operations
     setStrokeWidth,
+    setStrokeOpacity,
     toggleShowLabels,
+    toggleShowConfidence,
     toggleShowBboxes,
     toggleShowPolygons,
     setFillOpacity,

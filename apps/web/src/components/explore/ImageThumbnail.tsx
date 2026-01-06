@@ -24,6 +24,8 @@ interface ImageThumbnailProps {
   visibility?: VisibilityState;
   /** Map of category_id to category color for border styling */
   categoryColorMap?: Record<string, string>;
+  /** Optional filter function for annotation confidence filtering */
+  shouldShowAnnotation?: (labelId?: string, confidence?: number) => boolean;
 }
 
 export const ImageThumbnail = memo(function ImageThumbnail({
@@ -36,6 +38,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
   onRemoveTag,
   visibility,
   categoryColorMap = {},
+  shouldShowAnnotation,
 }: ImageThumbnailProps) {
   // Build thumbnail URL with size parameter
   const thumbnailUrl = useMemo(() => {
@@ -223,6 +226,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
           polygons={overlayPolygons}
           displayOptions={visibility?.annotationDisplay}
           showOnHover={false}
+          shouldShowAnnotation={shouldShowAnnotation}
         />
       )}
 

@@ -5,6 +5,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAnnotationFilters } from '../hooks/useAnnotationFilters';
 import {
     AlertTriangle,
     Check,
@@ -49,6 +50,7 @@ import {
     type SharedImage,
     type Tag as TagType
 } from '../lib/data-management-client';
+import { projectsApi } from '../lib/api-client';
 import { filterCategoriesBySearch } from '../lib/tag-utils';
 import { MultiTaskSelect, VirtualizedImageGrid } from './explore';
 import { FullscreenImage } from './explore/FullscreenImage';
@@ -212,6 +214,16 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
 
   // Visibility state for controlling tag display on thumbnails
   const visibilityState = useExploreVisibility(projectId);
+
+  // Fetch project details to get labels for annotation filtering
+  const { data: projectDetails } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => projectsApi.get(Number(projectId)),
+    enabled: !!projectId,
+  });
+
+  // Annotation filters hook for per-label confidence threshold filtering
+  const annotationFilters = useAnnotationFilters(projectId, projectDetails?.labels);
 
   // Fetch sidebar aggregations for metadata filters
   const {
@@ -1426,6 +1438,9 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             // Collapse control
             isCollapsed={isSidebarCollapsed}
             onCollapseChange={setIsSidebarCollapsed}
+            // Annotation filters
+            projectLabels={projectDetails?.labels}
+            annotationFilters={annotationFilters}
           />
         )}
 
@@ -1492,6 +1507,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
               onRemoveTag={handleRemoveTag}
               visibility={visibilityState.visibility}
               categoryColorMap={categoryColorMap}
+              shouldShowAnnotation={annotationFilters.shouldShowAnnotation}
             />
             {/* Liquid Glass Loading Overlay - shows during filter updates */}
             {(isFetchingImages && !isLoadingImages) && (

@@ -27,6 +27,8 @@ interface VirtualizedImageGridProps {
   visibility?: VisibilityState;
   /** Map of category_id to category color for thumbnail tag borders */
   categoryColorMap?: Record<string, string>;
+  /** Optional filter function for annotation confidence filtering */
+  shouldShowAnnotation?: (labelId?: string, confidence?: number) => boolean;
 }
 
 export function VirtualizedImageGrid({
@@ -43,6 +45,7 @@ export function VirtualizedImageGrid({
   onRemoveTag,
   visibility,
   categoryColorMap,
+  shouldShowAnnotation,
 }: VirtualizedImageGridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -188,6 +191,7 @@ export function VirtualizedImageGrid({
               onRemoveTag={onRemoveTag}
               visibility={visibility}
               categoryColorMap={categoryColorMap}
+              shouldShowAnnotation={shouldShowAnnotation}
             />
           );
         })}

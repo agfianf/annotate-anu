@@ -23,6 +23,8 @@ interface JustifiedRowProps {
   visibility?: VisibilityState;
   /** Map of category_id to category color for thumbnail tag borders */
   categoryColorMap?: Record<string, string>;
+  /** Optional filter function for annotation confidence filtering */
+  shouldShowAnnotation?: (labelId?: string, confidence?: number) => boolean;
 }
 
 export function JustifiedRow({
@@ -37,6 +39,7 @@ export function JustifiedRow({
   onRemoveTag,
   visibility,
   categoryColorMap,
+  shouldShowAnnotation,
 }: JustifiedRowProps) {
   return (
     <div
@@ -74,6 +77,7 @@ export function JustifiedRow({
             onRemoveTag={onRemoveTag ? (tagId: string) => onRemoveTag(image.id, tagId) : undefined}
             visibility={visibility}
             categoryColorMap={categoryColorMap}
+            shouldShowAnnotation={shouldShowAnnotation}
           />
         );
       })}

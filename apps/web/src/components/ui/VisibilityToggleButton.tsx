@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 export type VisibilityState = boolean | 'partial';
 
 /** Predefined color themes for the visibility toggle */
-export type VisibilityColorTheme = 'emerald' | 'orange' | 'blue' | 'purple';
+export type VisibilityColorTheme = 'emerald' | 'orange' | 'blue' | 'purple' | 'cyan';
 
 interface VisibilityToggleButtonProps {
   /** Visibility state: true (visible), false (hidden), or 'partial' (mixed) */
@@ -46,6 +46,11 @@ const colorClasses: Record<VisibilityColorTheme, { visible: string; partial: str
     visible: 'text-purple-500',
     partial: 'text-purple-400/60',
     hover: 'hover:bg-purple-100',
+  },
+  cyan: {
+    visible: 'text-cyan-500',
+    partial: 'text-cyan-400/60',
+    hover: 'hover:bg-cyan-100',
   },
 };
 
