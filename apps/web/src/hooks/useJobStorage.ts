@@ -627,9 +627,17 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
         const image = jobContext.images.find((img) =>
           (img.shared_image_id || img.id) === annotation.imageId
         )
-        const jobImageId = image?.id || annotation.imageId
-        console.log('[jobRemoveAnnotation] Marking for DELETE')
-        autoSave.markDelete(id, backendId, jobImageId)
+        // Use jobImageId (backend ID) for sync, fallback to image.id then annotation.imageId
+        const jobImageId = image?.jobImageId || image?.id || annotation.imageId
+        console.log('[jobRemoveAnnotation] Marking for DELETE', {
+          annotationId: id,
+          backendId,
+          annotationImageId: annotation.imageId,
+          annotationType: annotation.type,
+          foundImage: image ? { id: image.id, jobImageId: image.jobImageId, shared_image_id: image.shared_image_id } : null,
+          resolvedJobImageId: jobImageId
+        })
+        autoSave.markDelete(id, backendId, jobImageId, annotation.type)
       } else {
         console.warn('[jobRemoveAnnotation] WARNING: No backendId, deletion will NOT be synced!')
       }
@@ -657,8 +665,9 @@ export function useJobStorage(jobId: string | null): JobStorageState & JobStorag
           const image = jobContext.images.find((img) =>
             (img.shared_image_id || img.id) === annotation.imageId
           )
-          const jobImageId = image?.id || annotation.imageId
-          autoSave.markDelete(annotation.id, backendId, jobImageId)
+          // Use jobImageId (backend ID) for sync, fallback to image.id then annotation.imageId
+          const jobImageId = image?.jobImageId || image?.id || annotation.imageId
+          autoSave.markDelete(annotation.id, backendId, jobImageId, annotation.type)
         }
       }
     },

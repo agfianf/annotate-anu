@@ -50,7 +50,7 @@ export interface AutoSaveState {
 export interface AutoSaveActions {
   markCreate: (annotation: Annotation, imageWidth: number, imageHeight: number) => void
   markUpdate: (annotation: Annotation, backendId: string, imageWidth: number, imageHeight: number) => void
-  markDelete: (annotationId: string, backendId: string, imageId: string) => void
+  markDelete: (annotationId: string, backendId: string, imageId: string, annotationType: 'rectangle' | 'polygon' | 'point') => void
   syncNow: () => Promise<void>
   clearPending: () => void
   // Legacy compatibility - will be deprecated
@@ -206,18 +206,19 @@ export function useAutoSave(
    * Mark an annotation for deletion
    */
   const markDelete = useCallback(
-    (annotationId: string, backendId: string, imageId: string) => {
+    (annotationId: string, backendId: string, imageId: string, annotationType: 'rectangle' | 'polygon' | 'point') => {
       console.log('[markDelete] Adding to pending:', {
         id: annotationId,
         backendId,
-        operation: 'delete'
+        operation: 'delete',
+        type: annotationType
       })
       pendingChangesRef.current.set(annotationId, {
         annotation: {
           id: annotationId,
           imageId,
           labelId: '',
-          type: 'rectangle',
+          type: annotationType,
           createdAt: 0,
           updatedAt: 0,
           x: 0,
@@ -371,8 +372,14 @@ export function useAutoSave(
       if (Object.keys(imagesPayload).length > 0) {
         console.log('[syncToBackend] Payload being sent:', JSON.stringify(imagesPayload, null, 2))
         syncedImageIds.push(...Object.keys(imagesPayload))
-        await jobsApi.syncAnnotations(jobId, { images: imagesPayload })
+        const syncResponse = await jobsApi.syncAnnotations(jobId, { images: imagesPayload })
+        console.log('[syncToBackend] Backend response:', syncResponse)
         console.log('[syncToBackend] Sync completed successfully for images:', syncedImageIds)
+
+        // Warn if backend didn't process any operations (indicates image ID mismatch)
+        if (syncResponse.total_operations === 0) {
+          console.warn('[syncToBackend] WARNING: Backend processed 0 operations! Image IDs may be incorrect.')
+        }
       }
 
       // Clear errors for successfully synced images

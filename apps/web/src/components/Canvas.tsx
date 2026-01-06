@@ -297,6 +297,8 @@ const Canvas = React.memo(function Canvas({
   const [konvaImage, setKonvaImage] = useState<HTMLImageElement | null>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
   const [scale, setScale] = useState(1)
+  // Track if scale has been calculated for current image (prevents annotations from rendering with stale scale)
+  const [scaleInitialized, setScaleInitialized] = useState(false)
   const [currentRectangle, setCurrentRectangle] = useState<number[] | null>(null)
   const [rectangleStartPoint, setRectangleStartPoint] = useState<{ x: number; y: number } | null>(null)
   const [polygonPoints, setPolygonPoints] = useState<Array<{ x: number; y: number }>>([])
@@ -439,6 +441,9 @@ const Canvas = React.memo(function Canvas({
 
   // Load image (use preloaded image if available to avoid re-fetching)
   useEffect(() => {
+    // Reset scale initialization when image changes to prevent stale scale rendering
+    setScaleInitialized(false)
+
     if (preloadedImage) {
       // Use preloaded image directly (skip re-fetch)
       konvaImageRef.current = preloadedImage
@@ -456,6 +461,7 @@ const Canvas = React.memo(function Canvas({
           width: preloadedImage.width * newScale,
           height: preloadedImage.height * newScale,
         })
+        setScaleInitialized(true)
       }
     } else if (image) {
       // Fallback: original loading logic (for non-preloaded images)
@@ -477,6 +483,7 @@ const Canvas = React.memo(function Canvas({
             width: img.width * newScale,
             height: img.height * newScale,
           })
+          setScaleInitialized(true)
         }
       }
     }
@@ -2324,6 +2331,12 @@ const Canvas = React.memo(function Canvas({
   // This is especially important in basic mode (< 100 annotations) where all are in Konva
   // NOTE: Hover no longer moves annotations between layers (was causing FPS drops)
   const { staticAnnotations, interactiveAnnotations } = useMemo(() => {
+    // Guard: Don't render annotations until scale is properly calculated
+    // This prevents annotations from appearing at wrong positions on initial load
+    if (!scaleInitialized) {
+      return { staticAnnotations: [], interactiveAnnotations: [] }
+    }
+
     const selectedSet = new Set(selectedIds)
     const staticAnns: Annotation[] = []
     const interactiveAnns: Annotation[] = []
@@ -2349,7 +2362,7 @@ const Canvas = React.memo(function Canvas({
     }
 
     return { staticAnnotations: staticAnns, interactiveAnnotations: interactiveAnns }
-  }, [konvaAnnotations, selectedIds])
+  }, [konvaAnnotations, selectedIds, scaleInitialized])
 
   if (!image) {
     return (
