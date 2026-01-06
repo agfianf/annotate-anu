@@ -241,11 +241,34 @@ export function AnnotationsSidebar({
   }, [annotations, filterMode]);
 
   // Transform annotations to table rows
-  const tinyThreshold = resolvedAppearance.tinyThreshold ?? 2;
+  const tinyThresholdSettings = resolvedAppearance.tinyThresholdSettings ?? {
+    unit: 'percentage' as const,
+    percentageWarning: 2,
+    percentageCritical: 0.5,
+    pixelsWarning: 2000,
+    pixelsCritical: 500,
+  };
   const tableData: AnnotationTableRow[] = useMemo(() => {
+    const { unit, percentageWarning, percentageCritical, pixelsWarning, pixelsCritical } = tinyThresholdSettings;
+
     return filteredAnnotations.map((ann, idx) => {
       const label = getLabel(ann.labelId);
+      const area = getAnnotationArea(ann);
       const areaPercentage = getAreaPercentage(ann, imageWidth, imageHeight);
+
+      // Calculate warning/critical based on selected unit
+      let isWarning = false;
+      let isCritical = false;
+
+      if (unit === 'percentage') {
+        isCritical = areaPercentage > 0 && areaPercentage < percentageCritical;
+        isWarning = areaPercentage > 0 && areaPercentage >= percentageCritical && areaPercentage < percentageWarning;
+      } else {
+        // unit === 'pixels'
+        isCritical = area > 0 && area < pixelsCritical;
+        isWarning = area > 0 && area >= pixelsCritical && area < pixelsWarning;
+      }
+
       return {
         id: ann.id,
         index: idx + 1,
@@ -258,15 +281,16 @@ export function AnnotationsSidebar({
         isVisible: ann.isVisible ?? true,
         dimensions: getDimensionsString(ann),
         pointCount: getPointCount(ann),
-        area: getAnnotationArea(ann),
+        area,
         areaPercentage,
-        isTiny: areaPercentage > 0 && areaPercentage < tinyThreshold,
+        isWarning,
+        isCritical,
         hasAttributes: !!(ann.attributes && Object.keys(ann.attributes).length > 0),
         createdAt: ann.createdAt,
         originalAnnotation: ann,
       };
     });
-  }, [filteredAnnotations, getLabel, imageWidth, imageHeight, tinyThreshold]);
+  }, [filteredAnnotations, getLabel, imageWidth, imageHeight, tinyThresholdSettings]);
 
   // Filter counts
   const filterCounts = useMemo(() => ({
@@ -534,7 +558,7 @@ export function AnnotationsSidebar({
                 data={tableData}
                 labels={labels}
                 selectedIds={selectedIds}
-                tinyThreshold={tinyThreshold}
+                tinyThresholdSettings={tinyThresholdSettings}
                 onRowClick={handleRowClick}
                 onSelectionChange={(ids) => {
                   setSelectedIds(new Set(ids));

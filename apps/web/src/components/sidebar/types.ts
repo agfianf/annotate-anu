@@ -13,6 +13,20 @@ export type SortMode = 'newest' | 'oldest' | 'confidence-high' | 'confidence-low
 // Dim level for highlight mode (5 levels as requested)
 export type DimLevel = 'none' | 'light' | 'subtle' | 'medium' | 'strong' | 'very-strong';
 
+// Tiny threshold unit type
+export type TinyThresholdUnit = 'percentage' | 'pixels';
+
+// Tiny threshold settings with warning and critical levels (separate values per unit)
+export interface TinyThresholdSettings {
+  unit: TinyThresholdUnit;         // User's chosen unit
+  // Percentage-based thresholds (% of image area)
+  percentageWarning: number;       // e.g., 2 means 2%
+  percentageCritical: number;      // e.g., 0.5 means 0.5%
+  // Pixel-based thresholds (in pixels, stored as raw pixels)
+  pixelsWarning: number;           // e.g., 2000 means 2000px (displayed as 2 k px)
+  pixelsCritical: number;          // e.g., 500 means 500px (displayed as 0.5 k px)
+}
+
 // Dim level opacity mapping
 export const DIM_LEVEL_MAP: Record<DimLevel, number> = {
   'none': 0,
@@ -35,8 +49,8 @@ export interface AppearanceSettings {
   // Highlight mode settings
   highlightMode: boolean;   // Enable/disable background dimming
   dimLevel: DimLevel;       // Dim intensity level
-  // Tiny annotation detection
-  tinyThreshold: number;    // 1-5% (annotations below this are marked as tiny)
+  // Tiny annotation detection with warning/critical levels
+  tinyThresholdSettings: TinyThresholdSettings;
 }
 
 // Table row data structure
@@ -54,7 +68,8 @@ export interface AnnotationTableRow {
   pointCount: number;               // Number of points (polygons) or 0 for rectangles/points
   area: number;                     // Pixel area for rectangles/polygons, 0 for points
   areaPercentage: number;           // Percentage of image area (0-100)
-  isTiny: boolean;                  // True if below threshold percentage
+  isWarning: boolean;               // True if below warning threshold (amber)
+  isCritical: boolean;              // True if below critical threshold (red)
   hasAttributes: boolean;           // True if annotation has custom attributes
   createdAt: number;
   originalAnnotation: Annotation;   // Reference to original annotation
@@ -141,7 +156,7 @@ export interface AnnotationsTableProps {
   data: AnnotationTableRow[];
   labels: Label[];
   selectedIds: Set<string>;
-  tinyThreshold: number;
+  tinyThresholdSettings: TinyThresholdSettings;
   onRowClick: (id: string, event: React.MouseEvent) => void;
   onSelectionChange: (ids: string[]) => void;
   onLabelChange: (annotationId: string, newLabelId: string) => void;
@@ -161,7 +176,13 @@ export const FALLBACK_APPEARANCE_DEFAULTS: AppearanceSettings = {
   showHoverTooltips: true,
   highlightMode: false,
   dimLevel: 'medium',
-  tinyThreshold: 2,
+  tinyThresholdSettings: {
+    unit: 'percentage',
+    percentageWarning: 2,
+    percentageCritical: 0.5,
+    pixelsWarning: 2000,
+    pixelsCritical: 500,
+  },
 };
 
 // Sidebar width constants

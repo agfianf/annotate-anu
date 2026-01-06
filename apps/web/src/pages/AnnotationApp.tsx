@@ -38,7 +38,13 @@ const DEFAULT_APPEARANCE_SETTINGS = {
   showHoverTooltips: true,
   highlightMode: false,  // dim non-annotated areas
   dimLevel: 'medium' as const,  // light, subtle, medium, strong, very-strong
-  tinyThreshold: 2,      // annotations < this % of image area are flagged as tiny
+  tinyThresholdSettings: {
+    unit: 'percentage' as const,
+    percentageWarning: 2,      // annotations < this % are flagged as warning (amber)
+    percentageCritical: 0.5,   // annotations < this % are flagged as critical (red)
+    pixelsWarning: 2000,       // annotations < this px are flagged as warning
+    pixelsCritical: 500,       // annotations < this px are flagged as critical
+  },
 }
 
 // Thumbnail component to prevent re-creating blob URLs on every render
@@ -229,6 +235,31 @@ function AnnotationApp() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
+
+        // Migration: old tinyThreshold (single number) to new structure
+        if (typeof parsed.tinyThreshold === 'number' && !parsed.tinyThresholdSettings) {
+          parsed.tinyThresholdSettings = {
+            unit: 'percentage',
+            percentageWarning: parsed.tinyThreshold,
+            percentageCritical: parsed.tinyThreshold / 4,
+            pixelsWarning: 2000,
+            pixelsCritical: 500,
+          }
+          delete parsed.tinyThreshold
+        }
+
+        // Migration: old warningThreshold/criticalThreshold to new per-unit structure
+        if (parsed.tinyThresholdSettings && 'warningThreshold' in parsed.tinyThresholdSettings) {
+          const old = parsed.tinyThresholdSettings
+          parsed.tinyThresholdSettings = {
+            unit: old.unit || 'percentage',
+            percentageWarning: old.unit === 'percentage' ? old.warningThreshold : 2,
+            percentageCritical: old.unit === 'percentage' ? old.criticalThreshold : 0.5,
+            pixelsWarning: old.unit === 'pixels' ? old.warningThreshold : 2000,
+            pixelsCritical: old.unit === 'pixels' ? old.criticalThreshold : 500,
+          }
+        }
+
         return { ...DEFAULT_APPEARANCE_SETTINGS, ...parsed }
       } catch {
         // Invalid JSON, use defaults

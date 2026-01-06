@@ -27,6 +27,7 @@ import {
   Square as SquareIcon,
   Trash2,
   User,
+  XCircle,
 } from 'lucide-react';
 import { LabelDropdownCell } from './LabelDropdownCell';
 import type { AnnotationsTableProps, AnnotationTableRow } from './types';
@@ -162,7 +163,7 @@ export function AnnotationsTable({
   data,
   labels,
   selectedIds,
-  tinyThreshold,
+  tinyThresholdSettings,
   onRowClick,
   onSelectionChange,
   onLabelChange,
@@ -326,19 +327,47 @@ export function AnnotationsTable({
         size: 40,
         cell: (info) => {
           const pct = info.getValue();
-          const isTiny = info.row.original.isTiny;
+          const { isCritical, isWarning } = info.row.original;
           if (pct === 0) {
             return <span className="text-gray-400 text-[10px]">-</span>;
           }
+
+          // Critical: Red styling
+          if (isCritical) {
+            const threshold = tinyThresholdSettings.unit === 'percentage'
+              ? `${tinyThresholdSettings.percentageCritical}%`
+              : `${(tinyThresholdSettings.pixelsCritical / 1000).toFixed(1)}k px`;
+            return (
+              <span
+                className="text-[10px] font-mono text-red-600 font-bold"
+                title={`Critical: <${threshold}`}
+              >
+                {pct < 0.1 ? '<0.1' : pct.toFixed(1)}
+                <XCircle className="inline w-2.5 h-2.5 ml-0.5" />
+              </span>
+            );
+          }
+
+          // Warning: Amber styling
+          if (isWarning) {
+            const threshold = tinyThresholdSettings.unit === 'percentage'
+              ? `${tinyThresholdSettings.percentageWarning}%`
+              : `${(tinyThresholdSettings.pixelsWarning / 1000).toFixed(1)}k px`;
+            return (
+              <span
+                className="text-[10px] font-mono text-amber-600 font-medium"
+                title={`Warning: <${threshold}`}
+              >
+                {pct < 0.1 ? '<0.1' : pct.toFixed(1)}
+                <AlertTriangle className="inline w-2.5 h-2.5 ml-0.5" />
+              </span>
+            );
+          }
+
+          // Normal
           return (
-            <span
-              className={`text-[10px] font-mono ${
-                isTiny ? 'text-amber-600 font-bold' : 'text-gray-500'
-              }`}
-              title={isTiny ? `Tiny: <${tinyThreshold}% of image` : `${pct.toFixed(2)}% of image`}
-            >
+            <span className="text-[10px] font-mono text-gray-500" title={`${pct.toFixed(2)}% of image`}>
               {pct < 0.1 ? '<0.1' : pct.toFixed(1)}
-              {isTiny && <AlertTriangle className="inline w-2.5 h-2.5 ml-0.5" />}
             </span>
           );
         },
@@ -553,7 +582,17 @@ export function AnnotationsTable({
                 <tbody>
                   {labelRows.map((row) => {
                     const isSelected = selectedIds.has(row.original.id);
-                    const isTiny = row.original.isTiny;
+                    const { isCritical, isWarning } = row.original;
+
+                    // Determine row background color
+                    let rowBgClass = 'hover:bg-gray-50';
+                    if (isSelected) {
+                      rowBgClass = 'bg-emerald-50 hover:bg-emerald-100 border-l-2 border-l-emerald-500';
+                    } else if (isCritical) {
+                      rowBgClass = 'bg-red-50/50 hover:bg-red-50';
+                    } else if (isWarning) {
+                      rowBgClass = 'bg-amber-50/50 hover:bg-amber-50';
+                    }
 
                     return (
                       <tr
@@ -564,16 +603,7 @@ export function AnnotationsTable({
                           }
                         }}
                         onClick={(e) => handleRowClick(row.original, e)}
-                        className={`
-                          border-b border-gray-100 cursor-pointer transition-colors
-                          ${
-                            isSelected
-                              ? 'bg-emerald-50 hover:bg-emerald-100 border-l-2 border-l-emerald-500'
-                              : isTiny
-                              ? 'bg-amber-50/50 hover:bg-amber-50'
-                              : 'hover:bg-gray-50'
-                          }
-                        `}
+                        className={`border-b border-gray-100 cursor-pointer transition-colors ${rowBgClass}`}
                       >
                         {/* Selection checkbox */}
                         <td className="w-7 px-1 py-1">
