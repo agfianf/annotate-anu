@@ -202,8 +202,8 @@ export function AnnotationOverlay({
       {/* Render bboxes (detections) */}
       {showBboxes && filteredBboxes?.map((bbox, idx) => {
         const labelPos = getBboxLabelPosition(bbox);
-        // Show confidence for all annotations that have it (format: "Label 85" - no % sign)
-        const confidenceText = bbox.confidence != null
+        // Show confidence for non-manual annotations (format: "Label 85" - no % sign)
+        const confidenceText = bbox.source !== 'manual' && bbox.confidence != null
           ? ` ${Math.round(bbox.confidence * 100)}`
           : '';
         const labelText = `${bbox.label_name}${confidenceText}`;
@@ -263,8 +263,8 @@ export function AnnotationOverlay({
         const pathD = pointsToPath(poly.points);
         if (!pathD) return null;
 
-        // Show confidence for all annotations that have it (format: "Label 85" - no % sign)
-        const confidenceText = poly.confidence != null
+        // Show confidence for non-manual annotations (format: "Label 85" - no % sign)
+        const confidenceText = poly.source !== 'manual' && poly.confidence != null
           ? ` ${Math.round(poly.confidence * 100)}`
           : '';
         const labelText = `${poly.label_name}${confidenceText}`;

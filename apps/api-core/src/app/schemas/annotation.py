@@ -43,7 +43,7 @@ class DetectionCreate(BaseModel):
     x_max: float = Field(..., ge=0, le=1, description="Right edge (0-1)")
     y_max: float = Field(..., ge=0, le=1, description="Bottom edge (0-1)")
     rotation: float = Field(0.0, ge=0, lt=360, description="Rotation degrees")
-    confidence: float = Field(1.0, ge=0.0, le=1.0)
+    confidence: float | None = Field(None, ge=0.0, le=1.0)
     source: str = Field("manual", max_length=50, description="Source: manual, model:<id>, import")
     attributes: dict | None = None
 
@@ -92,7 +92,7 @@ class SegmentationCreate(BaseModel):
     )
     rle: dict | None = Field(None, description="RLE-encoded mask")
     area: float | None = None
-    confidence: float = Field(1.0, ge=0.0, le=1.0)
+    confidence: float | None = Field(None, ge=0.0, le=1.0)
     source: str = Field("manual", max_length=50, description="Source: manual, model:<id>, import")
     attributes: dict | None = None
 

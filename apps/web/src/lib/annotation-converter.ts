@@ -73,7 +73,7 @@ export function rectangleToDetection(
     y_min: rect.y / imageHeight,
     x_max: (rect.x + rect.width) / imageWidth,
     y_max: (rect.y + rect.height) / imageHeight,
-    confidence: rect.confidence ?? 1.0,
+    confidence: rect.confidence,
     source: rect.source,
     attributes: {
       ...rect.attributes, // User-defined attributes
@@ -105,7 +105,7 @@ export function polygonToSegmentation(
     label_id: poly.labelId,
     format: 'polygon',
     polygon: poly.points.map((p) => [p.x / imageWidth, p.y / imageHeight]),
-    confidence: poly.confidence ?? 1.0,
+    confidence: poly.confidence,
     source: poly.source,
     attributes: {
       ...poly.attributes, // User-defined attributes
