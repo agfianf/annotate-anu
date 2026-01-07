@@ -78,6 +78,17 @@ Tags and attributes:
 - `DELETE /api/v1/projects/{project_id}/images/bulk-tag`
 - `POST /api/v1/projects/{project_id}/attributes/schemas`
 
+## Tagging Constraints
+
+### One-Tag-Per-Label Rule
+
+When tagging images within a category that has the **one-tag-per-label** constraint enabled:
+- Only one tag from that category can be assigned to an image at a time.
+- Assigning a new tag automatically removes the previous tag from the same category.
+- Useful for mutually exclusive classifications (e.g., train/val/test splits, quality ratings).
+
+Configure this constraint when creating tag categories via the API or UI.
+
 ## Notes
 
 - File paths must exist under the share root configured in API Core.

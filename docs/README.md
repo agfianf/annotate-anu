@@ -24,6 +24,7 @@ flowchart TB
   features --> f1["features/data-management.md"]
   features --> f2["features/explore-gallery.md"]
   features --> f3["features/export-workflow.md"]
+  features --> f4["features/quality-metrics-workflow.md"]
 
   architecture --> a1["architecture/README.md"]
   architecture --> a2["architecture/annotation-sync.md"]
@@ -52,6 +53,7 @@ Diagram source: `docs/development/docs-navigation.mmd`.
         <li><a href="features/data-management.md">Data management and tasks</a></li>
         <li><a href="features/explore-gallery.md">Explore gallery and filters</a></li>
         <li><a href="features/export-workflow.md">Export workflow</a></li>
+        <li><a href="features/quality-metrics-workflow.md">Quality metrics workflow</a></li>
       </ul>
     </td>
     <td>

@@ -37,10 +37,57 @@ and a React/Konva UI for annotation, exploration, and exports.
 
 ## Demo
 
+### Hero GIFs (Top Priority)
+
 | Demo | GIF | Description |
 | --- | --- | --- |
-| Landing | ![Landing page demo](assets/landing_page.gif) | Marketing landing and onboarding. |
-| Annotation workflow | ![Annotation tools demo](assets/features.gif) | Prompt, mask, edit, and export in the canvas. |
+| Landing | ![Landing page demo](assets/landing_page.gif) | Marketing landing and onboarding |
+| Annotation workflow | ![Annotation tools demo](assets/features.gif) | Prompt, mask, edit, and export in the canvas |
+
+### AI-Powered Annotation
+
+| Demo | GIF | Description |
+| --- | --- | --- |
+| SAM3 Text Prompt | ![SAM3 text prompt](assets/gifs/annotation-sam3-text-prompt.gif) | Type "cat" → instant segmentation mask |
+| SAM3 Bbox Prompt | ![SAM3 bbox prompt](assets/gifs/annotation-sam3-bbox-prompt.gif) | Draw rough box → SAM refines to perfect polygon |
+| Polygon Simplification | ![Polygon simplify](assets/gifs/annotation-polygon-simplify.gif) | Reduce polygon points for easier editing |
+| BYOM Inference | ![BYOM models](assets/gifs/annotation-byom-inference.gif) | Bring your own model for custom detection |
+
+### Explore & Analytics
+
+| Demo | GIF | Description |
+| --- | --- | --- |
+| Virtualized Gallery | ![Gallery scroll](assets/gifs/explore-gallery-virtualized-scroll.gif) | Smooth scrolling through 1000+ images |
+| Tri-State Filtering | ![Tag filtering](assets/gifs/explore-gallery-tri-state-tags.gif) | Include/exclude/idle tag states with AND/OR |
+| Histogram Filters | ![Histogram filter](assets/gifs/explore-gallery-histogram-filter.gif) | Click histogram bars to filter by dimension |
+| Quality Metrics | ![Quality metrics](assets/gifs/explore-gallery-quality-metrics.gif) | Background processing with progress tracking |
+| Confidence Slider | ![Confidence filter](assets/gifs/explore-gallery-confidence-slider.gif) | Filter annotations by confidence range |
+
+> **Note**: Replace placeholder GIFs above with actual recordings. See [GIF Recording Guide](docs/features/explore-gallery.md#gif-recording-guide) for details.
+
+## Why AnnotateANU?
+
+| Feature | AnnotateANU | CVAT | FiftyOne | Encord | Roboflow |
+|---------|:-----------:|:----:|:--------:|:------:|:--------:|
+| **Self-Hosted** | ✅ | ✅ | ✅ | ❌ | ⚠️ |
+| **SAM3 Integration** | ✅ Native | ✅ | ❌ | ✅ | ✅ |
+| **Text Prompts** | ✅ | ❌ | ❌ | ✅ | ✅ |
+| **BYOM Support** | ✅ | ⚠️ | ❌ | ⚠️ | ❌ |
+| **Tri-State Tag Filters** | ✅ | ❌ | ⚠️ | ⚠️ | ❌ |
+| **Histogram Filtering** | ✅ | ❌ | ✅* | ⚠️ | ✅ |
+| **Quality Metrics** | ✅ | ❌ | ⚠️* | ✅ | ❌ |
+| **Model Source Tracking** | ✅ | ❌ | ✅ | ⚠️ | ❌ |
+| **Polygon Simplification** | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+*\*Requires Python code*
+
+### Key Differentiators
+
+- **🎯 Tri-State Tag Filtering**: Include, exclude, or ignore tags with AND/OR logic—unique to AnnotateANU
+- **📊 Integrated Analytics**: Built-in histograms, heatmaps, and quality metrics without code
+- **🤖 BYOM Registry**: Register and use your own inference endpoints alongside SAM3
+- **⚡ Real-time Confidence Filtering**: Slider-based annotation filtering by confidence score
+- **🔧 Polygon Simplification**: Reduce polygon complexity for better performance
 
 ## Architecture
 

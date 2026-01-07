@@ -56,11 +56,13 @@ The Quality Metrics Workflow provides automated computation of image quality met
 | Quality histogram filters | ✅ Complete | Multi-select filtering by quality range |
 | Issue detection | ✅ Complete | Auto-detects blur, brightness, contrast issues |
 
-**Recent Updates (c255398)**:
+**Recent Updates (c255398, 236264f)**:
 - Added consolidated `EnhancedDatasetStatsPanel` with Quality tab
 - Integrated quality histogram with multi-select filtering
 - Added quality status counts display (pending/completed/failed)
 - Added issue breakdown visualization
+- Added quality metric filter integration with Explore view
+- Added BBox and Polygon object count histograms in Annotation Analysis panel
 
 ---
 
@@ -901,4 +903,4 @@ docker logs -f anu-api-core-worker-dev
 
 ---
 
-*Last updated: 2026-01-02*
+*Last updated: 2026-01-07*

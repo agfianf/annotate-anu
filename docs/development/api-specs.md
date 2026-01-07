@@ -194,16 +194,31 @@ Base URL: `http://localhost:8001/api/v1`
 - `DELETE /models/{model_id}`
 - `POST /models/{model_id}/health`
 
-- `POST /inference/text`
-- `POST /inference/bbox`
+- `POST /inference/text` - Supports `point_reduction` and `simplify_polygons` params
+- `POST /inference/bbox` - Supports `point_reduction` and `simplify_polygons` params
 - `POST /inference/auto`
 
 ## SAM3 Inference API (FastAPI)
 
 Base URL: `http://localhost:8000/api/v1/sam3`
 
-- `POST /inference/text`
-- `POST /inference/bbox`
-- `POST /inference/batch`
+- `POST /inference/text` - Text prompt segmentation
+- `POST /inference/bbox` - Bounding box prompt segmentation
+- `POST /inference/batch` - Batch processing
 
 Requests are `multipart/form-data` with images and prompt fields.
+
+### Polygon Simplification Parameters
+
+All inference endpoints support polygon simplification:
+- `point_reduction` (float, 0.0-1.0): Percentage of points to retain
+- `simplify_polygons` (boolean): Enable/disable simplification
+
+Example:
+```bash
+curl -X POST http://localhost:8000/api/v1/sam3/inference/text \
+  -F "image=@image.jpg" \
+  -F "prompt=cat" \
+  -F "point_reduction=0.5" \
+  -F "simplify_polygons=true"
+```

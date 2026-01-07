@@ -70,6 +70,23 @@ The UI never calls your endpoint directly. It calls:
 
 Use the model ID from registration. The built-in SAM3 model uses `model_id = "sam3"`.
 
+### Polygon Point Reduction
+
+SAM3 and BYOM models support configurable polygon point reduction:
+- **Purpose**: Reduce polygon complexity for better performance and easier editing.
+- **Parameter**: `point_reduction` (float, 0.0-1.0) - percentage of points to retain.
+- **Passthrough**: The setting is passed from the UI through the inference proxy to SAM3.
+
+Example request with polygon simplification:
+```json
+{
+  "model_id": "sam3",
+  "image": "...",
+  "point_reduction": 0.5,
+  "simplify_polygons": true
+}
+```
+
 ## Response Mapping
 
 `response_mapping` supports JSON paths for nested responses. Example:
