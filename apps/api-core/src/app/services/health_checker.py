@@ -36,6 +36,10 @@ class HealthChecker:
         tuple[bool, str, float | None]
             (is_healthy, status_message, response_time_ms)
         """
+        # Internal URLs are always healthy (mock classifiers, etc.)
+        if endpoint_url.startswith("internal://"):
+            return True, "Internal model (always healthy)", 0.0
+
         health_url = f"{endpoint_url.rstrip('/')}/health"
         headers = {}
         if auth_token:

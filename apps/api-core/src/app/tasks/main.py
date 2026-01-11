@@ -8,7 +8,7 @@ celery_app = Celery(
     "annotateanu",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.tasks.export", "app.tasks.quality"],
+    include=["app.tasks.export", "app.tasks.quality", "app.tasks.classification"],
 )
 
 # Celery configuration

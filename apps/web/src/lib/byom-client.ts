@@ -7,6 +7,8 @@ import type {
   APIResponse,
   AvailableModel,
   InferenceResult,
+  ClassificationResult,
+  ClassificationParams,
   ModelHealthResponse,
   ModelListResponse,
   ModelRegistrationRequest,
@@ -204,6 +206,48 @@ export const byomClient = {
       return response.data.data
     } catch (error) {
       console.error(`[byomClient] Proxy inference failed:`, error)
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
+          throw new Error('Cannot connect to API Core service. Is it running?')
+        }
+        const axiosError = error as AxiosError<{ detail: string }>
+        if (axiosError.response?.data?.detail) {
+          throw new Error(axiosError.response.data.detail)
+        }
+      }
+      throw error
+    }
+  },
+
+  /**
+   * Call classification through api-core proxy
+   * Classification produces whole-image labels, not spatial outputs
+   */
+  async classifyProxy(
+    modelId: string,
+    params: ClassificationParams
+  ): Promise<ClassificationResult> {
+    console.log(`[byomClient] Calling proxy classification (model: ${modelId})`)
+
+    const formData = new FormData()
+    formData.append('image', params.image)
+    formData.append('model_id', modelId)
+
+    if (params.top_k !== undefined) {
+      formData.append('top_k', params.top_k.toString())
+    }
+
+    try {
+      const response = await axios.post<APIResponse<ClassificationResult>>(
+        `${CORE_API_URL}/api/v1/inference/classify`,
+        formData,
+        { timeout: TIMEOUT }
+      )
+
+      console.log(`[byomClient] Proxy classification complete: ${response.data.data.predicted_class}`)
+      return response.data.data
+    } catch (error) {
+      console.error(`[byomClient] Proxy classification failed:`, error)
       if (axios.isAxiosError(error)) {
         if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
           throw new Error('Cannot connect to API Core service. Is it running?')

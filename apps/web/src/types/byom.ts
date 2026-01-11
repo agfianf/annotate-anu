@@ -10,9 +10,11 @@ export interface ModelCapabilities {
   supports_bbox_prompt: boolean
   supports_auto_detect: boolean
   supports_class_filter: boolean
+  supports_classification: boolean
   output_types: OutputType[]
   classes?: string[]
   model_type?: ModelType  // For easy UI logic
+  is_mock?: boolean  // Indicates locally-mocked model (no external API)
 }
 
 export interface ResponseMapping {
@@ -135,4 +137,25 @@ export interface APIResponse<T> {
   data: T
   message: string
   status_code: number
+}
+
+/**
+ * Classification types
+ */
+export interface ClassPrediction {
+  class_name: string
+  probability: number
+}
+
+export interface ClassificationResult {
+  predicted_class: string
+  confidence: number
+  top_k_predictions: ClassPrediction[]
+  class_probabilities?: Record<string, number>
+  processing_time_ms: number
+  model_id: string
+}
+
+export interface ClassificationParams extends BaseInferenceParams {
+  top_k?: number
 }

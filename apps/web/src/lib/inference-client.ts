@@ -9,6 +9,8 @@ import { byomClient } from './byom-client'
 import type {
   AvailableModel,
   InferenceResult,
+  ClassificationResult,
+  ClassificationParams,
   TextPromptParams,
   BboxPromptParams,
   AutoDetectParams,
@@ -73,10 +75,29 @@ export const inferenceClient = {
   },
 
   /**
+   * Image classification inference (via proxy)
+   * Classification produces whole-image labels, not spatial outputs
+   */
+  async classify(
+    model: AvailableModel,
+    params: ClassificationParams
+  ): Promise<ClassificationResult> {
+    console.log(`[inferenceClient] Classification via proxy: ${model.name}`)
+
+    // Check if model supports classification
+    if (!model.capabilities.supports_classification) {
+      throw new Error(`Model ${model.name} does not support classification`)
+    }
+
+    // All requests go through the proxy
+    return await byomClient.classifyProxy(model.id, params)
+  },
+
+  /**
    * Get available inference modes for a model
    */
-  getAvailableModes(model: AvailableModel): Array<'text' | 'bbox' | 'auto'> {
-    const modes: Array<'text' | 'bbox' | 'auto'> = []
+  getAvailableModes(model: AvailableModel): Array<'text' | 'bbox' | 'auto' | 'classify'> {
+    const modes: Array<'text' | 'bbox' | 'auto' | 'classify'> = []
 
     if (model.capabilities.supports_text_prompt) {
       modes.push('text')
@@ -87,6 +108,9 @@ export const inferenceClient = {
     if (model.capabilities.supports_auto_detect) {
       modes.push('auto')
     }
+    if (model.capabilities.supports_classification) {
+      modes.push('classify')
+    }
 
     return modes
   },
@@ -94,7 +118,7 @@ export const inferenceClient = {
   /**
    * Check if a model supports a specific mode
    */
-  supportsMode(model: AvailableModel, mode: 'text' | 'bbox' | 'auto'): boolean {
+  supportsMode(model: AvailableModel, mode: 'text' | 'bbox' | 'auto' | 'classify'): boolean {
     switch (mode) {
       case 'text':
         return model.capabilities.supports_text_prompt
@@ -102,6 +126,8 @@ export const inferenceClient = {
         return model.capabilities.supports_bbox_prompt
       case 'auto':
         return model.capabilities.supports_auto_detect
+      case 'classify':
+        return model.capabilities.supports_classification
       default:
         return false
     }

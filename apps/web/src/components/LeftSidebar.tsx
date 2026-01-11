@@ -4,6 +4,7 @@ import { Keyboard, Maximize2, MousePointer, Pentagon, Redo, Square, Undo, ZoomIn
 import { useState } from 'react'
 import { AutoDetectPanel } from './AutoDetectPanel'
 import { BboxPromptPanel } from './BboxPromptPanel'
+import { ClassificationPanel } from './ClassificationPanel'
 import { TextPromptPanel } from './TextPromptPanel'
 import { ToolButton } from './ui/ToolButton'
 
@@ -43,7 +44,7 @@ interface LeftSidebarProps {
   selectedModel: AvailableModel
 }
 
-type ActiveTool = 'text-prompt' | 'bbox-prompt' | 'auto-detect' | null
+type ActiveTool = 'text-prompt' | 'bbox-prompt' | 'auto-detect' | 'classify' | null
 
 // Custom icon for Text-Prompt tool
 function TextPromptIcon({ className }: { className?: string }) {
@@ -102,6 +103,26 @@ function AutoDetectIcon({ className }: { className?: string }) {
       <circle cx="12" cy="12" r="6" />
       <circle cx="12" cy="12" r="2" />
       <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+    </svg>
+  )
+}
+
+// Custom icon for Classification tool
+function ClassifyIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {/* Tags/labels pattern */}
+      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+      <path d="M2 17l10 5 10-5" />
+      <path d="M2 12l10 5 10-5" />
     </svg>
   )
 }
@@ -306,6 +327,20 @@ export function LeftSidebar({
           disabled={!selectedModel?.capabilities.supports_auto_detect}
         />
 
+        <ToolButton
+          icon={<ClassifyIcon className="w-5 h-5" />}
+          tooltipTitle="Classify"
+          tooltipDescription={
+            selectedModel?.capabilities.supports_classification
+              ? "Classify the entire image into categories"
+              : `${selectedModel?.name || 'Selected model'} does not support classification`
+          }
+          onClick={() => handleToolClick('classify')}
+          isActive={activeTool === 'classify'}
+          activeColor="violet"
+          disabled={!selectedModel?.capabilities.supports_classification}
+        />
+
         {/* Spacer to push controls to bottom */}
         <div className="flex-1" />
 
@@ -413,6 +448,13 @@ export function LeftSidebar({
               selectedLabelId={selectedLabelId}
               currentImage={currentImage}
               onAnnotationsCreated={onAnnotationsCreated}
+              onClose={handlePanelClose}
+              selectedModel={selectedModel}
+            />
+          )}
+          {activeTool === 'classify' && (
+            <ClassificationPanel
+              currentImage={currentImage}
               onClose={handlePanelClose}
               selectedModel={selectedModel}
             />

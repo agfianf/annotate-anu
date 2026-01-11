@@ -63,6 +63,8 @@ import { getTextColorForBackground } from '@/lib/colors';
 import { ExportWizardModal } from './export';
 import type { FilterSnapshot } from '@/types/export';
 import { PixelGridLoader } from '@/components/ui/animate';
+import { BatchClassifyModal } from './explore/BatchClassifyModal';
+import { useModelRegistry } from '../hooks/useModelRegistry';
 // Analytics Panel System
 import { AnalyticsPanelContext, AnalyticsPanelProvider } from '@/contexts/AnalyticsPanelContext';
 import { AnalyticsPanelContainer, PanelLibrary } from './analytics';
@@ -225,6 +227,9 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   // Annotation filters hook for per-label confidence threshold filtering
   const annotationFilters = useAnnotationFilters(projectId, projectDetails?.labels);
 
+  // Model registry for classification (undefined = solo mode, all models available)
+  const { allModels } = useModelRegistry();
+
   // Fetch sidebar aggregations for metadata filters
   const {
     widthAggregation,
@@ -255,6 +260,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const [showRemoveTagModal, setShowRemoveTagModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState<SharedImage | null>(null);
   const [showExportWizard, setShowExportWizard] = useState(false);
+  const [showClassifyModal, setShowClassifyModal] = useState(false);
 
   // Bulk tag confirmation state (1 tag per label rule)
   const [pendingBulkTag, setPendingBulkTag] = useState<{
@@ -1393,6 +1399,14 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 Add Tags
               </button>
               <button
+                onClick={() => setShowClassifyModal(true)}
+                className="px-4 py-2 bg-violet-500/60 hover:bg-violet-500/80 backdrop-blur-sm text-white text-sm font-medium rounded-full flex items-center gap-1.5 transition-all shadow-lg shadow-violet-500/30"
+                title="AI Classification"
+              >
+                <Sparkles className="w-4 h-4" />
+                AI Classify
+              </button>
+              <button
                 onClick={() => setShowRemoveTagModal(true)}
                 disabled={getTagsFromSelectedImages().length === 0}
                 className="p-2.5 bg-red-500/60 hover:bg-red-500/80 disabled:bg-white/10 disabled:cursor-not-allowed backdrop-blur-sm text-white rounded-full flex items-center transition-all shadow-lg shadow-red-500/30"
@@ -1665,6 +1679,15 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
         onExportCreated={(exportId) => {
           toast.success(`Export created: ${exportId.slice(0, 8)}...`);
         }}
+      />
+
+      {/* Batch Classification Modal */}
+      <BatchClassifyModal
+        isOpen={showClassifyModal}
+        onClose={() => setShowClassifyModal(false)}
+        projectId={Number(projectId)}
+        selectedImageIds={Array.from(selectedImages)}
+        availableModels={allModels}
       />
 
       {/* Bulk Tag Confirmation Modal (1 tag per label rule) */}

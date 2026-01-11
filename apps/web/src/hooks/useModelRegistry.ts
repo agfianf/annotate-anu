@@ -25,12 +25,16 @@ const SAM3_BUILTIN: AvailableModel = {
     supports_bbox_prompt: true,
     supports_auto_detect: false,
     supports_class_filter: false,
+    supports_classification: false,
     output_types: ['polygon'],
     classes: undefined,
   },
   is_healthy: true,
   description: 'Segment Anything Model 3 - General purpose segmentation',
 }
+
+// Note: Mock Classifier is no longer built-in. Users must register it via Model Configuration
+// with custom classes. This allows more flexibility in defining classification categories.
 
 /**
  * @param allowedModelIds - Model IDs allowed for this project
@@ -90,13 +94,14 @@ export function useModelRegistry(allowedModelIds?: string[] | null) {
           supports_bbox_prompt: false,
           supports_auto_detect: true,
           supports_class_filter: false,
+          supports_classification: false,
           output_types: ['bbox'],
         },
         is_healthy: m.is_healthy,
         description: m.description || undefined,
       }))
 
-    // Combine SAM3 + BYOM models
+    // Combine SAM3 + BYOM models (mock classifiers must be registered via Model Config)
     const allAvailable = [SAM3_BUILTIN, ...byomModels]
 
     // Job mode with no models configured - return empty array

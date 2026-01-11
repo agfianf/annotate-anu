@@ -6,7 +6,12 @@ import time
 import httpx
 
 from app.helpers.logger import logger
-from app.schemas.inference.response import InferenceResponse, MaskPolygon
+from app.schemas.inference.response import (
+    ClassificationResponse,
+    ClassPrediction,
+    InferenceResponse,
+    MaskPolygon,
+)
 from app.schemas.models.base import ModelBase
 
 
@@ -196,6 +201,195 @@ class InferenceProxyService:
             threshold=threshold,
             class_filter=class_filter,
             return_visualization=return_visualization,
+        )
+
+    async def classify(
+        self,
+        model: ModelBase,
+        image_bytes: bytes,
+        image_filename: str,
+        image_content_type: str,
+        top_k: int = 5,
+    ) -> ClassificationResponse:
+        """Proxy classification inference to mock or external BYOM model.
+
+        Unlike detection/segmentation, classification produces whole-image labels
+        with probability distributions rather than spatial outputs.
+
+        Parameters
+        ----------
+        model : ModelBase
+            Model to use for classification
+        image_bytes : bytes
+            Image file bytes
+        image_filename : str
+            Original filename
+        image_content_type : str
+            MIME type of the image
+        top_k : int
+            Number of top predictions to return
+
+        Returns
+        -------
+        ClassificationResponse
+            Classification result with top-k predictions
+
+        Raises
+        ------
+        ValueError
+            If model doesn't support classification
+        """
+        if model.id == "sam3":
+            raise ValueError("SAM3 does not support classification")
+
+        # Check if this is a mock classifier (built-in or registered)
+        is_mock = (
+            model.id == "mock-classifier"
+            or model.endpoint_url == "internal://mock-classifier"
+            or (model.capabilities and getattr(model.capabilities, "is_mock", False))
+        )
+
+        if is_mock:
+            # Use mock classifier with model's custom classes if defined
+            custom_classes = None
+            if model.capabilities and model.capabilities.classes:
+                custom_classes = model.capabilities.classes
+
+            from app.services.mock_classifier import MockClassifierService
+
+            classifier = MockClassifierService(class_list=custom_classes)
+            return await classifier.classify(image_bytes, top_k=top_k)
+
+        return await self._byom_classify(
+            model,
+            image_bytes,
+            image_filename,
+            image_content_type,
+            top_k,
+        )
+
+    async def _byom_classify(
+        self,
+        model: ModelBase,
+        image_bytes: bytes,
+        image_filename: str,
+        image_content_type: str,
+        top_k: int,
+    ) -> ClassificationResponse:
+        """Call external BYOM classification endpoint.
+
+        Parameters
+        ----------
+        model : ModelBase
+            BYOM model configuration
+        image_bytes : bytes
+            Image file bytes
+        image_filename : str
+            Original filename
+        image_content_type : str
+            MIME type
+        top_k : int
+            Number of top predictions
+
+        Returns
+        -------
+        ClassificationResponse
+            Classification result
+        """
+        # Get custom endpoint path from config
+        classification_path = "/classify"
+        response_mapping = None
+        if model.endpoint_config:
+            classification_path = model.endpoint_config.get("classification_path", "/classify")
+            response_mapping = model.endpoint_config.get("classification_response_mapping")
+
+        url = f"{model.endpoint_url.rstrip('/')}{classification_path}"
+
+        logger.info(f"Proxying classify: image size={len(image_bytes)} bytes, filename={image_filename}")
+
+        headers = {}
+        if model.auth_token:
+            headers["Authorization"] = f"Bearer {model.auth_token}"
+
+        files = {"image": (image_filename, image_bytes, image_content_type)}
+        data = {"top_k": str(top_k)}
+
+        logger.info(f"Proxying classification to BYOM: {url}")
+        start_time = time.time()
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(url, files=files, data=data, headers=headers)
+            response.raise_for_status()
+
+        elapsed_ms = (time.time() - start_time) * 1000
+        logger.info(f"BYOM classification completed in {elapsed_ms:.0f}ms")
+
+        result = response.json()
+        # Handle both wrapped and unwrapped responses
+        if "data" in result:
+            result = result["data"]
+
+        return self._normalize_classification_response(result, response_mapping, model.id, elapsed_ms)
+
+    def _normalize_classification_response(
+        self,
+        data: dict,
+        response_mapping: dict | None,
+        model_id: str,
+        elapsed_ms: float,
+    ) -> ClassificationResponse:
+        """Normalize external classification response.
+
+        Parameters
+        ----------
+        data : dict
+            Raw API response data
+        response_mapping : dict | None
+            Custom field mapping configuration
+        model_id : str
+            Model identifier
+        elapsed_ms : float
+            Processing time in milliseconds
+
+        Returns
+        -------
+        ClassificationResponse
+            Normalized classification response
+        """
+        mapping = response_mapping or {}
+
+        # Extract predicted class
+        predicted_class = self._get_nested_value(
+            data, mapping.get("predicted_class_field", "predicted_class")
+        ) or ""
+
+        # Extract confidence
+        confidence = self._get_nested_value(
+            data, mapping.get("confidence_field", "confidence")
+        ) or 0.0
+
+        # Extract top-k predictions
+        raw_predictions = self._get_nested_value(
+            data, mapping.get("top_k_field", "top_k_predictions")
+        ) or []
+
+        top_k_predictions = []
+        for p in raw_predictions:
+            if isinstance(p, dict):
+                class_name = p.get("class_name") or p.get("label") or p.get("class") or ""
+                probability = p.get("probability") or p.get("score") or p.get("confidence") or 0.0
+                top_k_predictions.append(ClassPrediction(class_name=class_name, probability=probability))
+
+        # Extract full probability distribution if available
+        class_probabilities = data.get("class_probabilities", {})
+
+        return ClassificationResponse(
+            predicted_class=predicted_class,
+            confidence=confidence,
+            top_k_predictions=top_k_predictions,
+            class_probabilities=class_probabilities,
+            processing_time_ms=elapsed_ms,
+            model_id=model_id,
         )
 
     async def _sam3_text_prompt(

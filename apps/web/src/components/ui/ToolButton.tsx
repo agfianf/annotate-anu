@@ -14,7 +14,7 @@ interface ToolButtonProps {
   shortcut?: string;
   onClick: () => void;
   isActive?: boolean;
-  activeColor?: 'orange' | 'purple' | 'blue' | 'emerald';
+  activeColor?: 'orange' | 'purple' | 'blue' | 'emerald' | 'violet';
   disabled?: boolean;
   showLabelSelector?: boolean;
   labels?: Label[];
@@ -51,6 +51,7 @@ export function ToolButton({
     purple: 'bg-purple-500 text-white',
     blue: 'bg-blue-500 text-white',
     emerald: 'bg-emerald-500 text-white',
+    violet: 'bg-violet-500 text-white',
   };
 
   const glowColors = {
@@ -58,6 +59,7 @@ export function ToolButton({
     purple: 'rgba(168, 85, 247, 0.4)',
     blue: 'rgba(59, 130, 246, 0.4)',
     emerald: 'rgba(16, 185, 129, 0.4)',
+    violet: 'rgba(139, 92, 246, 0.4)',
   };
 
   const selectedLabel = labels.find((l) => l.id === selectedLabelId);

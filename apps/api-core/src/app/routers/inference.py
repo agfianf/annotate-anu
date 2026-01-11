@@ -4,16 +4,19 @@ import json
 from datetime import datetime
 from typing import Annotated
 
+import redis
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from app.config import settings
 from app.dependencies.database import get_async_conn
 from app.helpers.logger import logger
 from app.helpers.response_api import JsonResponse
 from app.repositories.models import ModelAsyncRepositories
-from app.schemas.inference.response import InferenceResponse
+from app.schemas.inference.response import ClassificationResponse, InferenceResponse
 from app.schemas.models.base import ModelBase, ModelCapabilities
 from app.services.inference_proxy import InferenceProxyService
+from app.services.mock_classifier import IMAGENET_SUBSET, mock_classifier
 
 router = APIRouter(prefix="/api/v1/inference", tags=["Inference Proxy"])
 
@@ -53,6 +56,38 @@ def _get_sam3_model(sam3_url: str) -> ModelBase:
     )
 
 
+def _get_mock_classifier_model() -> ModelBase:
+    """Create pseudo-model for built-in mock classifier.
+
+    Returns
+    -------
+    ModelBase
+        Mock classifier model configuration
+    """
+    now = datetime.now()
+    return ModelBase(
+        id="mock-classifier",
+        name="Mock Classifier (Demo)",
+        endpoint_url="internal://mock-classifier",
+        auth_token=None,
+        capabilities=ModelCapabilities(
+            supports_text_prompt=False,
+            supports_bbox_prompt=False,
+            supports_auto_detect=False,
+            supports_class_filter=False,
+            supports_classification=True,
+            output_types=[],
+            classes=IMAGENET_SUBSET,
+        ),
+        description="Mock classifier for testing - generates random but reproducible predictions",
+        is_active=True,
+        is_healthy=True,
+        last_health_check=now,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 async def get_model_by_id(
     model_id: str,
     request: Request,
@@ -83,6 +118,9 @@ async def get_model_by_id(
         proxy: InferenceProxyService = request.state.inference_proxy
         return _get_sam3_model(proxy.sam3_url)
 
+    if model_id == "mock-classifier":
+        return _get_mock_classifier_model()
+
     # Get from database
     if connection is None:
         raise HTTPException(
@@ -96,6 +134,11 @@ async def get_model_by_id(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Model {model.name} is not active",
             )
+
+        # Mark internal:// URL models as healthy (no external check needed)
+        if model.endpoint_url.startswith("internal://"):
+            model.is_healthy = True
+
         return model
     except Exception as e:
         logger.error(f"Failed to get model {model_id}: {e}")
@@ -380,3 +423,234 @@ async def inference_auto(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Inference failed: {str(e)}",
         )
+
+
+@router.post("/classify", response_model=JsonResponse[ClassificationResponse, None])
+async def inference_classify(
+    request: Request,
+    image: UploadFile = File(..., description="Image file to classify"),
+    model_id: str = Form(..., description="Model ID ('mock-classifier' or UUID)"),
+    top_k: int = Form(5, ge=1, le=100, description="Number of top predictions to return"),
+    connection: Annotated[AsyncConnection | None, Depends(get_async_conn)] = None,
+):
+    """Classify an image using a classification model.
+
+    Unlike detection/segmentation which produces spatial outputs (boxes, masks),
+    classification produces whole-image labels with probability distributions.
+
+    Parameters
+    ----------
+    request : Request
+        FastAPI request
+    image : UploadFile
+        Image file to classify
+    model_id : str
+        Model ID ('mock-classifier' for built-in, or UUID for BYOM)
+    top_k : int
+        Number of top predictions to return (1-100, default 5)
+    connection : AsyncConnection
+        Database connection
+
+    Returns
+    -------
+    JsonResponse[ClassificationResponse, None]
+        Classification response with top-k predictions
+    """
+    model = await get_model_by_id(model_id, request, connection)
+
+    # Check capability
+    if model.capabilities and not model.capabilities.supports_classification:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Model {model.name} does not support classification",
+        )
+
+    # Read image bytes immediately to avoid consumption issues
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty image file received",
+        )
+
+    try:
+        # For mock-classifier, use the built-in mock service directly
+        if model_id == "mock-classifier":
+            result = await mock_classifier.classify(image_bytes, top_k)
+        else:
+            # For external BYOM classification models, use the proxy
+            proxy: InferenceProxyService = request.state.inference_proxy
+            result = await proxy.classify(
+                model=model,
+                image_bytes=image_bytes,
+                image_filename=image.filename or "image.jpg",
+                image_content_type=image.content_type or "image/jpeg",
+                top_k=top_k,
+            )
+
+        return JsonResponse(
+            data=result,
+            message=f"Classified as '{result.predicted_class}' ({result.confidence:.1%}) using {model.name}",
+            status_code=status.HTTP_200_OK,
+        )
+    except Exception as e:
+        logger.error(f"Classification inference failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Classification failed: {str(e)}",
+        )
+
+
+@router.post("/batch-classify/start")
+async def start_batch_classification(
+    project_id: int = Form(..., description="Project ID for tag creation"),
+    model_id: str = Form(..., description="Model ID for classification"),
+    image_ids: str = Form(..., description="JSON array of image IDs to classify"),
+    create_tags: bool = Form(True, description="Whether to create tags from predictions"),
+    label_mapping_config: str | None = Form(None, description="JSON config for label mapping"),
+):
+    """Start a batch classification job.
+
+    This endpoint starts a background Celery task to classify multiple images
+    and optionally create tags from predictions.
+
+    Parameters
+    ----------
+    project_id : int
+        Project ID for tag creation
+    model_id : str
+        Model ID ('mock-classifier' for built-in, or UUID for registered models)
+    image_ids : str
+        JSON array of image IDs to classify
+    create_tags : bool
+        Whether to create tags from predictions (default True)
+    label_mapping_config : str | None
+        JSON object with structured label mapping configuration:
+        {
+            "className": {
+                "mode": "existing" | "create",
+                "existingTagId": "uuid",      // when mode="existing"
+                "newTagName": "name",         // when mode="create" (default: className)
+                "newTagCategoryId": "uuid"    // when mode="create" (default: uncategorized)
+            }
+        }
+
+    Returns
+    -------
+    dict
+        Job ID and status
+    """
+    # Parse image IDs
+    try:
+        ids = json.loads(image_ids)
+        if not isinstance(ids, list) or len(ids) == 0:
+            raise ValueError("image_ids must be a non-empty array")
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid image_ids JSON: {str(e)}",
+        )
+
+    # Parse label mapping config
+    mapping_config = None
+    if label_mapping_config:
+        try:
+            mapping_config = json.loads(label_mapping_config)
+        except json.JSONDecodeError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid label_mapping_config JSON: {str(e)}",
+            )
+
+    # Import and start the Celery task
+    from app.tasks.classification import batch_classify_images_task
+
+    task = batch_classify_images_task.delay(
+        project_id=project_id,
+        model_id=model_id,
+        image_ids=ids,
+        create_tags=create_tags,
+        label_mapping_config=mapping_config,
+    )
+
+    logger.info(f"Started batch classification job {task.id} for {len(ids)} images")
+
+    return {
+        "job_id": task.id,
+        "status": "started",
+        "total": len(ids),
+    }
+
+
+@router.get("/batch-classify/progress/{job_id}")
+async def get_batch_classification_progress(job_id: str):
+    """Get batch classification job progress.
+
+    Parameters
+    ----------
+    job_id : str
+        Celery task ID
+
+    Returns
+    -------
+    dict
+        Job progress with status, processed count, total, and failed count
+    """
+    # First check Redis for progress updates
+    redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+    progress_key = f"classification:progress:{job_id}"
+
+    redis_progress = redis_client.hgetall(progress_key)
+
+    if redis_progress:
+        return {
+            "job_id": job_id,
+            "status": redis_progress.get("status", "unknown"),
+            "processed": int(redis_progress.get("processed", 0)),
+            "failed": int(redis_progress.get("failed", 0)),
+            "total": int(redis_progress.get("total", 0)),
+            "error": redis_progress.get("error"),
+        }
+
+    # Fall back to Celery task state
+    from celery.result import AsyncResult
+
+    result = AsyncResult(job_id)
+
+    if result.state == "PENDING":
+        return {
+            "job_id": job_id,
+            "status": "pending",
+            "processed": 0,
+            "failed": 0,
+            "total": 0,
+        }
+    elif result.state == "SUCCESS":
+        # Task completed, get result
+        task_result = result.result or {}
+        return {
+            "job_id": job_id,
+            "status": "completed",
+            "processed": task_result.get("processed", 0),
+            "failed": task_result.get("failed", 0),
+            "total": task_result.get("total", 0),
+            "results": task_result.get("results", []),
+        }
+    elif result.state == "FAILURE":
+        return {
+            "job_id": job_id,
+            "status": "failed",
+            "error": str(result.result) if result.result else "Unknown error",
+            "processed": 0,
+            "failed": 0,
+            "total": 0,
+        }
+    else:
+        # STARTED or other states
+        return {
+            "job_id": job_id,
+            "status": result.state.lower(),
+            "processed": 0,
+            "failed": 0,
+            "total": 0,
+        }

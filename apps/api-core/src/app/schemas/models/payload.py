@@ -1,8 +1,23 @@
 """Payload schemas for creating and updating models."""
 
-from pydantic import BaseModel, Field, HttpUrl
+from typing import Annotated
+
+from pydantic import AfterValidator, BaseModel, Field, HttpUrl
 
 from app.schemas.models.base import ModelCapabilities
+
+
+def validate_endpoint_url(v: str) -> str:
+    """Validate endpoint URL allowing http, https, or internal schemes."""
+    if v.startswith("internal://"):
+        return v
+    # For non-internal URLs, validate as HttpUrl
+    HttpUrl(v)
+    return v
+
+
+# Custom type that accepts both HTTP URLs and internal:// URLs
+EndpointUrl = Annotated[str, AfterValidator(validate_endpoint_url)]
 
 
 class ResponseMapping(BaseModel):
@@ -60,9 +75,9 @@ class ModelCreatePayload(BaseModel):
         max_length=100,
         description="Unique display name for the model"
     )
-    endpoint_url: HttpUrl = Field(
+    endpoint_url: EndpointUrl = Field(
         ...,
-        description="Base URL of the external model API"
+        description="Base URL of the external model API (or internal:// for mock models)"
     )
     auth_token: str | None = Field(
         default=None,
@@ -91,9 +106,6 @@ class ModelCreatePayload(BaseModel):
             Transformed payload ready for database
         """
         data = self.model_dump(exclude_none=True)
-        # Convert HttpUrl to string
-        if "endpoint_url" in data:
-            data["endpoint_url"] = str(data["endpoint_url"])
         # Convert capabilities to dict
         if "capabilities" in data and isinstance(data["capabilities"], ModelCapabilities):
             data["capabilities"] = data["capabilities"].model_dump()
@@ -132,7 +144,7 @@ class ModelUpdatePayload(BaseModel):
     """Payload for updating an existing model."""
 
     name: str | None = Field(default=None, min_length=1, max_length=100)
-    endpoint_url: HttpUrl | None = Field(default=None)
+    endpoint_url: EndpointUrl | None = Field(default=None)
     auth_token: str | None = Field(default=None)
     description: str | None = Field(default=None, max_length=500)
     capabilities: ModelCapabilities | None = Field(default=None)
@@ -148,9 +160,6 @@ class ModelUpdatePayload(BaseModel):
             Transformed payload ready for database
         """
         data = self.model_dump(exclude_none=True)
-        # Convert HttpUrl to string
-        if "endpoint_url" in data:
-            data["endpoint_url"] = str(data["endpoint_url"])
         # Convert capabilities to dict
         if "capabilities" in data and isinstance(data["capabilities"], ModelCapabilities):
             data["capabilities"] = data["capabilities"].model_dump()

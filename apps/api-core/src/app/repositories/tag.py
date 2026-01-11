@@ -150,3 +150,35 @@ class TagRepository:
         )
         result = await connection.execute(stmt)
         return result.scalar() or 0
+
+    @staticmethod
+    async def get_category_by_name(
+        connection: AsyncConnection,
+        project_id: int,
+        name: str,
+    ) -> dict | None:
+        """Get a tag category by name within a project."""
+        from app.models.data_management import tag_categories
+
+        stmt = select(tag_categories).where(
+            tag_categories.c.project_id == project_id,
+            tag_categories.c.name == name,
+        )
+        result = await connection.execute(stmt)
+        row = result.fetchone()
+        return dict(row._mapping) if row else None
+
+    @staticmethod
+    async def create_category(
+        connection: AsyncConnection,
+        project_id: int,
+        data: dict,
+    ) -> dict:
+        """Create a new tag category within a project."""
+        from app.models.data_management import tag_categories
+
+        data["project_id"] = project_id
+        stmt = insert(tag_categories).values(**data).returning(tag_categories)
+        result = await connection.execute(stmt)
+        row = result.fetchone()
+        return dict(row._mapping)

@@ -25,6 +25,10 @@ class ModelCapabilities(BaseModel):
         default=False,
         description="Whether model supports filtering by class names"
     )
+    supports_classification: bool = Field(
+        default=False,
+        description="Whether model supports image classification (whole-image labels)"
+    )
     output_types: list[str] = Field(
         default=["bbox"],
         description="Output types supported (bbox, polygon, mask)"
@@ -32,6 +36,10 @@ class ModelCapabilities(BaseModel):
     classes: list[str] | None = Field(
         default=None,
         description="List of class names the model can detect"
+    )
+    is_mock: bool = Field(
+        default=False,
+        description="Whether model uses local mock instead of external API"
     )
 
 

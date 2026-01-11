@@ -39,3 +39,41 @@ class InferenceResponse(BaseModel):
         default=None,
         description="Base64 encoded visualization image",
     )
+
+
+class ClassPrediction(BaseModel):
+    """Single class prediction with probability."""
+
+    class_name: str = Field(..., description="Predicted class name")
+    probability: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Prediction probability (0.0-1.0)",
+    )
+
+
+class ClassificationResponse(BaseModel):
+    """Response for image classification inference.
+
+    Unlike detection/segmentation which produces spatial outputs (boxes, masks),
+    classification produces whole-image labels with probability distributions.
+    """
+
+    predicted_class: str = Field(..., description="Top predicted class name")
+    confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Confidence of top prediction (0.0-1.0)",
+    )
+    top_k_predictions: list[ClassPrediction] = Field(
+        ...,
+        description="Top-k class predictions with probabilities",
+    )
+    class_probabilities: dict[str, float] = Field(
+        default_factory=dict,
+        description="Full probability distribution over all classes (optional)",
+    )
+    processing_time_ms: float = Field(..., description="Processing time in milliseconds")
+    model_id: str = Field(..., description="ID of model that produced the result")

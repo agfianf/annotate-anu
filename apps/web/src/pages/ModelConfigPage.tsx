@@ -17,6 +17,7 @@ export default function ModelConfigPage() {
   const { registeredModels, refreshModels, loading } = useModelRegistry()
   const [showForm, setShowForm] = useState(false)
   const [activePreset, setActivePreset] = useState<string | null>(null)
+  const [isMockMode, setIsMockMode] = useState(false)
   const [formData, setFormData] = useState<ModelRegistrationRequest>({
     name: '',
     endpoint_url: '',
@@ -27,6 +28,7 @@ export default function ModelConfigPage() {
       supports_bbox_prompt: false,
       supports_auto_detect: false,
       supports_class_filter: false,
+      supports_classification: false,
       output_types: ['bbox'],
       classes: undefined,
     },
@@ -63,6 +65,8 @@ export default function ModelConfigPage() {
 
       // Reset form to initial state
       setShowForm(false)
+      setActivePreset(null)
+      setIsMockMode(false)
       setFormData({
         name: '',
         endpoint_url: '',
@@ -73,6 +77,7 @@ export default function ModelConfigPage() {
           supports_bbox_prompt: false,
           supports_auto_detect: false,
           supports_class_filter: false,
+          supports_classification: false,
           output_types: ['bbox'],
           classes: undefined,
         },
@@ -190,8 +195,29 @@ export default function ModelConfigPage() {
   }
 
   // Complete presets for all form fields (capabilities + endpoint + response mapping)
-  const applyCompletePreset = (preset: 'yolov8' | 'yolov11' | 'sam3' | 'ultralytics' | 'custom') => {
+  const applyCompletePreset = (preset: 'yolov8' | 'yolov11' | 'sam3' | 'ultralytics' | 'custom' | 'mockClassifier') => {
     const presets = {
+      mockClassifier: {
+        capabilities: {
+          supports_text_prompt: false,
+          supports_bbox_prompt: false,
+          supports_auto_detect: false,
+          supports_class_filter: false,
+          supports_classification: true,
+          output_types: [] as OutputType[],
+          classes: undefined,
+        },
+        endpoint_config: {
+          inference_path: '/classify',
+          response_mapping: {
+            boxes_field: '',
+            scores_field: '',
+            masks_field: undefined,
+            labels_field: 'class_probabilities',
+            num_objects_field: undefined,
+          },
+        },
+      },
       yolov8: {
         capabilities: {
           supports_text_prompt: false,
@@ -314,6 +340,7 @@ export default function ModelConfigPage() {
 
   // Reset all fields to defaults
   const resetAllFields = () => {
+    setIsMockMode(false)
     setFormData({
       name: formData.name, // Keep name and URL
       endpoint_url: formData.endpoint_url,
@@ -324,6 +351,7 @@ export default function ModelConfigPage() {
         supports_bbox_prompt: false,
         supports_auto_detect: false,
         supports_class_filter: false,
+        supports_classification: false,
         output_types: ['bbox'],
         classes: undefined,
       },
@@ -401,7 +429,7 @@ export default function ModelConfigPage() {
                 </button>
               </div>
 
-              <div className="grid grid-cols-5 gap-3">
+              <div className="grid grid-cols-6 gap-3">
                 <button
                   type="button"
                   onClick={() => applyCompletePreset('yolov8')}
@@ -464,6 +492,26 @@ export default function ModelConfigPage() {
 
                 <button
                   type="button"
+                  onClick={() => applyCompletePreset('mockClassifier')}
+                  className={`p-3 bg-white border-2 rounded-lg hover:shadow-md transition-all group relative
+                    ${activePreset === 'mockClassifier'
+                      ? 'border-violet-600 bg-violet-50 shadow-lg ring-2 ring-violet-400'
+                      : 'border-violet-300 hover:border-violet-500'}`}
+                >
+                  {activePreset === 'mockClassifier' && (
+                    <div className="absolute -top-2 -right-2 bg-violet-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                      ✓
+                    </div>
+                  )}
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">🏷️</div>
+                    <div className="text-xs font-bold text-gray-900">Classifier</div>
+                    <div className="text-[10px] text-gray-600 mt-0.5">Mock Demo</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => applyCompletePreset('ultralytics')}
                   className={`p-3 bg-white border-2 rounded-lg hover:shadow-md transition-all group relative
                     ${activePreset === 'ultralytics'
@@ -509,6 +557,48 @@ export default function ModelConfigPage() {
                   Endpoint path, Response field mappings. You can customize any field after selecting a preset.
                 </p>
               </div>
+
+              {/* Mock Mode Toggle - Only show for Classifier preset */}
+              {activePreset === 'mockClassifier' && (
+                <div className="mt-4 p-4 bg-violet-50 border border-violet-200 rounded-lg">
+                  <div className="flex items-center gap-3 mb-2">
+                    <input
+                      type="checkbox"
+                      id="mock-mode-toggle"
+                      checked={isMockMode}
+                      onChange={(e) => {
+                        setIsMockMode(e.target.checked)
+                        if (e.target.checked) {
+                          setFormData(prev => ({
+                            ...prev,
+                            endpoint_url: 'internal://mock-classifier',
+                          }))
+                        } else {
+                          setFormData(prev => ({
+                            ...prev,
+                            endpoint_url: '',
+                          }))
+                        }
+                      }}
+                      className="w-4 h-4 text-violet-600 border-gray-300 rounded focus:ring-violet-500"
+                    />
+                    <label htmlFor="mock-mode-toggle" className="text-sm font-medium text-gray-900">
+                      Enable Mock Mode (no external API required)
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-600 ml-7">
+                    Predictions are generated locally using random but reproducible results.
+                    Useful for testing classification workflows without an external model.
+                  </p>
+                  {isMockMode && (
+                    <div className="mt-3 ml-7 p-2 bg-white/60 rounded border border-violet-100">
+                      <p className="text-xs text-violet-700 font-medium">
+                        Tip: Add custom classes below in the "Detectable Classes" field to define what categories your mock classifier will predict.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -662,6 +752,24 @@ export default function ModelConfigPage() {
                           <p className="text-xs text-gray-600 mt-0.5">Model can filter detections by class names</p>
                         </div>
                         <InfoTooltip content="Whether model supports filtering by class names. Enable if your model can return only specific object classes when requested." />
+                      </label>
+
+                      <label className="flex items-center gap-3 p-3 bg-violet-50 rounded-lg border border-violet-200 hover:bg-violet-100 transition-colors cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.capabilities?.supports_classification || false}
+                          onChange={() => handleCapabilityToggle('supports_classification')}
+                          className="w-4 h-4 text-violet-600 border-gray-300 rounded focus:ring-2 focus:ring-violet-500 focus:ring-offset-0"
+                        />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium text-gray-900">Image Classification</span>
+                          <p className="text-xs text-gray-600 mt-0.5">Model classifies the entire image into categories</p>
+                        </div>
+                        <InfoTooltip
+                          content="Whether your model supports whole-image classification. Enable if your model predicts a class label for the entire image rather than detecting/segmenting individual objects."
+                          example="Input: Image → Output: 'cat' (95% confidence)"
+                          note="Classification models output a single label for the whole image, unlike detection models that output bounding boxes."
+                        />
                       </label>
                     </div>
                   </div>
@@ -967,6 +1075,11 @@ export default function ModelConfigPage() {
                           {model.capabilities.supports_auto_detect && (
                             <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded">
                               Auto Detect
+                            </span>
+                          )}
+                          {model.capabilities.supports_classification && (
+                            <span className="px-2 py-1 bg-violet-100 text-violet-700 text-xs rounded">
+                              Classification
                             </span>
                           )}
                         </div>
