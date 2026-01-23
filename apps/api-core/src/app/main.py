@@ -22,6 +22,7 @@ from app.routers import images as images_router
 from app.routers import inference as inference_router
 from app.routers import jobs as jobs_router
 from app.routers import models as models_router
+from app.routers import moondream as moondream_router
 from app.routers import project_images as project_images_router
 from app.routers import projects as projects_router
 from app.routers import share as share_router
@@ -194,6 +195,7 @@ app.include_router(images_router.router)
 app.include_router(annotations_router.router)
 app.include_router(models_router.router)
 app.include_router(inference_router.router)
+app.include_router(moondream_router.router)
 app.include_router(share_router.router)
 app.include_router(shared_images_router.router)
 app.include_router(tag_categories_router.router)

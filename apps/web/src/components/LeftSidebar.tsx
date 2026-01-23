@@ -1,11 +1,14 @@
 import type { ImageData, Label, PromptMode, Tool } from '@/types/annotations'
 import type { AvailableModel } from '@/types/byom'
-import { Keyboard, Maximize2, MousePointer, Pentagon, Redo, Square, Undo, ZoomIn, ZoomOut } from 'lucide-react'
+import { FileText, Keyboard, Maximize2, MousePointer, Pentagon, Redo, Scissors, Square, Target, Undo, ZoomIn, ZoomOut } from 'lucide-react'
 import { useState } from 'react'
 import { AutoDetectPanel } from './AutoDetectPanel'
 import { BboxPromptPanel } from './BboxPromptPanel'
 import { ClassificationPanel } from './ClassificationPanel'
 import { TextPromptPanel } from './TextPromptPanel'
+import { MoondreamDetectPanel } from './MoondreamDetectPanel'
+import { MoondreamSegmentPanel } from './MoondreamSegmentPanel'
+import { MoondreamOCRPanel } from './MoondreamOCRPanel'
 import { ToolButton } from './ui/ToolButton'
 
 interface LeftSidebarProps {
@@ -44,7 +47,7 @@ interface LeftSidebarProps {
   selectedModel: AvailableModel
 }
 
-type ActiveTool = 'text-prompt' | 'bbox-prompt' | 'auto-detect' | 'classify' | null
+type ActiveTool = 'text-prompt' | 'bbox-prompt' | 'auto-detect' | 'classify' | 'moondream-detect' | 'moondream-segment' | 'moondream-ocr' | null
 
 // Custom icon for Text-Prompt tool
 function TextPromptIcon({ className }: { className?: string }) {
@@ -341,6 +344,48 @@ export function LeftSidebar({
           disabled={!selectedModel?.capabilities.supports_classification}
         />
 
+        {/* Moondream AI Tools - shown when model supports them */}
+        {(selectedModel?.capabilities.supports_detect ||
+          selectedModel?.capabilities.supports_segment ||
+          selectedModel?.capabilities.supports_ocr) && (
+          <>
+            <div className="w-full h-px bg-gray-300 my-2" />
+
+            {selectedModel?.capabilities.supports_detect && (
+              <ToolButton
+                icon={<Target className="w-5 h-5" />}
+                tooltipTitle="Moondream Detect"
+                tooltipDescription="Zero-shot object detection - describe any object to find it"
+                onClick={() => handleToolClick('moondream-detect')}
+                isActive={activeTool === 'moondream-detect'}
+                activeColor="cyan"
+              />
+            )}
+
+            {selectedModel?.capabilities.supports_segment && (
+              <ToolButton
+                icon={<Scissors className="w-5 h-5" />}
+                tooltipTitle="Moondream Segment"
+                tooltipDescription="Get precise segmentation masks for objects"
+                onClick={() => handleToolClick('moondream-segment')}
+                isActive={activeTool === 'moondream-segment'}
+                activeColor="teal"
+              />
+            )}
+
+            {selectedModel?.capabilities.supports_ocr && (
+              <ToolButton
+                icon={<FileText className="w-5 h-5" />}
+                tooltipTitle="Moondream OCR"
+                tooltipDescription="Extract text from images (OCR)"
+                onClick={() => handleToolClick('moondream-ocr')}
+                isActive={activeTool === 'moondream-ocr'}
+                activeColor="indigo"
+              />
+            )}
+          </>
+        )}
+
         {/* Spacer to push controls to bottom */}
         <div className="flex-1" />
 
@@ -455,6 +500,36 @@ export function LeftSidebar({
           {activeTool === 'classify' && (
             <ClassificationPanel
               currentImage={currentImage}
+              onClose={handlePanelClose}
+              selectedModel={selectedModel}
+            />
+          )}
+          {activeTool === 'moondream-detect' && (
+            <MoondreamDetectPanel
+              labels={labels}
+              selectedLabelId={selectedLabelId}
+              currentImage={currentImage}
+              onAnnotationsCreated={onAnnotationsCreated}
+              onClose={handlePanelClose}
+              selectedModel={selectedModel}
+            />
+          )}
+          {activeTool === 'moondream-segment' && (
+            <MoondreamSegmentPanel
+              labels={labels}
+              selectedLabelId={selectedLabelId}
+              currentImage={currentImage}
+              onAnnotationsCreated={onAnnotationsCreated}
+              onClose={handlePanelClose}
+              selectedModel={selectedModel}
+            />
+          )}
+          {activeTool === 'moondream-ocr' && (
+            <MoondreamOCRPanel
+              labels={labels}
+              selectedLabelId={selectedLabelId}
+              currentImage={currentImage}
+              onAnnotationsCreated={onAnnotationsCreated}
               onClose={handlePanelClose}
               selectedModel={selectedModel}
             />

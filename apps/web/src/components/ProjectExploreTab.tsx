@@ -64,6 +64,7 @@ import { ExportWizardModal } from './export';
 import type { FilterSnapshot } from '@/types/export';
 import { PixelGridLoader } from '@/components/ui/animate';
 import { BatchClassifyModal } from './explore/BatchClassifyModal';
+import { AutoTagModal } from './explore/AutoTagModal';
 import { useModelRegistry } from '../hooks/useModelRegistry';
 // Analytics Panel System
 import { AnalyticsPanelContext, AnalyticsPanelProvider } from '@/contexts/AnalyticsPanelContext';
@@ -261,6 +262,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
   const [showImageModal, setShowImageModal] = useState<SharedImage | null>(null);
   const [showExportWizard, setShowExportWizard] = useState(false);
   const [showClassifyModal, setShowClassifyModal] = useState(false);
+  const [showAutoTagModal, setShowAutoTagModal] = useState(false);
 
   // Bulk tag confirmation state (1 tag per label rule)
   const [pendingBulkTag, setPendingBulkTag] = useState<{
@@ -1399,6 +1401,14 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 Add Tags
               </button>
               <button
+                onClick={() => setShowAutoTagModal(true)}
+                className="px-4 py-2 bg-cyan-500/60 hover:bg-cyan-500/80 backdrop-blur-sm text-white text-sm font-medium rounded-full flex items-center gap-1.5 transition-all shadow-lg shadow-cyan-500/30"
+                title="Auto-tag with Moondream AI"
+              >
+                <Sparkles className="w-4 h-4" />
+                Auto-Tag
+              </button>
+              <button
                 onClick={() => setShowClassifyModal(true)}
                 className="px-4 py-2 bg-violet-500/60 hover:bg-violet-500/80 backdrop-blur-sm text-white text-sm font-medium rounded-full flex items-center gap-1.5 transition-all shadow-lg shadow-violet-500/30"
                 title="AI Classification"
@@ -1685,6 +1695,15 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       <BatchClassifyModal
         isOpen={showClassifyModal}
         onClose={() => setShowClassifyModal(false)}
+        projectId={Number(projectId)}
+        selectedImageIds={Array.from(selectedImages)}
+        availableModels={allModels}
+      />
+
+      {/* Auto-Tag Modal */}
+      <AutoTagModal
+        isOpen={showAutoTagModal}
+        onClose={() => setShowAutoTagModal(false)}
         projectId={Number(projectId)}
         selectedImageIds={Array.from(selectedImages)}
         availableModels={allModels}

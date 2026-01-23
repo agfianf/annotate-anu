@@ -19,6 +19,7 @@ const SAM3_BUILTIN: AvailableModel = {
   id: 'sam3',
   name: 'SAM3 (Built-in)',
   type: 'builtin',
+  provider: 'sam3',
   endpoint_url: API_URL,
   capabilities: {
     supports_text_prompt: true,
@@ -31,6 +32,27 @@ const SAM3_BUILTIN: AvailableModel = {
   },
   is_healthy: true,
   description: 'Segment Anything Model 3 - General purpose segmentation',
+}
+
+/**
+ * Detect provider type from model configuration
+ */
+function detectProvider(model: RegisteredModel): 'sam3' | 'byom' | 'moondream' {
+  // Check for Moondream by endpoint URL pattern
+  if (model.endpoint_url.includes('moondream.ai') ||
+      model.endpoint_url.includes('moondream')) {
+    return 'moondream'
+  }
+
+  // Check for Moondream-specific capabilities
+  const caps = model.capabilities
+  if (caps && (caps.supports_query || caps.supports_detect || caps.supports_segment ||
+      caps.supports_ocr || caps.supports_caption || caps.supports_point)) {
+    return 'moondream'
+  }
+
+  // Default to BYOM for external models
+  return 'byom'
 }
 
 // Note: Mock Classifier is no longer built-in. Users must register it via Model Configuration
@@ -78,31 +100,35 @@ export function useModelRegistry(allowedModelIds?: string[] | null) {
   }
 
   /**
-   * Compute all available models (SAM3 + BYOM), filtered by project if applicable
+   * Compute all available models (SAM3 + BYOM + Moondream), filtered by project if applicable
    */
   const allModels: AvailableModel[] = useMemo(() => {
-    const byomModels: AvailableModel[] = registeredModels
+    const externalModels: AvailableModel[] = registeredModels
       .filter((m) => m.is_active)
-      .map((m) => ({
-        id: m.id,
-        name: m.name,
-        type: 'byom' as const,
-        endpoint_url: m.endpoint_url,
-        auth_token: undefined, // Auth token not exposed in response
-        capabilities: m.capabilities || {
-          supports_text_prompt: false,
-          supports_bbox_prompt: false,
-          supports_auto_detect: true,
-          supports_class_filter: false,
-          supports_classification: false,
-          output_types: ['bbox'],
-        },
-        is_healthy: m.is_healthy,
-        description: m.description || undefined,
-      }))
+      .map((m) => {
+        const provider = detectProvider(m)
+        return {
+          id: m.id,
+          name: m.name,
+          type: 'byom' as const,
+          provider,
+          endpoint_url: m.endpoint_url,
+          auth_token: undefined, // Auth token not exposed in response
+          capabilities: m.capabilities || {
+            supports_text_prompt: false,
+            supports_bbox_prompt: false,
+            supports_auto_detect: true,
+            supports_class_filter: false,
+            supports_classification: false,
+            output_types: ['bbox'],
+          },
+          is_healthy: m.is_healthy,
+          description: m.description || undefined,
+        }
+      })
 
-    // Combine SAM3 + BYOM models (mock classifiers must be registered via Model Config)
-    const allAvailable = [SAM3_BUILTIN, ...byomModels]
+    // Combine SAM3 + external models (BYOM and Moondream)
+    const allAvailable = [SAM3_BUILTIN, ...externalModels]
 
     // Job mode with no models configured - return empty array
     if (allowedModelIds === null) {

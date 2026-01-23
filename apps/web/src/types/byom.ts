@@ -4,6 +4,7 @@
 
 export type OutputType = 'bbox' | 'polygon' | 'mask'
 export type ModelType = 'detection' | 'segmentation' | 'hybrid'
+export type ModelProvider = 'sam3' | 'byom' | 'moondream'
 
 export interface ModelCapabilities {
   supports_text_prompt: boolean
@@ -11,10 +12,23 @@ export interface ModelCapabilities {
   supports_auto_detect: boolean
   supports_class_filter: boolean
   supports_classification: boolean
+  // Moondream-specific capabilities
+  supports_query?: boolean      // VQA (visual question answering)
+  supports_detect?: boolean     // Zero-shot detection with object name
+  supports_segment?: boolean    // SVG path segmentation
+  supports_ocr?: boolean        // Text extraction
+  supports_caption?: boolean    // Image captioning
+  supports_point?: boolean      // Object center coordinates
   output_types: OutputType[]
   classes?: string[]
   model_type?: ModelType  // For easy UI logic
   is_mock?: boolean  // Indicates locally-mocked model (no external API)
+}
+
+export interface MoondreamConfig {
+  hostingType: 'cloud' | 'self-hosted'
+  apiKey?: string
+  baseUrl?: string
 }
 
 export interface ResponseMapping {
@@ -83,8 +97,10 @@ export interface AvailableModel {
   id: string
   name: string
   type: 'builtin' | 'byom'
+  provider?: ModelProvider  // sam3, byom, or moondream
   endpoint_url: string
   auth_token?: string  // Only for BYOM models
+  moondream_config?: MoondreamConfig  // Only for Moondream models
   capabilities: ModelCapabilities
   is_healthy: boolean
   description?: string
@@ -158,4 +174,66 @@ export interface ClassificationResult {
 
 export interface ClassificationParams extends BaseInferenceParams {
   top_k?: number
+}
+
+/**
+ * Moondream-specific types
+ */
+export interface MoondreamDetectResult {
+  objects: Array<{
+    x_min: number
+    y_min: number
+    x_max: number
+    y_max: number
+  }>
+}
+
+export interface MoondreamSegmentResult {
+  path: string  // SVG path data
+  bbox: {
+    x_min: number
+    y_min: number
+    x_max: number
+    y_max: number
+  }
+}
+
+export interface MoondreamPointResult {
+  points: Array<{
+    x: number
+    y: number
+  }>
+}
+
+export interface MoondreamQueryResult {
+  answer: string
+}
+
+export interface MoondreamCaptionResult {
+  caption: string
+}
+
+export interface MoondreamDetectParams {
+  image: File
+  object: string
+}
+
+export interface MoondreamSegmentParams {
+  image: File
+  object: string
+}
+
+export interface MoondreamQueryParams {
+  image: File
+  question: string
+}
+
+export interface MoondreamCaptionParams {
+  image: File
+  length?: 'short' | 'long'
+}
+
+export interface MoondreamPointParams {
+  image: File
+  object: string
 }

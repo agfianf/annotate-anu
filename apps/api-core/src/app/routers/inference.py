@@ -17,6 +17,7 @@ from app.schemas.inference.response import ClassificationResponse, InferenceResp
 from app.schemas.models.base import ModelBase, ModelCapabilities
 from app.services.inference_proxy import InferenceProxyService
 from app.services.mock_classifier import IMAGENET_SUBSET, mock_classifier
+from app.services.mock_detector import COCO_SUBSET
 
 router = APIRouter(prefix="/api/v1/inference", tags=["Inference Proxy"])
 
@@ -88,6 +89,70 @@ def _get_mock_classifier_model() -> ModelBase:
     )
 
 
+def _get_mock_detector_model() -> ModelBase:
+    """Create pseudo-model for built-in mock detector.
+
+    Returns
+    -------
+    ModelBase
+        Mock detector model configuration
+    """
+    now = datetime.now()
+    return ModelBase(
+        id="mock-detector",
+        name="Mock Detector (Demo)",
+        endpoint_url="internal://mock-detector",
+        auth_token=None,
+        capabilities=ModelCapabilities(
+            supports_text_prompt=False,
+            supports_bbox_prompt=False,
+            supports_auto_detect=True,
+            supports_class_filter=True,
+            supports_classification=False,
+            output_types=["bbox"],
+            classes=COCO_SUBSET,
+        ),
+        description="Mock detector for testing - generates random but reproducible bounding boxes",
+        is_active=True,
+        is_healthy=True,
+        last_health_check=now,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _get_mock_segmenter_model() -> ModelBase:
+    """Create pseudo-model for built-in mock segmenter.
+
+    Returns
+    -------
+    ModelBase
+        Mock segmenter model configuration
+    """
+    now = datetime.now()
+    return ModelBase(
+        id="mock-segmenter",
+        name="Mock Segmenter (Demo)",
+        endpoint_url="internal://mock-segmenter",
+        auth_token=None,
+        capabilities=ModelCapabilities(
+            supports_text_prompt=True,
+            supports_bbox_prompt=True,
+            supports_auto_detect=True,
+            supports_class_filter=True,
+            supports_classification=False,
+            output_types=["bbox", "polygon"],
+            classes=COCO_SUBSET,
+        ),
+        description="Mock segmenter for testing - generates random but reproducible polygon masks",
+        is_active=True,
+        is_healthy=True,
+        last_health_check=now,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 async def get_model_by_id(
     model_id: str,
     request: Request,
@@ -120,6 +185,12 @@ async def get_model_by_id(
 
     if model_id == "mock-classifier":
         return _get_mock_classifier_model()
+
+    if model_id == "mock-detector":
+        return _get_mock_detector_model()
+
+    if model_id == "mock-segmenter":
+        return _get_mock_segmenter_model()
 
     # Get from database
     if connection is None:

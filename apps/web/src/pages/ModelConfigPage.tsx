@@ -195,7 +195,7 @@ export default function ModelConfigPage() {
   }
 
   // Complete presets for all form fields (capabilities + endpoint + response mapping)
-  const applyCompletePreset = (preset: 'yolov8' | 'yolov11' | 'sam3' | 'ultralytics' | 'custom' | 'mockClassifier') => {
+  const applyCompletePreset = (preset: 'yolov8' | 'yolov11' | 'sam3' | 'ultralytics' | 'custom' | 'mockClassifier' | 'mockDetector' | 'mockSegmenter' | 'moondream') => {
     const presets = {
       mockClassifier: {
         capabilities: {
@@ -298,6 +298,48 @@ export default function ModelConfigPage() {
           },
         },
       },
+      mockDetector: {
+        capabilities: {
+          supports_text_prompt: false,
+          supports_bbox_prompt: false,
+          supports_auto_detect: true,
+          supports_class_filter: true,
+          supports_classification: false,
+          output_types: ['bbox'] as OutputType[],
+          classes: undefined,
+        },
+        endpoint_config: {
+          inference_path: '/detect',
+          response_mapping: {
+            boxes_field: 'boxes',
+            scores_field: 'scores',
+            masks_field: undefined,
+            labels_field: 'labels',
+            num_objects_field: undefined,
+          },
+        },
+      },
+      mockSegmenter: {
+        capabilities: {
+          supports_text_prompt: true,
+          supports_bbox_prompt: true,
+          supports_auto_detect: true,
+          supports_class_filter: true,
+          supports_classification: false,
+          output_types: ['bbox', 'polygon'] as OutputType[],
+          classes: undefined,
+        },
+        endpoint_config: {
+          inference_path: '/segment',
+          response_mapping: {
+            boxes_field: 'boxes',
+            scores_field: 'scores',
+            masks_field: 'masks',
+            labels_field: 'labels',
+            num_objects_field: undefined,
+          },
+        },
+      },
       custom: {
         capabilities: {
           supports_text_prompt: false,
@@ -315,6 +357,34 @@ export default function ModelConfigPage() {
             masks_field: 'detections.masks',
             labels_field: 'detections.classes',
             num_objects_field: 'detections.count',
+          },
+        },
+      },
+      moondream: {
+        capabilities: {
+          supports_text_prompt: false,
+          supports_bbox_prompt: false,
+          supports_auto_detect: false,
+          supports_class_filter: false,
+          supports_classification: false,
+          // Moondream-specific capabilities
+          supports_query: true,
+          supports_detect: true,
+          supports_segment: true,
+          supports_ocr: true,
+          supports_caption: true,
+          supports_point: true,
+          output_types: ['bbox', 'polygon'] as OutputType[],
+          classes: undefined,
+        },
+        endpoint_config: {
+          inference_path: '/v1',  // Moondream uses /v1/detect, /v1/segment, etc.
+          response_mapping: {
+            boxes_field: 'objects',
+            scores_field: '',  // Moondream doesn't return confidence scores
+            masks_field: 'path',
+            labels_field: '',
+            num_objects_field: undefined,
           },
         },
       },
@@ -512,6 +582,46 @@ export default function ModelConfigPage() {
 
                 <button
                   type="button"
+                  onClick={() => applyCompletePreset('mockDetector')}
+                  className={`p-3 bg-white border-2 rounded-lg hover:shadow-md transition-all group relative
+                    ${activePreset === 'mockDetector'
+                      ? 'border-orange-600 bg-orange-50 shadow-lg ring-2 ring-orange-400'
+                      : 'border-orange-300 hover:border-orange-500'}`}
+                >
+                  {activePreset === 'mockDetector' && (
+                    <div className="absolute -top-2 -right-2 bg-orange-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                      ✓
+                    </div>
+                  )}
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">🎯</div>
+                    <div className="text-xs font-bold text-gray-900">Detector</div>
+                    <div className="text-[10px] text-gray-600 mt-0.5">Mock Demo</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => applyCompletePreset('mockSegmenter')}
+                  className={`p-3 bg-white border-2 rounded-lg hover:shadow-md transition-all group relative
+                    ${activePreset === 'mockSegmenter'
+                      ? 'border-cyan-600 bg-cyan-50 shadow-lg ring-2 ring-cyan-400'
+                      : 'border-cyan-300 hover:border-cyan-500'}`}
+                >
+                  {activePreset === 'mockSegmenter' && (
+                    <div className="absolute -top-2 -right-2 bg-cyan-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                      ✓
+                    </div>
+                  )}
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">✂️</div>
+                    <div className="text-xs font-bold text-gray-900">Segmenter</div>
+                    <div className="text-[10px] text-gray-600 mt-0.5">Mock Demo</div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => applyCompletePreset('ultralytics')}
                   className={`p-3 bg-white border-2 rounded-lg hover:shadow-md transition-all group relative
                     ${activePreset === 'ultralytics'
@@ -549,6 +659,26 @@ export default function ModelConfigPage() {
                     <div className="text-[10px] text-gray-600 mt-0.5">Generic API</div>
                   </div>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => applyCompletePreset('moondream')}
+                  className={`p-3 bg-white border-2 rounded-lg hover:shadow-md transition-all group relative
+                    ${activePreset === 'moondream'
+                      ? 'border-cyan-600 bg-cyan-50 shadow-lg ring-2 ring-cyan-400'
+                      : 'border-cyan-300 hover:border-cyan-500'}`}
+                >
+                  {activePreset === 'moondream' && (
+                    <div className="absolute -top-2 -right-2 bg-cyan-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                      ✓
+                    </div>
+                  )}
+                  <div className="text-center">
+                    <div className="text-2xl mb-1">🌙</div>
+                    <div className="text-xs font-bold text-gray-900">Moondream</div>
+                    <div className="text-[10px] text-gray-600 mt-0.5">VLM + OCR</div>
+                  </div>
+                </button>
               </div>
 
               <div className="mt-3 p-2 bg-white/70 rounded-lg">
@@ -558,8 +688,8 @@ export default function ModelConfigPage() {
                 </p>
               </div>
 
-              {/* Mock Mode Toggle - Only show for Classifier preset */}
-              {activePreset === 'mockClassifier' && (
+              {/* Mock Mode Toggle - Show for Classifier, Detector, Segmenter presets */}
+              {(activePreset === 'mockClassifier' || activePreset === 'mockDetector' || activePreset === 'mockSegmenter') && (
                 <div className="mt-4 p-4 bg-violet-50 border border-violet-200 rounded-lg">
                   <div className="flex items-center gap-3 mb-2">
                     <input
@@ -569,9 +699,14 @@ export default function ModelConfigPage() {
                       onChange={(e) => {
                         setIsMockMode(e.target.checked)
                         if (e.target.checked) {
+                          const mockUrl = activePreset === 'mockClassifier'
+                            ? 'internal://mock-classifier'
+                            : activePreset === 'mockDetector'
+                            ? 'internal://mock-detector'
+                            : 'internal://mock-segmenter'
                           setFormData(prev => ({
                             ...prev,
-                            endpoint_url: 'internal://mock-classifier',
+                            endpoint_url: mockUrl,
                           }))
                         } else {
                           setFormData(prev => ({
@@ -587,16 +722,52 @@ export default function ModelConfigPage() {
                     </label>
                   </div>
                   <p className="text-xs text-gray-600 ml-7">
-                    Predictions are generated locally using random but reproducible results.
-                    Useful for testing classification workflows without an external model.
+                    {activePreset === 'mockClassifier'
+                      ? 'Predictions are generated locally using random but reproducible results.'
+                      : activePreset === 'mockDetector'
+                      ? 'Detections are generated locally with realistic bounding boxes.'
+                      : 'Segmentations are generated locally with realistic polygon masks.'}
                   </p>
                   {isMockMode && (
                     <div className="mt-3 ml-7 p-2 bg-white/60 rounded border border-violet-100">
                       <p className="text-xs text-violet-700 font-medium">
-                        Tip: Add custom classes below in the "Detectable Classes" field to define what categories your mock classifier will predict.
+                        Tip: Add custom classes below in "Detectable Classes" to define what objects
+                        your mock {activePreset === 'mockClassifier' ? 'classifier' : activePreset === 'mockDetector' ? 'detector' : 'segmenter'} will recognize.
                       </p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Moondream Configuration Section */}
+              {activePreset === 'moondream' && (
+                <div className="mt-4 p-4 bg-cyan-50 border border-cyan-200 rounded-lg">
+                  <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    🌙 Moondream Configuration
+                  </h4>
+                  <div className="space-y-3">
+                    <p className="text-xs text-cyan-700">
+                      Moondream is a Vision Language Model supporting detection, segmentation, OCR, and visual question answering.
+                    </p>
+                    <div className="p-3 bg-white/60 rounded border border-cyan-100">
+                      <p className="text-xs text-gray-700 mb-2">
+                        <strong>Cloud API:</strong> Use <code className="px-1 py-0.5 bg-gray-100 rounded">https://api.moondream.ai</code> as the endpoint URL
+                        and add your API key in the Bearer Token field.
+                      </p>
+                      <p className="text-xs text-gray-700 mb-2">
+                        <strong>Self-hosted:</strong> Use your local instance URL (e.g., <code className="px-1 py-0.5 bg-gray-100 rounded">http://localhost:8080</code>).
+                      </p>
+                      <p className="text-xs text-cyan-600 mt-2">
+                        Get your free API key at <a href="https://console.moondream.ai" target="_blank" rel="noopener noreferrer" className="underline hover:text-cyan-700">console.moondream.ai</a> (5,000 requests/day free)
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <span className="px-2 py-1 bg-cyan-100 text-cyan-700 text-xs rounded">🎯 Zero-shot Detection</span>
+                      <span className="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded">✂️ Segmentation</span>
+                      <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded">📖 OCR</span>
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">💬 VQA</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -771,6 +942,68 @@ export default function ModelConfigPage() {
                           note="Classification models output a single label for the whole image, unlike detection models that output bounding boxes."
                         />
                       </label>
+
+                      {/* Moondream-specific capabilities */}
+                      {(formData.capabilities?.supports_detect || formData.capabilities?.supports_segment ||
+                        formData.capabilities?.supports_ocr || formData.capabilities?.supports_query || activePreset === 'moondream') && (
+                        <>
+                          <div className="w-full border-t border-cyan-200 my-2 pt-2">
+                            <span className="text-xs font-semibold text-cyan-700">🌙 Moondream Capabilities</span>
+                          </div>
+
+                          <label className="flex items-center gap-3 p-3 bg-cyan-50 rounded-lg border border-cyan-200 hover:bg-cyan-100 transition-colors cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.capabilities?.supports_detect || false}
+                              onChange={() => handleCapabilityToggle('supports_detect' as any)}
+                              className="w-4 h-4 text-cyan-600 border-gray-300 rounded focus:ring-2 focus:ring-cyan-500 focus:ring-offset-0"
+                            />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-gray-900">🎯 Zero-shot Detection</span>
+                              <p className="text-xs text-gray-600 mt-0.5">Detect any object by text description (e.g., &quot;red car&quot;, &quot;person with hat&quot;)</p>
+                            </div>
+                          </label>
+
+                          <label className="flex items-center gap-3 p-3 bg-teal-50 rounded-lg border border-teal-200 hover:bg-teal-100 transition-colors cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.capabilities?.supports_segment || false}
+                              onChange={() => handleCapabilityToggle('supports_segment' as any)}
+                              className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-2 focus:ring-teal-500 focus:ring-offset-0"
+                            />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-gray-900">✂️ Object Segmentation</span>
+                              <p className="text-xs text-gray-600 mt-0.5">Get polygon masks for objects by description</p>
+                            </div>
+                          </label>
+
+                          <label className="flex items-center gap-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200 hover:bg-indigo-100 transition-colors cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.capabilities?.supports_ocr || false}
+                              onChange={() => handleCapabilityToggle('supports_ocr' as any)}
+                              className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:ring-offset-0"
+                            />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-gray-900">📖 OCR (Text Extraction)</span>
+                              <p className="text-xs text-gray-600 mt-0.5">Extract text from images, documents, signs</p>
+                            </div>
+                          </label>
+
+                          <label className="flex items-center gap-3 p-3 bg-pink-50 rounded-lg border border-pink-200 hover:bg-pink-100 transition-colors cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.capabilities?.supports_query || false}
+                              onChange={() => handleCapabilityToggle('supports_query' as any)}
+                              className="w-4 h-4 text-pink-600 border-gray-300 rounded focus:ring-2 focus:ring-pink-500 focus:ring-offset-0"
+                            />
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-gray-900">💬 Visual Q&A (VQA)</span>
+                              <p className="text-xs text-gray-600 mt-0.5">Ask questions about image content, auto-tagging</p>
+                            </div>
+                          </label>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -1080,6 +1313,27 @@ export default function ModelConfigPage() {
                           {model.capabilities.supports_classification && (
                             <span className="px-2 py-1 bg-violet-100 text-violet-700 text-xs rounded">
                               Classification
+                            </span>
+                          )}
+                          {/* Moondream-specific capabilities */}
+                          {model.capabilities.supports_detect && (
+                            <span className="px-2 py-1 bg-cyan-100 text-cyan-700 text-xs rounded">
+                              Detect
+                            </span>
+                          )}
+                          {model.capabilities.supports_segment && (
+                            <span className="px-2 py-1 bg-teal-100 text-teal-700 text-xs rounded">
+                              Segment
+                            </span>
+                          )}
+                          {model.capabilities.supports_ocr && (
+                            <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded">
+                              OCR
+                            </span>
+                          )}
+                          {model.capabilities.supports_query && (
+                            <span className="px-2 py-1 bg-pink-100 text-pink-700 text-xs rounded">
+                              VQA
                             </span>
                           )}
                         </div>

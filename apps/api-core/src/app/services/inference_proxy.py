@@ -79,19 +79,32 @@ class InferenceProxyService:
                 image_bytes, image_filename, image_content_type,
                 text_prompt, threshold, mask_threshold, simplify_tolerance, return_visualization
             )
-        else:
-            return await self._byom_inference(
-                model,
-                image_bytes,
-                image_filename,
-                image_content_type,
-                "text",
+
+        # Check if this is a mock segmenter
+        is_mock_segmenter = (
+            model.id == "mock-segmenter"
+            or model.endpoint_url == "internal://mock-segmenter"
+        )
+
+        if is_mock_segmenter:
+            return await self._mock_segment(
+                model, image_bytes, "text",
                 text_prompt=text_prompt,
                 threshold=threshold,
-                mask_threshold=mask_threshold,
-                simplify_tolerance=simplify_tolerance,
-                return_visualization=return_visualization,
             )
+
+        return await self._byom_inference(
+            model,
+            image_bytes,
+            image_filename,
+            image_content_type,
+            "text",
+            text_prompt=text_prompt,
+            threshold=threshold,
+            mask_threshold=mask_threshold,
+            simplify_tolerance=simplify_tolerance,
+            return_visualization=return_visualization,
+        )
 
     async def bbox_prompt(
         self,
@@ -136,19 +149,32 @@ class InferenceProxyService:
                 image_bytes, image_filename, image_content_type,
                 bounding_boxes, threshold, mask_threshold, simplify_tolerance, return_visualization
             )
-        else:
-            return await self._byom_inference(
-                model,
-                image_bytes,
-                image_filename,
-                image_content_type,
-                "bbox",
+
+        # Check if this is a mock segmenter
+        is_mock_segmenter = (
+            model.id == "mock-segmenter"
+            or model.endpoint_url == "internal://mock-segmenter"
+        )
+
+        if is_mock_segmenter:
+            return await self._mock_segment(
+                model, image_bytes, "bbox",
                 bounding_boxes=bounding_boxes,
                 threshold=threshold,
-                mask_threshold=mask_threshold,
-                simplify_tolerance=simplify_tolerance,
-                return_visualization=return_visualization,
             )
+
+        return await self._byom_inference(
+            model,
+            image_bytes,
+            image_filename,
+            image_content_type,
+            "bbox",
+            bounding_boxes=bounding_boxes,
+            threshold=threshold,
+            mask_threshold=mask_threshold,
+            simplify_tolerance=simplify_tolerance,
+            return_visualization=return_visualization,
+        )
 
     async def auto_detect(
         self,
@@ -191,6 +217,30 @@ class InferenceProxyService:
         """
         if model.id == "sam3":
             raise ValueError("SAM3 does not support auto-detection")
+
+        # Check if this is a mock detector or mock segmenter
+        is_mock_detector = (
+            model.id == "mock-detector"
+            or model.endpoint_url == "internal://mock-detector"
+        )
+        is_mock_segmenter = (
+            model.id == "mock-segmenter"
+            or model.endpoint_url == "internal://mock-segmenter"
+        )
+
+        if is_mock_detector:
+            return await self._mock_detect(
+                model, image_bytes,
+                threshold=threshold,
+                class_filter=class_filter,
+            )
+
+        if is_mock_segmenter:
+            return await self._mock_segment(
+                model, image_bytes, "auto",
+                threshold=threshold,
+                class_filter=class_filter,
+            )
 
         return await self._byom_inference(
             model,
@@ -266,6 +316,116 @@ class InferenceProxyService:
             image_filename,
             image_content_type,
             top_k,
+        )
+
+    async def _mock_detect(
+        self,
+        model: ModelBase,
+        image_bytes: bytes,
+        threshold: float = 0.5,
+        class_filter: list[str] | None = None,
+    ) -> InferenceResponse:
+        """Handle mock detection inference.
+
+        Parameters
+        ----------
+        model : ModelBase
+            Mock detector model (used for custom classes)
+        image_bytes : bytes
+            Image file bytes
+        threshold : float
+            Detection confidence threshold
+        class_filter : list[str] | None
+            Optional list of classes to filter
+
+        Returns
+        -------
+        InferenceResponse
+            Mock detection result with bounding boxes
+        """
+        from io import BytesIO
+
+        from PIL import Image
+
+        from app.services.mock_detector import MockDetectorService
+
+        # Get image dimensions
+        img = Image.open(BytesIO(image_bytes))
+        width, height = img.size
+
+        # Get custom classes from model capabilities
+        custom_classes = None
+        if model.capabilities and model.capabilities.classes:
+            custom_classes = model.capabilities.classes
+
+        detector = MockDetectorService(class_list=custom_classes)
+        return await detector.detect(
+            image_bytes,
+            width,
+            height,
+            threshold=threshold,
+            class_filter=class_filter,
+        )
+
+    async def _mock_segment(
+        self,
+        model: ModelBase,
+        image_bytes: bytes,
+        mode: str,
+        text_prompt: str | None = None,
+        bounding_boxes: list[list[float]] | None = None,
+        threshold: float = 0.5,
+        class_filter: list[str] | None = None,
+    ) -> InferenceResponse:
+        """Handle mock segmentation inference.
+
+        Parameters
+        ----------
+        model : ModelBase
+            Mock segmenter model (used for custom classes)
+        image_bytes : bytes
+            Image file bytes
+        mode : str
+            Inference mode: 'auto', 'text', or 'bbox'
+        text_prompt : str | None
+            Text prompt for 'text' mode
+        bounding_boxes : list[list[float]] | None
+            Bounding boxes for 'bbox' mode
+        threshold : float
+            Detection confidence threshold
+        class_filter : list[str] | None
+            Optional list of classes to filter (for 'auto' mode)
+
+        Returns
+        -------
+        InferenceResponse
+            Mock segmentation result with polygon masks
+        """
+        from io import BytesIO
+
+        from PIL import Image
+
+        from app.services.mock_segmenter import MockSegmenterService
+
+        # Get image dimensions
+        img = Image.open(BytesIO(image_bytes))
+        width, height = img.size
+
+        # Get custom classes from model capabilities
+        custom_classes = None
+        if model.capabilities and model.capabilities.classes:
+            custom_classes = model.capabilities.classes
+
+        segmenter = MockSegmenterService(class_list=custom_classes)
+        return await segmenter.segment(
+            image_bytes,
+            width,
+            height,
+            mode,
+            text_prompt=text_prompt,
+            bounding_boxes=bounding_boxes,
+            threshold=threshold,
+            class_filter=class_filter,
         )
 
     async def _byom_classify(
