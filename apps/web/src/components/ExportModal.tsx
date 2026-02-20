@@ -25,19 +25,30 @@ export function ExportModal({
 }: ExportModalProps) {
   const [format, setFormat] = useState<ExportFormat>('coco')
   const [pathPrefix, setPathPrefix] = useState('')
+  const [trainSplit, setTrainSplit] = useState(80)
+  const [valSplit, setValSplit] = useState(10)
+  const [testSplit, setTestSplit] = useState(10)
+
+  // Calculate actual test split to ensure total is 100%
+  const actualTestSplit = 100 - trainSplit - valSplit
 
   const handleExport = async () => {
+    const splitConfig = {
+      train: trainSplit / 100,
+      val: valSplit / 100,
+      test: actualTestSplit / 100,
+    }
+
     if (format === 'coco') {
-      // Add path prefix to image filenames if provided
       const modifiedImages = pathPrefix
         ? images.map(img => ({ ...img, name: pathPrefix + img.name }))
         : images
 
       const cocoData = exportToCOCO(modifiedImages, annotations, labels)
-      await downloadCOCO(cocoData, 'annotations.json')
+      await downloadCOCO(cocoData, modifiedImages, splitConfig)
     } else {
       const yoloData = exportToYOLO(images, annotations, labels)
-      await downloadYOLOFiles(yoloData)
+      await downloadYOLOFiles(yoloData, images, splitConfig)
     }
 
     onClose()
@@ -135,6 +146,61 @@ export function ExportModal({
           </div>
         </div>
 
+        {/* Train/Val/Test Split */}
+        <div>
+          <label className="block text-sm font-medium text-gray-800 mb-3">
+            Dataset Split (Train/Val/Test)
+          </label>
+          <div className="space-y-3">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm text-gray-700">Train</label>
+                <span className="text-sm font-medium text-emerald-600">{trainSplit}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={trainSplit}
+                onChange={(e) => setTrainSplit(Number(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm text-gray-700">Validation</label>
+                <span className="text-sm font-medium text-emerald-600">{valSplit}%</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={valSplit}
+                onChange={(e) => setValSplit(Number(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm text-gray-700">Test (auto-calculated)</label>
+                <span className="text-sm font-medium text-emerald-600">{actualTestSplit}%</span>
+              </div>
+              <div className="h-2 bg-gray-200 rounded-lg relative overflow-hidden">
+                <div
+                  className="absolute left-0 h-full bg-emerald-500 transition-all"
+                  style={{ width: `${actualTestSplit}%` }}
+                />
+              </div>
+            </div>
+            {actualTestSplit < 0 && (
+              <p className="text-xs text-red-600">⚠ Total cannot exceed 100%. Reduce train or val split.</p>
+            )}
+            <p className="text-xs text-gray-600">
+              Images will be randomly split into train ({trainSplit}%), validation ({valSplit}%), and test ({actualTestSplit}%) sets.
+            </p>
+          </div>
+        </div>
+
         {/* Path Prefix */}
         <div>
           <label htmlFor="pathPrefix" className="block text-sm font-medium text-gray-800 mb-2">
@@ -174,11 +240,11 @@ export function ExportModal({
           </Button>
           <Button
             onClick={handleExport}
-            disabled={totalAnnotations === 0}
+            disabled={totalAnnotations === 0 || actualTestSplit < 0}
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             <Download className="w-4 h-4 mr-2" />
-            Export {format.toUpperCase()}
+            Export {format.toUpperCase()} Dataset
           </Button>
         </div>
       </div>

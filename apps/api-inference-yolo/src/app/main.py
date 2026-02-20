@@ -42,16 +42,18 @@ async def lifespan(app: FastAPI):
             "sam3_inference": sam3_inference,
         }
 
-        # Shutdown
-        logger.info("Shutting down application")
-        # Cleanup if needed
-        logger.info("Application shutdown complete")
-
         logger.info("Application startup complete")
 
     except Exception as e:
         logger.error(f"Failed to initialize application: {e}")
         raise
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down application")
+    # Cleanup if needed
+    logger.info("Application shutdown complete")
 
 
 # Create FastAPI app

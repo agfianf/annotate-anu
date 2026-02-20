@@ -31,16 +31,22 @@ const ShortcutsHelpModal: React.FC<ShortcutsHelpModalProps> = ({ isOpen, onClose
       title: '📝 Editing',
       shortcuts: [
         { keys: ['N'], description: 'New annotation (rectangle)' },
+        { keys: ['Ctrl', 'D'], description: 'Duplicate selected annotation' },
         { keys: ['Delete'], description: 'Delete selected annotation' },
-        { keys: ['Backspace'], description: 'Delete selected annotation' },
+        { keys: ['BACKSPACE'], description: 'Delete selected annotation' },
         { keys: ['Escape'], description: 'Cancel current drawing' },
+        { keys: ['H'], description: 'Toggle visibility of selected' },
+        { keys: ['L'], description: 'Lock/Unlock selected' },
+        { keys: ['Ctrl', 'S'], description: 'Save changes' },
       ],
     },
     {
       title: '🖼️ Image Navigation',
       shortcuts: [
         { keys: ['F'], description: 'Next image' },
+        { keys: ['➡️'], description: 'Next image' },
         { keys: ['D'], description: 'Previous image' },
+        { keys: ['⬅️'], description: 'Previous image' },
       ],
     },
     {

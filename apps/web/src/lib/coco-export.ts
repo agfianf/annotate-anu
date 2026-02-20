@@ -81,6 +81,16 @@ export function exportToCOCO(
       const poly = ann as PolygonAnnotation
       const flatPoints = poly.points.flatMap(p => [p.x, p.y])
 
+      // Calculate bounding box from polygon points
+      const xs = poly.points.map(p => p.x)
+      const ys = poly.points.map(p => p.y)
+      const minX = Math.min(...xs)
+      const minY = Math.min(...ys)
+      const maxX = Math.max(...xs)
+      const maxY = Math.max(...ys)
+      const width = maxX - minX
+      const height = maxY - minY
+
       // Calculate area using shoelace formula
       let area = 0
       for (let i = 0; i < poly.points.length; i++) {
@@ -93,6 +103,7 @@ export function exportToCOCO(
       return {
         ...baseAnnotation,
         segmentation: [flatPoints],
+        bbox: [minX, minY, width, height] as [number, number, number, number],
         area,
       }
     } else {
@@ -113,12 +124,73 @@ export function exportToCOCO(
   }
 }
 
-export async function downloadCOCO(dataset: COCODataset, filename: string = 'annotations.json') {
+export async function downloadCOCO(
+  dataset: COCODataset,
+  images: ImageData[],
+  splitConfig: { train: number; val: number; test: number }
+) {
   const zip = new JSZip()
 
-  // Add the COCO JSON file to the zip
-  const json = JSON.stringify(dataset, null, 2)
-  zip.file(filename, json)
+  // Shuffle images for random split
+  const shuffledImages = [...images].sort(() => Math.random() - 0.5)
+
+  const trainCount = Math.floor(shuffledImages.length * splitConfig.train)
+  const valCount = Math.floor(shuffledImages.length * splitConfig.val)
+
+  const trainImages = shuffledImages.slice(0, trainCount)
+  const valImages = shuffledImages.slice(trainCount, trainCount + valCount)
+  const testImages = shuffledImages.slice(trainCount + valCount)
+
+  // Create image ID sets for each split
+  const trainImageIds = new Set(trainImages.map(img => img.id))
+  const valImageIds = new Set(valImages.map(img => img.id))
+  const testImageIds = new Set(testImages.map(img => img.id))
+
+  // Helper function to add images and annotations for a split
+  const addSplit = async (
+    splitName: string,
+    imageList: ImageData[],
+    imageIdSet: Set<string>
+  ) => {
+    if (imageList.length === 0) return
+
+    // Filter COCO dataset for this split
+    const splitCocoImages = dataset.images.filter(img => {
+      const originalImg = images.find(i => i.name === img.file_name || i.relativePath === img.file_name)
+      return originalImg && imageIdSet.has(originalImg.id)
+    })
+
+    const splitCocoImageIds = new Set(splitCocoImages.map(img => img.id))
+    const splitCocoAnnotations = dataset.annotations.filter(ann => 
+      splitCocoImageIds.has(ann.image_id)
+    )
+
+    const splitDataset: COCODataset = {
+      info: dataset.info,
+      images: splitCocoImages,
+      annotations: splitCocoAnnotations,
+      categories: dataset.categories,
+    }
+
+    // Add JSON annotation file
+    const annotationJson = JSON.stringify(splitDataset, null, 2)
+    zip.file(`${splitName}/annotations/instances_${splitName}.json`, annotationJson)
+
+    // Add images
+    const imagesFolder = zip.folder(`${splitName}/images`)
+    if (imagesFolder) {
+      for (const img of imageList) {
+        // Convert blob to array buffer and add to zip
+        const arrayBuffer = await img.blob.arrayBuffer()
+        imagesFolder.file(img.name, arrayBuffer)
+      }
+    }
+  }
+
+  // Add all splits
+  await addSplit('train', trainImages, trainImageIds)
+  await addSplit('val', valImages, valImageIds)
+  await addSplit('test', testImages, testImageIds)
 
   // Generate the zip file
   const zipBlob = await zip.generateAsync({ type: 'blob' })
@@ -127,7 +199,7 @@ export async function downloadCOCO(dataset: COCODataset, filename: string = 'ann
   const url = URL.createObjectURL(zipBlob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `coco_annotations_${Date.now()}.zip`
+  link.download = `coco_dataset_${Date.now()}.zip`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)

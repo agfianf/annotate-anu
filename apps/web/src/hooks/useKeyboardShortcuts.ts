@@ -16,6 +16,10 @@ interface KeyboardShortcutsConfig {
   onResetZoom?: () => void
   onShowShortcuts?: () => void
   onToggleSidebar?: () => void
+  onDuplicate?: () => void
+  onSave?: () => void
+  onToggleVisibility?: () => void
+  onLock?: () => void
   selectedTool?: Tool
 }
 
@@ -64,10 +68,10 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
       }
 
       // Image navigation shortcuts
-      else if (event.key === 'f' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && config.onNextImage) {
+      else if (((event.key === 'f' || event.key === 'ArrowRight') && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) && config.onNextImage) {
         event.preventDefault()
         config.onNextImage()
-      } else if (event.key === 'd' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && config.onPreviousImage) {
+      } else if (((event.key === 'd' || event.key === 'ArrowLeft') && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) && config.onPreviousImage) {
         event.preventDefault()
         config.onPreviousImage()
       }
@@ -109,6 +113,30 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
       else if ((event.ctrlKey || event.metaKey) && event.key === 'b' && config.onToggleSidebar) {
         event.preventDefault()
         config.onToggleSidebar()
+      }
+
+      // Duplicate annotation
+      else if ((event.ctrlKey || event.metaKey) && event.key === 'd' && config.onDuplicate) {
+        event.preventDefault()
+        config.onDuplicate()
+      }
+
+      // Save/Export
+      else if ((event.ctrlKey || event.metaKey) && event.key === 's' && config.onSave) {
+        event.preventDefault()
+        config.onSave()
+      }
+
+      // Toggle visibility
+      else if (event.key === 'h' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && config.onToggleVisibility) {
+        event.preventDefault()
+        config.onToggleVisibility()
+      }
+
+      // Lock/Unlock
+      else if (event.key === 'l' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && config.onLock) {
+        event.preventDefault()
+        config.onLock()
       }
     }
 

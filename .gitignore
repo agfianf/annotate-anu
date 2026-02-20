@@ -8,7 +8,13 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
 apps/api-inference/.venv
+apps/api-inference-yolo/.venv
+
+# SAM3 Model Weights
+apps/sam3.pt
+sam3.pt
 
 # Environment variables
 # .env

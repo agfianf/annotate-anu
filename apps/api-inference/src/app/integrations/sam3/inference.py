@@ -146,17 +146,25 @@ class SAM3Inference:
             outputs = self.model(**inputs)
 
         # Post-process
+        # Use 0.0 threshold to get raw scores, then filter manually to ensure accuracy
         results = self.processor.post_process_instance_segmentation(
             outputs,
-            threshold=threshold,
+            threshold=0.0,
             mask_threshold=mask_threshold,
             target_sizes=inputs.get("original_sizes").tolist(),
         )[0]
 
+        # Filter by threshold manually
+        keep = results["scores"] > threshold
+        
+        scores = results["scores"][keep]
+        boxes = results["boxes"][keep]
+        masks = results["masks"][keep]
+
         # Prepare response
-        num_objects = len(results["scores"])
-        boxes_list = results["boxes"].cpu().tolist()
-        scores_list = results["scores"].cpu().tolist()
+        num_objects = len(scores)
+        boxes_list = boxes.cpu().tolist()
+        scores_list = scores.cpu().tolist()
 
         # Convert masks to polygon coordinates
         masks_polygon = masks_to_polygon_data(results["masks"], simplify_tolerance)
@@ -240,17 +248,25 @@ class SAM3Inference:
             outputs = self.model(**inputs)
 
         # Post-process
+        # Use 0.0 threshold to get raw scores, then filter manually to ensure accuracy
         results = self.processor.post_process_instance_segmentation(
             outputs,
-            threshold=threshold,
+            threshold=0.0,
             mask_threshold=mask_threshold,
             target_sizes=inputs.get("original_sizes").tolist(),
         )[0]
 
+        # Filter by threshold manually
+        keep = results["scores"] > threshold
+        
+        scores = results["scores"][keep]
+        boxes = results["boxes"][keep]
+        masks = results["masks"][keep]
+
         # Prepare response
-        num_objects = len(results["scores"])
-        boxes_list = results["boxes"].cpu().tolist()
-        scores_list = results["scores"].cpu().tolist()
+        num_objects = len(scores)
+        boxes_list = boxes.cpu().tolist()
+        scores_list = scores.cpu().tolist()
 
         # Convert masks to polygon coordinates
         masks_polygon = masks_to_polygon_data(results["masks"], simplify_tolerance)
@@ -332,9 +348,10 @@ class SAM3Inference:
             outputs = self.model(**inputs)
 
         # Post-process
+        # Use 0.0 threshold to get raw scores, then filter manually to ensure accuracy
         results = self.processor.post_process_instance_segmentation(
             outputs,
-            threshold=threshold,
+            threshold=0.0,
             mask_threshold=mask_threshold,
             target_sizes=inputs.get("original_sizes").tolist(),
         )
@@ -342,9 +359,16 @@ class SAM3Inference:
         # Process each result
         batch_results = []
         for idx, (image, result) in enumerate(zip(images, results)):
-            num_objects = len(result["scores"])
-            boxes_list = result["boxes"].cpu().tolist()
-            scores_list = result["scores"].cpu().tolist()
+            # Filter by threshold manually
+            keep = result["scores"] > threshold
+            
+            scores = result["scores"][keep]
+            boxes = result["boxes"][keep]
+            masks = result["masks"][keep]
+
+            num_objects = len(scores)
+            boxes_list = boxes.cpu().tolist()
+            scores_list = scores.cpu().tolist()
 
             # Convert masks to polygon coordinates
             masks_polygon = masks_to_polygon_data(result["masks"], simplify_tolerance)

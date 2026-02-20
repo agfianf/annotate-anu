@@ -1,0 +1,11 @@
+{
+  "name": "@sam3/api-inference",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SAM3 FastAPI inference backend (Python/uv)",
+  "scripts": {
+    "dev": "echo 'Use make backend-run or Docker for Python backend'",
+    "build": "echo 'Python backend does not require build step'",
+    "clean": "find . -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true"
+  }
+}

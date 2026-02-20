@@ -656,7 +656,7 @@ function AnnotationApp() {
     setSelectedAnnotations(prev => prev.filter(selectedId => selectedId !== id))
     // Record history after user action (not during undo/redo)
     if (!isUndoingRef.current) {
-      recordChange(currentAnnotations.filter(a => a.id !== id))
+      recordChange(currentAnnotations.filter(a => !annotationsToDelete.includes(a.id)))
     }
   }
 
@@ -738,14 +738,23 @@ function AnnotationApp() {
     const annotation = annotations.find(a => a.id === annotationId)
     if (!annotation) return
 
-    const updatedAnnotation = {
-      ...annotation,
-      isVisible: !(annotation.isVisible ?? true),
-      updatedAt: Date.now(),
-    }
+    // Find all annotations in the same group (if grouped)
+    const annotationsToToggle = annotation.groupId
+      ? annotations.filter(a => a.groupId === annotation.groupId)
+      : [annotation]
+
+    const newVisibility = !(annotation.isVisible ?? true)
 
     try {
-      await updateAnnotation(updatedAnnotation)
+      // Update all annotations in the group
+      for (const ann of annotationsToToggle) {
+        const updatedAnnotation = {
+          ...ann,
+          isVisible: newVisibility,
+          updatedAt: Date.now(),
+        }
+        await updateAnnotation(updatedAnnotation)
+      }
     } catch (error) {
       console.error('Failed to toggle annotation visibility:', error)
       toast.error('Failed to toggle visibility')
@@ -761,6 +770,87 @@ function AnnotationApp() {
       console.error('Failed to bulk toggle visibility:', error)
       toast.error('Failed to toggle visibility')
     }
+  }
+
+  const handleDuplicateAnnotation = async (annotationId: string) => {
+    const annotation = annotations.find(a => a.id === annotationId)
+    if (!annotation) return
+
+    const now = Date.now()
+    const offset = 20
+
+    // Find all annotations in the same group (if grouped)
+    const annotationsToDuplicate = annotation.groupId
+      ? annotations.filter(a => a.groupId === annotation.groupId)
+      : [annotation]
+
+    const newGroupId = annotation.groupId ? `${now}-group-duplicate` : undefined
+
+    try {
+      const newAnnotations: Annotation[] = []
+      
+      for (const ann of annotationsToDuplicate) {
+        const newAnn = JSON.parse(JSON.stringify(ann)) as Annotation
+        newAnn.id = crypto.randomUUID()
+        newAnn.createdAt = now
+        newAnn.updatedAt = now
+        newAnn.groupId = newGroupId
+        
+        // Offset position
+        if (newAnn.type === 'rectangle') {
+            newAnn.x += offset
+            newAnn.y += offset
+        } else if (newAnn.type === 'polygon' || newAnn.type === 'point') {
+            newAnn.points = newAnn.points.map(p => ({ x: p.x + offset, y: p.y + offset }))
+        }
+        
+        newAnnotations.push(newAnn)
+        await addAnnotation(newAnn)
+      }
+      
+      // Select the new annotation (or the first one of the group)
+      if (newAnnotations.length > 0) {
+        setSelectedAnnotation(newAnnotations[0].id)
+        toast.success(`Duplicated ${newAnnotations.length > 1 ? 'group' : 'annotation'}`)
+      }
+      
+    } catch (error) {
+      console.error('Failed to duplicate annotation:', error)
+      toast.error('Failed to duplicate annotation')
+    }
+  }
+
+  const handleLockAnnotation = async (annotationId: string) => {
+    const annotation = annotations.find(a => a.id === annotationId)
+    if (!annotation) return
+
+    // Find all annotations in the same group (if grouped)
+    const annotationsToLock = annotation.groupId
+      ? annotations.filter(a => a.groupId === annotation.groupId)
+      : [annotation]
+
+    const newLockState = !(annotation.isLocked ?? false)
+
+    try {
+      // Update all annotations in the group
+      for (const ann of annotationsToLock) {
+        const updatedAnnotation = {
+          ...ann,
+          isLocked: newLockState,
+          updatedAt: Date.now(),
+        }
+        await updateAnnotation(updatedAnnotation)
+      }
+      toast.success(newLockState ? 'Locked' : 'Unlocked')
+    } catch (error) {
+      console.error('Failed to toggle annotation lock:', error)
+      toast.error('Failed to toggle lock')
+    }
+  }
+
+  const handleSaveShortcut = () => {
+    // Since we use auto-save, just confirm to user
+    toast.success('All changes saved')
   }
 
   const handleAutoAnnotateResults = async (results: {
@@ -814,6 +904,7 @@ function AnnotationApp() {
         if (!labelForDetection) continue
 
         const mask = results.masks[i]
+        const groupId = results.createBBoxOverlay ? `${now}-group-${i}` : undefined
 
         if (mask.polygons.length > 0) {
           const polygonCoords = mask.polygons[0]
@@ -1112,10 +1203,27 @@ function AnnotationApp() {
   // Keyboard shortcuts
   useKeyboardShortcuts({
     onSelectTool: setSelectedTool,
+    selectedTool,
     onDelete: () => {
       // Show confirmation dialog before deleting
       if (selectedAnnotations.length > 0) {
         setShowKeyboardDeleteConfirm(true)
+      }
+    },
+    onDuplicate: () => {
+      if (selectedAnnotation) {
+        handleDuplicateAnnotation(selectedAnnotation)
+      }
+    },
+    onSave: handleSaveShortcut,
+    onToggleVisibility: () => {
+      if (selectedAnnotation) {
+        handleToggleAnnotationVisibility(selectedAnnotation)
+      }
+    },
+    onLock: () => {
+      if (selectedAnnotation) {
+        handleLockAnnotation(selectedAnnotation)
       }
     },
     onNewAnnotation: () => {

@@ -849,6 +849,9 @@ export default function Sidebar({
                                   <Sparkles className="w-3 h-3 text-emerald-500" />
                                 )}
                                 <span>#{index + 1}</span>
+                                {ann.groupId && sortedAnnotations.some(a => a.groupId === ann.groupId && a.id !== ann.id) && (
+                                  <span className="text-xs text-gray-500">+bbox</span>
+                                )}
                                 {ann.confidence !== undefined && (
                                   <span className={`ml-1 text-xs font-medium ${getConfidenceColor(ann.confidence)}`}>
                                     {Math.round(ann.confidence * 100)}%

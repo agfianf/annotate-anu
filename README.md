@@ -122,6 +122,21 @@ Diagram source: `docs/architecture/system-overview.mmd`.
 | PostgreSQL | Core data store | 5432 |
 | Redis | Cache and task queue | - |
 
+### Backend Options
+
+**🚀 Ultralytics SAM3 (Recommended)** - `api-inference-yolo`
+- ✅ Faster inference with FP16 support
+- ✅ Better text prompt segmentation with semantic understanding
+- ✅ Bounding box exemplar-based segmentation for finding similar objects
+- ✅ No HuggingFace account required (but model download is manual)
+- ✅ Supports single, auto-apply, and batch processing modes
+- 📦 Uses: `ultralytics`, PyTorch, SAM3SemanticPredictor
+
+**🔄 HuggingFace SAM3** - `api-inference`
+- ✅ Auto-downloads model on first run
+- ⚠️ Requires HuggingFace account and gated model access
+- 📦 Uses: `transformers`, `huggingface-hub`
+
 ## Quick Start
 
 ### Prerequisites

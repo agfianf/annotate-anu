@@ -62,6 +62,7 @@ interface TextPromptPanelProps {
     annotationType: 'bbox' | 'polygon'
     labelId?: string
     imageId?: string
+    createBBoxOverlay?: boolean
   }) => void
   onClose: () => void
   currentAnnotations?: any[] // Add annotations to check if image already has AI annotations
@@ -86,16 +87,25 @@ export function TextPromptPanel({
   onTextPromptChange,
   selectedModel,
 }: TextPromptPanelProps) {
-  const [textPrompt, setTextPrompt] = useState(() => {
-    const saved = localStorage.getItem('textPrompt')
-    return saved || ''
-  })
+  // Load saved prompts per label from localStorage
+  const loadLabelPrompts = (): Record<string, string> => {
+    try {
+      const saved = localStorage.getItem('labelTextPrompts')
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  }
+
+  const [labelPrompts, setLabelPrompts] = useState<Record<string, string>>(loadLabelPrompts)
+  const [textPrompt, setTextPrompt] = useState('')
   const [labelId, setLabelId] = useState(selectedLabelId || '')
   const [threshold, setThreshold] = useState(0.25)
   const [maskThreshold, setMaskThreshold] = useState(0.25)
   const [simplifyEnabled, setSimplifyEnabled] = useState(false)
   const [simplifyTolerance, setSimplifyTolerance] = useState(1.5)
   const [annotationType, setAnnotationType] = useState<AnnotationType>('polygon')
+  const [generateBBox, setGenerateBBox] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
   // Batch mode state
@@ -109,22 +119,32 @@ export function TextPromptPanel({
   const [hasRunOnce, setHasRunOnce] = useState(false)
   const lastProcessedImageIdRef = useRef<string | null>(null)
 
-  // Sync labelId with selectedLabelId from parent
+  // Sync labelId from props
   useEffect(() => {
     if (selectedLabelId) {
       setLabelId(selectedLabelId)
     }
   }, [selectedLabelId])
 
+  // Load saved prompt when labelId changes (from prop or selection)
+  useEffect(() => {
+    if (labelId) {
+      const savedPrompt = labelPrompts[labelId] || ''
+      setTextPrompt(savedPrompt)
+    }
+  }, [labelId]) // Load when label ID changes
+
   // Notify parent of text prompt changes for indicator display
   useEffect(() => {
     onTextPromptChange?.(textPrompt)
   }, [textPrompt, onTextPromptChange])
 
-  // Persist text prompt to localStorage
-  useEffect(() => {
-    localStorage.setItem('textPrompt', textPrompt)
-  }, [textPrompt])
+  // Save text prompt for current label to localStorage
+  const savePromptForLabel = (labelIdToSave: string, prompt: string) => {
+    const updated = { ...labelPrompts, [labelIdToSave]: prompt }
+    setLabelPrompts(updated)
+    localStorage.setItem('labelTextPrompts', JSON.stringify(updated))
+  }
 
   // Reset auto-apply state only when switching away from auto-apply mode
   useEffect(() => {
@@ -137,18 +157,20 @@ export function TextPromptPanel({
 
   // Auto-apply mode: Execute prompt when image changes (but only after user has run manually once)
   useEffect(() => {
-    console.log('[AUTO-APPLY] Effect triggered', {
+    const deps = {
       promptMode,
       currentImage: currentImage?.name,
+      currentImageId: currentImage?.id,
       hasRunOnce,
-      textPrompt,
+      textPromptTrimmed: textPrompt.trim(),
       labelId,
       isLoading,
       annotationsCount: currentAnnotations.length
-    })
+    }
+    console.log('[AUTO-APPLY] Effect triggered with deps:', deps)
 
     if (promptMode !== 'auto-apply') {
-      console.log('[AUTO-APPLY] Guard: Not in auto-apply mode')
+      console.log('[AUTO-APPLY] Guard: Not in auto-apply mode (mode=' + promptMode + ')')
       return
     }
     if (!currentImage) {
@@ -191,6 +213,18 @@ export function TextPromptPanel({
 
     const autoExecute = async () => {
       console.log(`[AUTO-APPLY] Starting auto-execute for "${currentImage.name}"`)
+      
+      // Validate blob exists and has size
+      if (!currentImage.blob || currentImage.blob.size === 0) {
+        console.error('[AUTO-APPLY] ERROR: Image blob is missing or empty!', {
+          hasBlob: !!currentImage.blob,
+          size: currentImage.blob?.size || 0
+        })
+        toast.error('Image blob is invalid - cannot process')
+        lastProcessedImageIdRef.current = currentImage.id
+        return
+      }
+
       setIsLoading(true)
       onLoadingChange?.(true) // Notify parent to show dimming effect
       console.log('[AUTO-APPLY] Loading state set to TRUE, dimming overlay should show')
@@ -298,6 +332,9 @@ export function TextPromptPanel({
 
       toast.success(`Successfully detected ${num_objects} object${num_objects > 1 ? 's' : ''}!`)
 
+      // Save the prompt for this label
+      savePromptForLabel(labelId, textPrompt)
+
       // Mark that user has run at least once (enables auto-apply)
       setHasRunOnce(true)
       lastProcessedImageIdRef.current = currentImage.id
@@ -399,6 +436,12 @@ export function TextPromptPanel({
 
     const successCount = batchProgress.filter(p => p.status === 'success').length
     const errorCount = batchProgress.filter(p => p.status === 'error').length
+    
+    // Save the prompt for this label after successful batch
+    if (successCount > 0) {
+      savePromptForLabel(labelId, textPrompt)
+    }
+    
     toast.success(`Batch complete: ${successCount} succeeded, ${errorCount} failed`)
   }
 
@@ -517,6 +560,21 @@ export function TextPromptPanel({
                 </div>
               </div>
             </label>
+
+            {annotationType === 'polygon' && (
+              <div className="ml-7 mt-1 animate-fadeIn">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={generateBBox}
+                    onChange={(e) => setGenerateBBox(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                    disabled={isLoading}
+                  />
+                  <span className="text-xs text-gray-700">Also create bounding boxes</span>
+                </label>
+              </div>
+            )}
 
             <label className="flex items-center space-x-3 cursor-pointer">
               <input
