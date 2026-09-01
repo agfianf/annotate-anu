@@ -129,9 +129,9 @@ function apiImageToImageData(apiImage: ImageResponse, _jobId: string): ImageData
  * @param jobId - Job ID from URL query params (null for solo mode)
  * @returns Combined state and actions for storage operations
  */
-export function useJobStorage(jobId: string | null): JobStorageState & JobStorageActions {
+export function useJobStorage(jobId: string | null, projectId?: string): JobStorageState & JobStorageActions {
   // Get local storage for fallback and IndexedDB operations
-  const localStorage = useStorage()
+  const localStorage = useStorage(projectId)
 
   // Get job context (will be null/empty if no jobId)
   const jobContext = useJobContext(jobId)

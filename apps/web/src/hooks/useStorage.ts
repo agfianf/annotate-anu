@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { ImageData, Annotation, Label } from '@/types/annotations'
-import { imageStorage, annotationStorage, labelStorage } from '@/lib/storage'
+import { imageStorage, annotationStorage, labelStorage, projectStorage, DEFAULT_PROJECT_ID } from '@/lib/storage'
 
-export function useStorage() {
+export function useStorage(projectId?: string) {
+  const scopeId = projectId || DEFAULT_PROJECT_ID
   const [images, setImages] = useState<ImageData[]>([])
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [labels, setLabels] = useState<Label[]>([])
@@ -14,13 +15,12 @@ export function useStorage() {
     try {
       setLoading(true)
 
-      // Initialize default labels if needed
-      await labelStorage.initializeDefaults()
+      await projectStorage.ensureDefault()
 
       const [loadedImages, loadedAnnotations, loadedLabels] = await Promise.all([
-        imageStorage.getAll(),
-        annotationStorage.getAll(),
-        labelStorage.getAll(),
+        imageStorage.getAllByProject(scopeId),
+        annotationStorage.getAllByProject(scopeId),
+        labelStorage.getAllByProject(scopeId),
       ])
 
       setImages(loadedImages)
@@ -36,21 +36,24 @@ export function useStorage() {
     } finally {
       setLoading(false)
     }
-  }, [currentImageId])
+  }, [currentImageId, scopeId])
 
-  // Load data on mount
+  // Reload whenever the active project changes
   useEffect(() => {
+    setCurrentImageId(null)
     loadData()
-  }, [])
+  }, [scopeId])
 
   // Image operations
   const addImage = useCallback(async (imageData: ImageData) => {
-    await imageStorage.add(imageData)
-    setImages(prev => [...prev, imageData])
+    const scoped = { ...imageData, projectId: scopeId }
+    await imageStorage.add(scoped)
+    await projectStorage.touch(scopeId)
+    setImages(prev => [...prev, scoped])
     if (!currentImageId) {
-      setCurrentImageId(imageData.id)
+      setCurrentImageId(scoped.id)
     }
-  }, [currentImageId])
+  }, [currentImageId, scopeId])
 
   const removeImage = useCallback(async (id: string) => {
     await imageStorage.remove(id)
@@ -65,16 +68,18 @@ export function useStorage() {
 
   // Annotation operations
   const addAnnotation = useCallback(async (annotation: Annotation) => {
-    await annotationStorage.add(annotation)
-    setAnnotations(prev => [...prev, annotation])
-  }, [])
+    const scoped = { ...annotation, projectId: scopeId }
+    await annotationStorage.add(scoped)
+    await projectStorage.touch(scopeId)
+    setAnnotations(prev => [...prev, scoped])
+  }, [scopeId])
 
   const addManyAnnotations = useCallback(async (annotations: Annotation[]) => {
-    // Batch write to IndexedDB in single transaction
-    await annotationStorage.addMany(annotations)
-    // Update React state in single operation
-    setAnnotations(prev => [...prev, ...annotations])
-  }, [])
+    const scoped = annotations.map(a => ({ ...a, projectId: scopeId }))
+    await annotationStorage.addMany(scoped)
+    await projectStorage.touch(scopeId)
+    setAnnotations(prev => [...prev, ...scoped])
+  }, [scopeId])
 
   const updateAnnotation = useCallback(async (annotation: Annotation) => {
     await annotationStorage.update(annotation)
@@ -118,9 +123,10 @@ export function useStorage() {
 
   // Label operations
   const addLabel = useCallback(async (label: Label) => {
-    await labelStorage.add(label)
-    setLabels(prev => [...prev, label])
-  }, [])
+    const scoped = { ...label, projectId: scopeId }
+    await labelStorage.add(scoped)
+    setLabels(prev => [...prev, scoped])
+  }, [scopeId])
 
   const updateLabel = useCallback(async (label: Label) => {
     await labelStorage.update(label)
@@ -151,17 +157,15 @@ export function useStorage() {
 
       // Conditionally clear annotations
       if (clearAnnotations) {
-        await annotationStorage.clear()
+        await annotationStorage.clearByProject(scopeId)
       }
 
-      // Conditionally clear labels
       if (clearLabels) {
-        await labelStorage.clear()
+        await labelStorage.clearByProject(scopeId)
       }
 
-      // Conditionally clear images
       if (clearImages) {
-        await imageStorage.clear()
+        await imageStorage.clearByProject(scopeId)
       }
 
       // Conditionally clear tool configuration from localStorage
@@ -176,7 +180,7 @@ export function useStorage() {
     } catch (error) {
       console.error('Failed to reset data:', error)
     }
-  }, [loadData])
+  }, [loadData, scopeId])
 
   // Get current image
   const currentImage = images.find(img => img.id === currentImageId)
