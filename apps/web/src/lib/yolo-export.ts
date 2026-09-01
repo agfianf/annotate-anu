@@ -8,19 +8,33 @@ import type {
   Label,
 } from '@/types/annotations'
 
+export type YOLOTask = 'detect' | 'segment'
+
 export interface YOLOExportData {
   classesContent: string
   annotationFiles: Map<string, string> // image filename -> annotation content
+  task: YOLOTask
+  skippedPoints: number // point annotations dropped in segment mode
+}
+
+/**
+ * True when the dataset contains at least one polygon, meaning a detect-only
+ * export would silently flatten masks into bounding boxes.
+ */
+export function hasPolygonAnnotations(annotations: Annotation[]): boolean {
+  return annotations.some(ann => ann.type === 'polygon' && ann.points.length >= 3)
 }
 
 /**
  * Convert annotations to YOLO format
- * YOLO format: <class-id> <x-center> <y-center> <width> <height> (all normalized 0-1)
+ * detect:  <class-id> <x-center> <y-center> <width> <height>   (normalized 0-1)
+ * segment: <class-id> <x1> <y1> <x2> <y2> ...                  (normalized 0-1)
  */
 export function exportToYOLO(
   images: ImageData[],
   annotations: Annotation[],
-  labels: Label[]
+  labels: Label[],
+  task: YOLOTask = 'detect'
 ): YOLOExportData {
   // Create label ID to index mapping
   const labelIdMap = new Map<string, number>()
@@ -42,13 +56,21 @@ export function exportToYOLO(
   // Create annotation files for each image
   const annotationFiles = new Map<string, string>()
 
+  let skippedPoints = 0
+
   images.forEach(image => {
     const imageAnns = annotationsByImage.get(image.id) || []
     const yoloLines: string[] = []
 
     imageAnns.forEach(ann => {
       const classId = labelIdMap.get(ann.labelId) ?? 0
-      const yoloLine = convertAnnotationToYOLO(ann, image.width, image.height, classId)
+      if (task === 'segment' && ann.type === 'point') {
+        skippedPoints++
+        return
+      }
+      const yoloLine = task === 'segment'
+        ? convertAnnotationToYOLOSeg(ann, image.width, image.height, classId)
+        : convertAnnotationToYOLO(ann, image.width, image.height, classId)
       if (yoloLine) {
         yoloLines.push(yoloLine)
       }
@@ -63,7 +85,50 @@ export function exportToYOLO(
   return {
     classesContent,
     annotationFiles,
+    task,
+    skippedPoints,
   }
+}
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
+
+/**
+ * Convert a single annotation to a YOLO segmentation polygon line.
+ * Rectangles are emitted as their four corners so mixed datasets stay usable.
+ */
+function convertAnnotationToYOLOSeg(
+  annotation: Annotation,
+  imageWidth: number,
+  imageHeight: number,
+  classId: number
+): string | null {
+  let points: Array<{ x: number; y: number }>
+
+  if (annotation.type === 'polygon') {
+    points = (annotation as PolygonAnnotation).points
+    if (points.length < 3) return null
+  } else if (annotation.type === 'rectangle') {
+    const rect = annotation as RectangleAnnotation
+    // Normalize negative width/height from drags made right-to-left or bottom-to-top
+    const x0 = Math.min(rect.x, rect.x + rect.width)
+    const x1 = Math.max(rect.x, rect.x + rect.width)
+    const y0 = Math.min(rect.y, rect.y + rect.height)
+    const y1 = Math.max(rect.y, rect.y + rect.height)
+    points = [
+      { x: x0, y: y0 },
+      { x: x1, y: y0 },
+      { x: x1, y: y1 },
+      { x: x0, y: y1 },
+    ]
+  } else {
+    return null
+  }
+
+  const coords = points
+    .map(p => `${clamp01(p.x / imageWidth).toFixed(6)} ${clamp01(p.y / imageHeight).toFixed(6)}`)
+    .join(' ')
+
+  return `${classId} ${coords}`
 }
 
 /**
@@ -149,7 +214,7 @@ export async function downloadYOLOFiles(exportData: YOLOExportData) {
   const url = URL.createObjectURL(zipBlob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `yolo_annotations_${Date.now()}.zip`
+  link.download = `yolo_${exportData.task}_annotations_${Date.now()}.zip`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -180,11 +245,21 @@ export function getYOLOPreview(
   images: ImageData[],
   annotations: Annotation[],
   labels: Label[],
-  maxLines: number = 10
+  maxLines: number = 10,
+  task: YOLOTask = 'detect'
 ): string {
-  const exportData = exportToYOLO(images, annotations, labels)
+  const exportData = exportToYOLO(images, annotations, labels, task)
 
   const preview: string[] = []
+  preview.push(
+    task === 'segment'
+      ? '# format: <class-id> <x1> <y1> <x2> <y2> ... (normalized polygon)'
+      : '# format: <class-id> <x-center> <y-center> <width> <height> (normalized)'
+  )
+  if (exportData.skippedPoints > 0) {
+    preview.push(`# ${exportData.skippedPoints} point annotation(s) omitted - not representable as masks`)
+  }
+  preview.push('')
   preview.push('# classes.txt')
   preview.push(exportData.classesContent)
   preview.push('')
