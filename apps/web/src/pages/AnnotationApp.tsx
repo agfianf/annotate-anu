@@ -1,10 +1,11 @@
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Cloud, CloudOff, Copy, Download, Link as LinkIcon, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Cloud, CloudOff, Copy, Download, FolderOpen, Link as LinkIcon, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import '../App.css'
 import Canvas from '../components/Canvas'
 import { ExportModal } from '../components/ExportModal'
+import { ImportLabelsModal } from '../components/ImportLabelsModal'
 import { LeftSidebar } from '../components/LeftSidebar'
 import { ModelSelector } from '../components/ModelSelector'
 import { AnnotationsSidebar } from '../components/sidebar'
@@ -22,6 +23,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useModelRegistry } from '../hooks/useModelRegistry'
 import { imagesApi } from '../lib/api-client'
 import { DEFAULT_LABEL_COLOR } from '../lib/colors'
+import { DEFAULT_PROJECT_ID, projectStorage } from '../lib/storage'
 import { ALLOWED_IMAGE_EXTENSIONS, getDisplayName, getRelativePath, isAllowedImageFile, isFolderUploadSupported } from '../lib/file-utils'
 import { annotationStorage } from '../lib/storage'
 import { generateUUID } from '../lib/utils'
@@ -169,15 +171,18 @@ const ImageThumbnail = ({
 
 function AnnotationApp() {
   const navigate = useNavigate()
-  const search = useSearch({ strict: false }) as { jobId?: string; imageId?: string }
+  const search = useSearch({ strict: false }) as { jobId?: string; imageId?: string; projectId?: string }
   const jobId = search.jobId || null
   const imageIdParam = search.imageId || null
+  const projectId = search.projectId || DEFAULT_PROJECT_ID
 
   const [selectedTool, setSelectedTool] = useState<Tool>('select')
   const [selectedAnnotations, setSelectedAnnotations] = useState<string[]>([])
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null)
   const [showLabelManager, setShowLabelManager] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [projectName, setProjectName] = useState<string | null>(null)
   const [showResetModal, setShowResetModal] = useState(false)
   const [showShortcutsModal, setShowShortcutsModal] = useState(false)
   const [resetOptions, setResetOptions] = useState({
@@ -269,7 +274,7 @@ function AnnotationApp() {
   })
 
   // Use job-aware storage (falls back to local storage if no jobId)
-  const storage = useJobStorage(jobId)
+  const storage = useJobStorage(jobId, projectId)
   const {
     images,
     labels,
@@ -443,6 +448,18 @@ function AnnotationApp() {
   const handleCancelNavigation = () => {
     setShowUnsavedChangesDialog(false)
     pendingNavigationRef.current = null
+  }
+
+  useEffect(() => {
+    if (isJobMode) return
+    projectStorage.getById(projectId).then(p => setProjectName(p?.name ?? null))
+  }, [projectId, isJobMode])
+
+  const handleImportLabels = async (newLabels: Label[], newAnnotations: Annotation[]) => {
+    for (const label of newLabels) {
+      await addLabel(label)
+    }
+    await addManyAnnotations(newAnnotations)
   }
 
   const handleImageUpload = async (files: FileList) => {
@@ -1200,6 +1217,16 @@ function AnnotationApp() {
               <span className="text-xl font-bold text-emerald-600">AnnotateANU</span>
             </Link>
           )}
+          {!isJobMode && projectName && (
+            <Link
+              to="/projects"
+              className="flex items-center gap-1.5 px-2.5 py-1 glass rounded border border-gray-200 text-sm text-gray-700 hover:border-emerald-400 transition-colors"
+              title="Switch project"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="font-medium max-w-[200px] truncate">{projectName}</span>
+            </Link>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {images.length > 0 && (
@@ -1293,6 +1320,17 @@ function AnnotationApp() {
             <Download className="w-4 h-4" />
             Export
           </button>
+          {!isJobMode && (
+            <button
+              onClick={() => setShowImportModal(true)}
+              disabled={images.length === 0}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-1.5"
+              title="Import YOLO label files for the images in this project"
+            >
+              <Upload className="w-4 h-4" />
+              Import
+            </button>
+          )}
           <button
             onClick={() => setShowResetModal(true)}
             className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded transition-colors flex items-center gap-1.5"
@@ -1625,6 +1663,7 @@ function AnnotationApp() {
           {/* Sidebar */}
           <AnnotationsSidebar
             annotations={currentAnnotations}
+            allAnnotations={annotations}
             labels={labels}
             selectedAnnotations={selectedAnnotations}
             selectedLabelId={selectedLabelId}
@@ -2253,6 +2292,14 @@ function AnnotationApp() {
         images={images}
         annotations={annotations}
         labels={labels}
+      />
+
+      <ImportLabelsModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        images={images}
+        labels={labels}
+        onImport={handleImportLabels}
       />
 
       {/* Unsaved Changes Dialog (Job Mode) */}
