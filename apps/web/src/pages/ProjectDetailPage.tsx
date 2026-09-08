@@ -23,6 +23,7 @@ import ProjectTabs, { type ProjectTabId } from '../components/ProjectTabs';
 import ProjectTasksTab from '../components/ProjectTasksTab';
 import { useExploreView } from '../contexts/ExploreViewContext';
 import type { ProjectDetail } from '../lib/api-client';
+import { getApiErrorMessage } from '../lib/api-error';
 import { projectsApi } from '../lib/api-client';
 
 const DEFAULT_README = `# Project Overview
@@ -89,8 +90,7 @@ export default function ProjectDetailPage() {
       setProject(data);
       setEditedReadme(data.readme || '');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to load project');
+      toast.error(getApiErrorMessage(err, 'Failed to load project'));
     } finally {
       setIsLoading(false);
     }
@@ -119,8 +119,7 @@ export default function ProjectDetailPage() {
       setIsEditing(false);
       toast.success('README saved successfully');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to save README');
+      toast.error(getApiErrorMessage(err, 'Failed to save README'));
     } finally {
       setIsSaving(false);
     }

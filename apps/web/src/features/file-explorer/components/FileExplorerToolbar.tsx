@@ -6,6 +6,7 @@ import { validateFolderPath } from '../utils/validation'
 import { PathAutocomplete } from './PathAutocomplete'
 import { shareApi } from '../api/share'
 import toast from 'react-hot-toast'
+import { getApiErrorMessage } from '@/lib/api-error';
 
 interface FileExplorerToolbarProps {
   currentPath: string
@@ -82,9 +83,7 @@ export const FileExplorerToolbar = memo(function FileExplorerToolbar({
     } catch (error: any) {
       // Extract error message from API response
       const errorMessage =
-        error?.response?.data?.detail ||
-        error?.message ||
-        'Failed to create folder'
+        getApiErrorMessage(error, 'Failed to create folder')
 
       toast.error(`Failed to create folder: ${errorMessage}`)
     }

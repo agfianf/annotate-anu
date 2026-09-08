@@ -24,7 +24,6 @@ import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
 import AnimationDemoPage from '../pages/AnimationDemoPage'
 import AnnotationApp from '../pages/AnnotationApp'
-import LocalProjectsPage from '../pages/LocalProjectsPage'
 import DashboardLayout from '../components/DashboardLayout'
 import DashboardPage from '../pages/DashboardPage'
 import ProfilePage from '../pages/ProfilePage'
@@ -72,7 +71,6 @@ const projectDetailSearchSchema = z.object({
 const annotateSearchSchema = z.object({
   jobId: z.coerce.string().optional(),
   imageId: z.string().optional(),
-  projectId: z.string().optional(),
 })
 
 // ============================================================================
@@ -135,12 +133,6 @@ const animationsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/animations',
   component: AnimationDemoPage,
-})
-
-const localProjectsRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/projects',
-  component: LocalProjectsPage,
 })
 
 const annotateRoute = createRoute({
@@ -262,7 +254,6 @@ export const routeTree = rootRoute.addChildren([
   loginRoute,
   registerRoute,
   animationsRoute,
-  localProjectsRoute,
   annotateRoute,
   authenticatedRoute.addChildren([
     dashboardLayoutRoute.addChildren([

@@ -18,6 +18,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import Toggle from '../components/Toggle';
 import { useAuth } from '../contexts/AuthContext';
 import type { Project } from '../lib/api-client';
+import { getApiErrorMessage } from '../lib/api-error';
 import { projectsApi } from '../lib/api-client';
 
 export default function ProjectsPage() {
@@ -57,8 +58,7 @@ export default function ProjectsPage() {
       const data = await projectsApi.list(includeArchived);
       setProjects(data);
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to load projects');
+      toast.error(getApiErrorMessage(err, 'Failed to load projects'));
     } finally {
       setIsLoading(false);
     }
@@ -132,8 +132,7 @@ export default function ProjectsPage() {
       setNewProject({ name: '', description: '' });
       toast.success('Project created');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to create project');
+      toast.error(getApiErrorMessage(err, 'Failed to create project'));
     } finally {
       setIsCreating(false);
     }

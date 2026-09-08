@@ -27,6 +27,7 @@ import toast from 'react-hot-toast';
 import { FileExplorer, useFileSelectionStore, useResolveSelection } from '../features/file-explorer';
 import type { JobPreview, MockImage, TaskCreateWithImages } from '../lib/api-client';
 import { tasksApi } from '../lib/api-client';
+import { getApiErrorMessage } from '../lib/api-error';
 import { taskFilePathsApi } from '../lib/data-management-client';
 import AssigneeDropdown from './AssigneeDropdown';
 
@@ -255,8 +256,7 @@ export default function CreateTaskWizard({ projectId, projectName, onClose, onSu
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to create task');
+      toast.error(getApiErrorMessage(err, 'Failed to create task'));
     } finally {
       setIsCreating(false);
     }

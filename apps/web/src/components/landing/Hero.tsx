@@ -142,7 +142,7 @@ function Hero() {
 
   const handleSoloMode = () => {
     markAsVisited()
-    navigate({ to: '/projects' })
+    navigate({ to: '/annotation' })
   }
 
   return (

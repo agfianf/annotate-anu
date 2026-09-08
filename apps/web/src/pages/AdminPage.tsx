@@ -7,6 +7,7 @@ import { Loader2, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import type { User } from '@/lib/api-client';
+import { getApiErrorMessage } from '@/lib/api-error';
 import { adminApi } from '@/lib/api-client';
 import { useAuth } from '@/contexts/AuthContext';
 import UsersTable from '@/components/admin/UsersTable';
@@ -38,8 +39,7 @@ export default function AdminPage() {
       const data = await adminApi.listUsers();
       setUsers(data);
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to load users');
+      toast.error(getApiErrorMessage(err, 'Failed to load users'));
     } finally {
       setIsLoading(false);
     }
@@ -67,8 +67,7 @@ export default function AdminPage() {
       }
       toast.success('Role updated');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to update role');
+      toast.error(getApiErrorMessage(err, 'Failed to update role'));
     } finally {
       setUpdatingUserId(null);
     }
@@ -85,8 +84,7 @@ export default function AdminPage() {
       }
       toast.success(updated.is_active ? 'User activated' : 'User deactivated');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to toggle active');
+      toast.error(getApiErrorMessage(err, 'Failed to toggle active'));
     } finally {
       setUpdatingUserId(null);
     }
@@ -107,8 +105,7 @@ export default function AdminPage() {
       }
       toast.success('User deleted');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to delete user');
+      toast.error(getApiErrorMessage(err, 'Failed to delete user'));
     } finally {
       setUpdatingUserId(null);
     }

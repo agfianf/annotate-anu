@@ -448,42 +448,7 @@ export const groupUIState = {
 
 // Project operations
 export const projectStorage = {
-  getAll: async (): Promise<Project[]> => {
-    const projects = await getAll<Project>(STORES.PROJECTS)
-    return projects.sort((a, b) => b.updatedAt - a.updatedAt)
-  },
-  getById: (id: string) => getById<Project>(STORES.PROJECTS, id),
-  add: (project: Project) => add(STORES.PROJECTS, project),
-  update: (project: Project) => update(STORES.PROJECTS, project),
-
-  create: async (name: string, description?: string): Promise<Project> => {
-    const now = Date.now()
-    const project: Project = { id: `proj-${now}-${Math.random().toString(36).slice(2, 8)}`, name, description, createdAt: now, updatedAt: now }
-    await add(STORES.PROJECTS, project)
-    return project
-  },
-
-  touch: async (id: string): Promise<void> => {
-    const project = await getById<Project>(STORES.PROJECTS, id)
-    if (project) await update(STORES.PROJECTS, { ...project, updatedAt: Date.now() })
-  },
-
-  // Deletes the project and every record scoped to it
-  remove: async (id: string): Promise<void> => {
-    await Promise.all(SCOPED_STORES.map((store) => clearByProject(store, id)))
-    await remove(STORES.PROJECTS, id)
-  },
-
-  getStats: async (id: string): Promise<{ images: number; annotations: number; labels: number }> => {
-    const [images, annotations, labels] = await Promise.all([
-      getAllByProject<ImageData>(STORES.IMAGES, id),
-      getAllByProject<Annotation>(STORES.ANNOTATIONS, id),
-      getAllByProject<Label>(STORES.LABELS, id),
-    ])
-    return { images: images.length, annotations: annotations.length, labels: labels.length }
-  },
-
-  // Guarantees at least one project exists so the app always has somewhere to write
+  // Solo mode writes to a single project; this guarantees it exists
   ensureDefault: async (): Promise<Project> => {
     const existing = await getAll<Project>(STORES.PROJECTS)
     if (existing.length > 0) return existing[0]
@@ -491,5 +456,10 @@ export const projectStorage = {
     const project: Project = { id: DEFAULT_PROJECT_ID, name: 'Default Project', createdAt: now, updatedAt: now }
     await add(STORES.PROJECTS, project)
     return project
+  },
+
+  touch: async (id: string): Promise<void> => {
+    const project = await getById<Project>(STORES.PROJECTS, id)
+    if (project) await update(STORES.PROJECTS, { ...project, updatedAt: Date.now() })
   },
 }
