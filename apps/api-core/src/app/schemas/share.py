@@ -122,3 +122,16 @@ class FileSelectionResponse(BaseModel):
 
     files: list[str] = Field(default_factory=list, description="List of resolved file paths")
     total_count: int = Field(..., description="Total number of files")
+
+
+class DeleteRequest(BaseModel):
+    """Request to delete files or directories."""
+
+    paths: list[str] = Field(..., min_length=1, description="Paths relative to the share root")
+
+
+class DeleteResponse(BaseModel):
+    """Result of a delete operation."""
+
+    deleted: list[str] = Field(default_factory=list)
+    failed: list[dict] = Field(default_factory=list)

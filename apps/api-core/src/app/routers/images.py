@@ -34,8 +34,8 @@ async def list_images(
     """List images for a job with pagination."""
     if page < 1:
         page = 1
-    if page_size < 1 or page_size > 200:
-        page_size = 50
+    # Clamp rather than reset, so an oversized request returns the max, not the default
+    page_size = max(1, min(page_size, 200))
     
     images_list, total = await ImageRepository.list_for_job(
         connection, job["id"], page=page, page_size=page_size, annotated_only=annotated_only

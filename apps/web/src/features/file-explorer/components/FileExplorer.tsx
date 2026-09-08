@@ -1,8 +1,13 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { shareApi } from '../api/share'
+import { getApiErrorMessage } from '@/lib/api-error'
 import {
   useDirectoryContents,
   usePrefetchDirectory,
   useResolveSelection,
+  fileTreeKeys,
 } from '../hooks/useFileTree'
 import { useFileSelectionStore } from '../stores/fileSelectionStore'
 import { FileTree } from './FileTree'
@@ -24,7 +29,11 @@ export function FileExplorer({
     setCurrentPath,
     getSelectedPaths,
     toggleExpand,
+    selectAll,
+    clearSelection,
   } = useFileSelectionStore()
+  const selectedPathSet = useFileSelectionStore((state) => state.selectedPaths)
+  const queryClient = useQueryClient()
 
   // Initialize path
   useEffect(() => {
@@ -71,6 +80,35 @@ export function FileExplorer({
     }
   }, [getSelectedPaths, onSelect, resolveSelectionMutation])
 
+  // Only the entries directly in this folder, not anything nested
+  const folderPaths = useMemo(() => (data?.items ?? []).map((item) => item.path), [data])
+
+  const allInFolderSelected =
+    folderPaths.length > 0 && folderPaths.every((path) => selectedPathSet.has(path))
+
+  const handleSelectAllInFolder = useCallback(() => {
+    selectAll(folderPaths)
+  }, [folderPaths, selectAll])
+
+  const handleDeleteSelected = useCallback(async () => {
+    const paths = getSelectedPaths()
+    if (paths.length === 0) return
+    if (!window.confirm(`Permanently delete ${paths.length} item(s)? Folders are deleted with their contents.`)) {
+      return
+    }
+
+    try {
+      const result = await shareApi.deletePaths(paths)
+      if (result.deleted.length > 0) toast.success(`Deleted ${result.deleted.length} item(s)`)
+      result.failed.forEach((f) => toast.error(`${f.path}: ${f.error}`))
+      clearSelection()
+      queryClient.invalidateQueries({ queryKey: fileTreeKeys.all })
+      refetch()
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Delete failed'))
+    }
+  }, [getSelectedPaths, clearSelection, queryClient, refetch])
+
   // Handle prefetch on hover
   const handleMouseEnterFolder = useCallback(
     (path: string) => {
@@ -103,8 +141,13 @@ export function FileExplorer({
         onRefresh={() => refetch()}
         onUpload={() => setUploadModalOpen(true)}
         onConfirmSelection={handleConfirmSelection}
+        onSelectAllInFolder={handleSelectAllInFolder}
+        onClearSelection={clearSelection}
+        onDeleteSelected={handleDeleteSelected}
         showUpload={showUpload}
-        selectedCount={getSelectedPaths().length}
+        selectedCount={selectedPathSet.size}
+        folderItemCount={folderPaths.length}
+        allInFolderSelected={allInFolderSelected}
       />
 
       {/* Breadcrumb navigation */}

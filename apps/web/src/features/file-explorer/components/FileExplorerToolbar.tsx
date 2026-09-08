@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { RefreshCw, Upload, FolderPlus, Check } from 'lucide-react'
+import { RefreshCw, Upload, FolderPlus, Check, CheckSquare, Square, Trash2 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateDirectory, fileTreeKeys } from '../hooks/useFileTree'
 import { validateFolderPath } from '../utils/validation'
@@ -13,8 +13,13 @@ interface FileExplorerToolbarProps {
   onRefresh: () => void
   onUpload: () => void
   onConfirmSelection: () => void
+  onSelectAllInFolder: () => void
+  onClearSelection: () => void
+  onDeleteSelected: () => void
   showUpload?: boolean
   selectedCount: number
+  folderItemCount: number
+  allInFolderSelected: boolean
 }
 
 export const FileExplorerToolbar = memo(function FileExplorerToolbar({
@@ -22,8 +27,13 @@ export const FileExplorerToolbar = memo(function FileExplorerToolbar({
   onRefresh,
   onUpload,
   onConfirmSelection,
+  onSelectAllInFolder,
+  onClearSelection,
+  onDeleteSelected,
   showUpload = true,
   selectedCount,
+  folderItemCount,
+  allInFolderSelected,
 }: FileExplorerToolbarProps) {
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
@@ -122,6 +132,28 @@ export const FileExplorerToolbar = memo(function FileExplorerToolbar({
           title="New Folder"
         >
           <FolderPlus className="w-4 h-4" />
+        </button>
+
+        <div className="w-px h-5 bg-gray-200 mx-1" />
+
+        <button
+          onClick={allInFolderSelected ? onClearSelection : onSelectAllInFolder}
+          disabled={folderItemCount === 0}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 text-sm"
+          title={allInFolderSelected ? 'Clear selection' : 'Select everything in this folder'}
+        >
+          {allInFolderSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+          <span>{allInFolderSelected ? 'Deselect All' : 'Select All'}</span>
+        </button>
+
+        <button
+          onClick={onDeleteSelected}
+          disabled={selectedCount === 0}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed text-red-600 text-sm"
+          title="Delete selected files and folders"
+        >
+          <Trash2 className="w-4 h-4" />
+          <span>Delete</span>
         </button>
 
         {showNewFolder && (

@@ -871,6 +871,21 @@ export const imagesApi = {
     return response.data.data;
   },
 
+  /** Pages through every image for a job; the server caps page_size at 200. */
+  async listAllForJob(jobId: string): Promise<ImageListResponse> {
+    const pageSize = 200;
+    const first = await imagesApi.listForJob(jobId, 1, pageSize);
+    const images = [...first.images];
+
+    const pages = Math.ceil(first.total / pageSize);
+    for (let page = 2; page <= pages; page++) {
+      const next = await imagesApi.listForJob(jobId, page, pageSize);
+      images.push(...next.images);
+    }
+
+    return { ...first, images, page: 1, page_size: images.length };
+  },
+
   /**
    * Get a single image by ID
    */
