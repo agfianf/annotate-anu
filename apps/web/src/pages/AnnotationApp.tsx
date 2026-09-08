@@ -24,6 +24,7 @@ import { useModelRegistry } from '../hooks/useModelRegistry'
 import { imagesApi } from '../lib/api-client'
 import { DEFAULT_LABEL_COLOR } from '../lib/colors'
 import { DEFAULT_PROJECT_ID } from '../lib/storage'
+import { getApiErrorMessage } from '../lib/api-error'
 import { ALLOWED_IMAGE_EXTENSIONS, getDisplayName, getRelativePath, isAllowedImageFile, isFolderUploadSupported } from '../lib/file-utils'
 import { annotationStorage } from '../lib/storage'
 import { generateUUID } from '../lib/utils'
@@ -1772,7 +1773,9 @@ function AnnotationApp() {
               <form
                 onSubmit={async (e) => {
                   e.preventDefault()
-                  const formData = new FormData(e.currentTarget)
+                  // currentTarget is nulled once the handler yields, so capture it first
+                  const form = e.currentTarget
+                  const formData = new FormData(form)
                   const name = formData.get('name') as string
 
                   if (!name.trim()) {
@@ -1812,13 +1815,12 @@ function AnnotationApp() {
                       toast.success('Label created')
                     }
 
-                    // Reset form
-                    e.currentTarget.reset()
+                    form.reset()
                     setSelectedColor(DEFAULT_LABEL_COLOR)
                     setShowColorPicker(false)
                   } catch (error) {
                     console.error('Failed to save label:', error)
-                    toast.error('Failed to save label')
+                    toast.error(getApiErrorMessage(error, 'Failed to save label'))
                   }
                 }}
                 className="mt-4 space-y-2"

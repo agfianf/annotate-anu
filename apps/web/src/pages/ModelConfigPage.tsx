@@ -11,6 +11,7 @@ import { byomClient } from '../lib/byom-client'
 import type { ModelRegistrationRequest, ModelCapabilities, ResponseMapping, OutputType } from '../types/byom'
 import { InfoTooltip } from '../components/ui/InfoTooltip'
 import { TagInput } from '../components/ui/TagInput'
+import { LocalModelPanel } from '../components/LocalModelPanel';
 
 export default function ModelConfigPage() {
   const navigate = useNavigate()
@@ -473,6 +474,11 @@ export default function ModelConfigPage() {
             <Plus className="w-5 h-5" />
             Register Model
           </button>
+        </div>
+
+        {/* Local .pt models served by the model server */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 mb-6">
+          <LocalModelPanel onModelRegistered={refreshModels} />
         </div>
 
         {/* Registration Form */}
