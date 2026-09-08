@@ -181,6 +181,31 @@ export const sam3Client = {
   /**
    * Health check
    */
+  /** Segment the instance under a click point. */
+  async pointPrompt(params: {
+    image: File
+    points: Array<[number, number]>
+    point_labels?: number[]
+    simplify_tolerance?: number
+  }): Promise<SAM3Response> {
+    const formData = new FormData()
+    formData.append('image', params.image)
+    formData.append('points', JSON.stringify(params.points))
+    if (params.point_labels) {
+      formData.append('point_labels', JSON.stringify(params.point_labels))
+    }
+    if (params.simplify_tolerance !== undefined) {
+      formData.append('simplify_tolerance', params.simplify_tolerance.toString())
+    }
+
+    const response = await axios.post<SAM3Response>(
+      `${API_BASE_URL}/api/v1/sam3/inference/point`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    )
+    return response.data
+  },
+
   async health(): Promise<{ status: string }> {
     const response = await axios.get(`${API_BASE_URL}/api/v1/sam3/health`)
     return response.data

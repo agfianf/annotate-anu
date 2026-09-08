@@ -1,5 +1,5 @@
 // Tool types
-export type Tool = 'select' | 'rectangle' | 'polygon' | 'point'
+export type Tool = 'select' | 'rectangle' | 'polygon' | 'point' | 'magic'
 
 // Annotation types
 export type AnnotationType = 'rectangle' | 'polygon' | 'point'

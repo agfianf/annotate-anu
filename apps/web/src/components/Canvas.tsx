@@ -210,6 +210,7 @@ interface CanvasProps {
   labels: Label[]
   selectedLabelId: string | null
   onAddAnnotation: (annotation: Omit<Annotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'>) => void
+  onMagicClick?: (point: { x: number; y: number }) => void
   onUpdateAnnotation: (annotation: Annotation) => void
   onUpdateManyAnnotations?: (annotations: Annotation[]) => void
   selectedAnnotations: string[]
@@ -247,6 +248,7 @@ const Canvas = React.memo(function Canvas({
   labels,
   selectedLabelId,
   onAddAnnotation,
+  onMagicClick,
   onUpdateAnnotation,
   onUpdateManyAnnotations,
   selectedAnnotations,
@@ -944,6 +946,11 @@ const Canvas = React.memo(function Canvas({
     const currentStagePosition = stagePositionRef.current
     const originalX = (pos.x - currentStagePosition.x) / (scale * currentZoom)
     const originalY = (pos.y - currentStagePosition.y) / (scale * currentZoom)
+
+    if (selectedTool === 'magic') {
+      onMagicClick?.({ x: originalX, y: originalY })
+      return
+    }
 
     if (selectedTool === 'rectangle') {
       if (!rectangleStartPoint) {
@@ -2389,7 +2396,7 @@ const Canvas = React.memo(function Canvas({
     if (isPanMode) {
       return isDraggingStage ? 'grabbing' : 'grab'
     }
-    if (selectedTool === 'rectangle' || selectedTool === 'polygon') {
+    if (selectedTool === 'rectangle' || selectedTool === 'polygon' || selectedTool === 'magic') {
       return 'crosshair'
     } else if (selectedTool === 'select') {
       return 'default'

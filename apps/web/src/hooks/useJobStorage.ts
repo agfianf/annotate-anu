@@ -674,6 +674,15 @@ export function useJobStorage(jobId: string | null, projectId?: string): JobStor
     [jobAnnotations, jobContext.images, autoSave]
   )
 
+  // Job annotations are not project-scoped, so the local resetAll cannot see them
+  const jobResetAll = useCallback(
+    async (options: { clearAnnotations?: boolean } = {}) => {
+      if (options.clearAnnotations === false) return
+      await jobRemoveManyAnnotations(jobAnnotations.map((a) => a.id))
+    },
+    [jobAnnotations, jobRemoveManyAnnotations]
+  )
+
   const jobBulkToggleVisibility = useCallback(
     async (ids: string[]) => {
       // Toggle in local state
@@ -807,7 +816,7 @@ export function useJobStorage(jobId: string | null, projectId?: string): JobStor
     reload: async () => {
       await loadJobAnnotations()
     },
-    resetAll: localStorage.resetAll,
+    resetAll: jobResetAll,
   }
 }
 
