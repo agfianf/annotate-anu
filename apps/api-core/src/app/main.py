@@ -14,6 +14,8 @@ from app.helpers.logger import logger
 from app.integrations.redis import RedisClient
 from app.routers import admin as admin_router
 from app.routers import analytics as analytics_router
+from app.routers import qc as qc_router
+from app.routers import storage as storage_router
 from app.routers import annotations as annotations_router
 from app.routers import attributes as attributes_router
 from app.routers import auth as auth_router
@@ -204,6 +206,8 @@ app.include_router(project_images_router.router)
 app.include_router(attributes_router.router)
 app.include_router(exports_router.router)
 app.include_router(analytics_router.router)
+app.include_router(qc_router.router)
+app.include_router(storage_router.router)
 
 
 # Root endpoint

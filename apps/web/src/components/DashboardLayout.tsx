@@ -7,6 +7,8 @@ import {
     Boxes,
     ChevronLeft,
     ChevronRight,
+    ClipboardCheck,
+    Database,
     HardDrive,
     Home,
     LogOut,
@@ -35,6 +37,8 @@ const navItems: NavItem[] = [
   { path: '/dashboard/admin', label: 'Users', icon: <Users className="w-4 h-4" />, adminOnly: true },
   { path: '/dashboard/projects', label: 'Projects', icon: <Boxes className="w-4 h-4" /> },
   { path: '/dashboard/files', label: 'File Share', icon: <HardDrive className="w-4 h-4" /> },
+  { path: '/dashboard/qc', label: 'Quality Control', icon: <ClipboardCheck className="w-4 h-4" /> },
+  { path: '/dashboard/storage', label: 'Storage', icon: <Database className="w-4 h-4" /> },
   { path: '/dashboard/models', label: 'Model Management', icon: <Sparkles className="w-4 h-4" /> },
 ];
 

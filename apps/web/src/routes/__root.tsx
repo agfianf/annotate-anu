@@ -24,6 +24,8 @@ import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
 import AnimationDemoPage from '../pages/AnimationDemoPage'
 import AnnotationApp from '../pages/AnnotationApp'
+import QCPage from '../pages/QCPage'
+import StoragePage from '../pages/StoragePage'
 import DashboardLayout from '../components/DashboardLayout'
 import DashboardPage from '../pages/DashboardPage'
 import ProfilePage from '../pages/ProfilePage'
@@ -68,6 +70,11 @@ const projectDetailSearchSchema = z.object({
 })
 
 // Annotation app
+const qcSearchSchema = z.object({
+  sessionId: z.string().optional(),
+  projectId: z.string().optional(),
+})
+
 const annotateSearchSchema = z.object({
   jobId: z.coerce.string().optional(),
   imageId: z.string().optional(),
@@ -239,6 +246,19 @@ const dashboardFilesRoute = createRoute({
   component: FileSharePage,
 })
 
+const dashboardQCRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/qc',
+  validateSearch: qcSearchSchema,
+  component: QCPage,
+})
+
+const dashboardStorageRoute = createRoute({
+  getParentRoute: () => dashboardLayoutRoute,
+  path: '/storage',
+  component: StoragePage,
+})
+
 const dashboardModelsRoute = createRoute({
   getParentRoute: () => dashboardLayoutRoute,
   path: '/models',
@@ -266,6 +286,8 @@ export const routeTree = rootRoute.addChildren([
       dashboardProjectTaskJobsRoute,
       dashboardTaskJobsRoute,
       dashboardFilesRoute,
+      dashboardQCRoute,
+      dashboardStorageRoute,
       dashboardModelsRoute,
     ]),
   ]),
