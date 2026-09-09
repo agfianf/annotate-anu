@@ -25,6 +25,8 @@ class ExportOutputFormat(str, Enum):
     COCO_JSON = "coco_json"
     MANIFEST_CSV = "manifest_csv"
     IMAGE_FOLDER = "image_folder"
+    YOLO_DETECT = "yolo_detect"
+    YOLO_SEG = "yolo_seg"
 
 
 class VersionMode(str, Enum):

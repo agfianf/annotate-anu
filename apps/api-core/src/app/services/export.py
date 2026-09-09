@@ -905,6 +905,100 @@ def build_classification_manifest(
     return output.getvalue()
 
 
+def build_yolo_from_coco(coco: dict, task: str, split_assignments: dict | None = None) -> dict:
+    """Convert an already-built COCO payload into YOLO label files.
+
+    Parameters
+    ----------
+    coco : dict
+        COCO structure with images, annotations and categories
+    task : str
+        'detect' for boxes, 'segment' for polygons
+    split_assignments : dict | None
+        image id (as str) -> train/val/test; anything unassigned goes to train
+
+    Returns
+    -------
+    dict
+        label_files keyed by "<split>/<stem>.txt", plus class names and counts
+    """
+    categories = sorted(coco.get("categories", []), key=lambda c: c["id"])
+    class_index = {c["id"]: i for i, c in enumerate(categories)}
+    names = [c["name"] for c in categories]
+
+    images_by_id = {img["id"]: img for img in coco.get("images", [])}
+    lines_by_image: dict[int, list[str]] = {img_id: [] for img_id in images_by_id}
+
+    for ann in coco.get("annotations", []):
+        img = images_by_id.get(ann["image_id"])
+        if not img:
+            continue
+        width = img.get("width") or 0
+        height = img.get("height") or 0
+        if width <= 0 or height <= 0:
+            continue
+
+        cls = class_index.get(ann.get("category_id"))
+        if cls is None:
+            continue
+
+        if task == "segment" and ann.get("segmentation"):
+            polygon = ann["segmentation"][0] if ann["segmentation"] else []
+            if len(polygon) < 6:
+                continue
+            coords = []
+            for i in range(0, len(polygon) - 1, 2):
+                coords.append(f"{min(max(polygon[i] / width, 0.0), 1.0):.6f}")
+                coords.append(f"{min(max(polygon[i + 1] / height, 0.0), 1.0):.6f}")
+            lines_by_image[img["id"]].append(f"{cls} " + " ".join(coords))
+        elif ann.get("bbox"):
+            x, y, w, h = ann["bbox"]
+            if w <= 0 or h <= 0:
+                continue
+            xc = min(max((x + w / 2) / width, 0.0), 1.0)
+            yc = min(max((y + h / 2) / height, 0.0), 1.0)
+            nw = min(max(w / width, 0.0), 1.0)
+            nh = min(max(h / height, 0.0), 1.0)
+            lines_by_image[img["id"]].append(f"{cls} {xc:.6f} {yc:.6f} {nw:.6f} {nh:.6f}")
+
+    splits = split_assignments or {}
+    label_files: dict[str, str] = {}
+    image_splits: dict[str, str] = {}
+    counts = {"train": 0, "val": 0, "test": 0}
+
+    for img_id, img in images_by_id.items():
+        file_path = img["file_name"]
+        stem = Path(file_path).stem
+        split = splits.get(str(img_id)) or splits.get(file_path) or "train"
+        if split not in counts:
+            split = "train"
+        counts[split] += 1
+        label_files[f"{split}/{stem}.txt"] = "\n".join(lines_by_image.get(img_id, []))
+        image_splits[file_path] = split
+
+    return {
+        "label_files": label_files,
+        "image_splits": image_splits,
+        "names": names,
+        "counts": counts,
+        "task": task,
+    }
+
+
+def build_yolo_data_yaml(names: list[str], counts: dict) -> str:
+    """data.yaml pointing at whichever splits actually got images."""
+    lines = ["path: .", "train: images/train"]
+    lines.append(f"val: images/{'val' if counts.get('val') else 'train'}")
+    if counts.get("test"):
+        lines.append("test: images/test")
+    lines.append("")
+    lines.append("names:")
+    for i, name in enumerate(names):
+        lines.append(f"  {i}: {name}")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def create_export_zip(
     export_dir: Path,
     export_id: str,
@@ -912,6 +1006,7 @@ def create_export_zip(
     output_format: str,
     include_images: bool = False,
     images_data: list[dict] | None = None,
+    split_assignments: dict | None = None,
 ) -> tuple[Path, int]:
     """Create export ZIP file and return path and size."""
     # Ensure export directory exists
@@ -926,6 +1021,13 @@ def create_export_zip(
         elif output_format == "manifest_csv":
             # Write CSV manifest
             zf.writestr("manifest.csv", content)
+        elif output_format in ("yolo_detect", "yolo_seg"):
+            task = "segment" if output_format == "yolo_seg" else "detect"
+            yolo = build_yolo_from_coco(content, task, split_assignments)
+            for rel, body in yolo["label_files"].items():
+                zf.writestr(f"labels/{rel}", body)
+            zf.writestr("data.yaml", build_yolo_data_yaml(yolo["names"], yolo["counts"]))
+            zf.writestr("classes.txt", "\n".join(yolo["names"]))
 
         # Write metadata
         metadata = {
@@ -937,9 +1039,19 @@ def create_export_zip(
 
         # Include images if requested
         if include_images and images_data:
+            yolo_splits = (
+                build_yolo_from_coco(content, "detect", split_assignments)["image_splits"]
+                if output_format in ("yolo_detect", "yolo_seg")
+                else {}
+            )
             for img in images_data:
                 src_path = settings.SHARE_ROOT / img["file_path"]
-                if src_path.exists():
+                if not src_path.exists():
+                    continue
+                if yolo_splits:
+                    split = yolo_splits.get(img["file_path"], "train")
+                    zf.write(src_path, f"images/{split}/{Path(img['file_path']).name}")
+                else:
                     zf.write(src_path, f"images/{img['file_path']}")
 
     size = zip_path.stat().st_size

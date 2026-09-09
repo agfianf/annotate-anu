@@ -186,6 +186,7 @@ async def _generate_export_async(export_id: str) -> dict:
                 output_format,
                 include_images=include_images,
                 images_data=images_data if include_images else None,
+                split_assignments=await _get_split_assignments(connection, image_ids),
             )
 
             # Get split counts

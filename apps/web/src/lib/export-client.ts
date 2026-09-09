@@ -276,6 +276,10 @@ export function getOutputFormatLabel(format: string): string {
       return 'CSV Manifest';
     case 'image_folder':
       return 'Image Folder';
+    case 'yolo_detect':
+      return 'YOLO11 Detection';
+    case 'yolo_seg':
+      return 'YOLO11 Segmentation';
     default:
       return format;
   }
