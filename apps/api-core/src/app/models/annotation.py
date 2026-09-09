@@ -212,6 +212,19 @@ segmentations = Table(
         server_default=text("'{}'::jsonb"),
     ),
     Column(
+        "qc_verdict",
+        String(20),
+        nullable=True,
+        comment="ROI QC outcome: good, refine or bad",
+    ),
+    Column(
+        "qc_original_label_id",
+        UUID(as_uuid=True),
+        ForeignKey("labels.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="Label before a QC reassignment, so the swap is reversible",
+    ),
+    Column(
         "source",
         String(50),
         nullable=False,
