@@ -81,6 +81,12 @@ class Settings(BaseSettings):
     )
     INFERENCE_TIMEOUT: int = Field(default=120, description="Inference request timeout in seconds")
 
+    # Model server settings (local Ultralytics/YOLO weights)
+    MODEL_SERVER_URL: str = Field(
+        default="http://model-server:8002",
+        description="Model server URL, reachable only on the compose network",
+    )
+
     # File Share Settings
     SHARE_ROOT: Path = Field(
         default=Path("/data/share"),

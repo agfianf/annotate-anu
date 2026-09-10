@@ -23,6 +23,7 @@ from app.routers import exports as exports_router
 from app.routers import images as images_router
 from app.routers import inference as inference_router
 from app.routers import jobs as jobs_router
+from app.routers import model_server as model_server_router
 from app.routers import models as models_router
 from app.routers import moondream as moondream_router
 from app.routers import project_images as project_images_router
@@ -196,6 +197,7 @@ app.include_router(jobs_router.router)
 app.include_router(images_router.router)
 app.include_router(annotations_router.router)
 app.include_router(models_router.router)
+app.include_router(model_server_router.router)
 app.include_router(inference_router.router)
 app.include_router(moondream_router.router)
 app.include_router(share_router.router)

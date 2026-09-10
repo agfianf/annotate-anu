@@ -1,16 +1,22 @@
 /** Client for the local model server that hosts Ultralytics/YOLO .pt weights. */
 
-import axios from 'axios'
+import type { AxiosProgressEvent } from 'axios'
+import apiClient from '@/lib/api-client'
 
-// Browser reaches the server on the published port
-const MODEL_SERVER_URL = import.meta.env.VITE_MODEL_SERVER_URL !== undefined
-  ? import.meta.env.VITE_MODEL_SERVER_URL
-  : 'http://localhost:18713'
+// The model server has no authentication and unpickles uploaded weights, so it is
+// not published on the host. Every browser call goes through api-core's proxy.
+const BASE_URL = '/api/v1/model-server'
 
 // api-core proxies inference server-side, so it needs the docker network address
 const MODEL_SERVER_INTERNAL_URL = import.meta.env.VITE_MODEL_SERVER_INTERNAL_URL !== undefined
   ? import.meta.env.VITE_MODEL_SERVER_INTERNAL_URL
   : 'http://model-server:8002'
+
+interface ApiResponse<T> {
+  data: T
+  message: string
+  status_code: number
+}
 
 export interface ServerModel {
   name: string
@@ -28,7 +34,8 @@ export interface UploadedModel {
   endpoint_url: string
 }
 
-export const modelServerUrl = MODEL_SERVER_URL
+/** Where the weights are served from. Reachable from api-core, not from the browser. */
+export const modelServerUrl = MODEL_SERVER_INTERNAL_URL
 
 /** URL to register as a BYOM endpoint. Must resolve from api-core, not the browser. */
 export function modelEndpointUrl(name: string): string {
@@ -37,33 +44,47 @@ export function modelEndpointUrl(name: string): string {
 
 export const modelServerClient = {
   async health(): Promise<{ status: string; models: number }> {
-    const response = await axios.get(`${MODEL_SERVER_URL}/health`, { timeout: 5000 })
-    return response.data
+    const response = await apiClient.get<ApiResponse<{ status: string; models: number }>>(
+      `${BASE_URL}/health`,
+      { timeout: 5000 }
+    )
+    return response.data.data
   },
 
   async listModels(): Promise<ServerModel[]> {
-    const response = await axios.get<{ models: ServerModel[] }>(`${MODEL_SERVER_URL}/models`, { timeout: 10000 })
-    return response.data.models
+    const response = await apiClient.get<ApiResponse<{ models: ServerModel[] }>>(
+      `${BASE_URL}/models`,
+      { timeout: 10000 }
+    )
+    return response.data.data.models
   },
 
   async uploadModel(file: File, onProgress?: (percent: number) => void): Promise<UploadedModel> {
     const form = new FormData()
     form.append('file', file)
-    const response = await axios.post<UploadedModel>(`${MODEL_SERVER_URL}/models/upload`, form, {
-      timeout: 0,
-      onUploadProgress: (e) => {
-        if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
-      },
-    })
-    return response.data
+    const response = await apiClient.post<ApiResponse<UploadedModel>>(
+      `${BASE_URL}/models/upload`,
+      form,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0,
+        onUploadProgress: (e: AxiosProgressEvent) => {
+          if (onProgress && e.total) onProgress(Math.round((e.loaded / e.total) * 100))
+        },
+      }
+    )
+    return response.data.data
   },
 
   async info(name: string): Promise<{ name: string; task: string; classes: string[] }> {
-    const response = await axios.get(`${MODEL_SERVER_URL}/models/${name}/info`, { timeout: 10000 })
-    return response.data
+    const response = await apiClient.get<ApiResponse<{ name: string; task: string; classes: string[] }>>(
+      `${BASE_URL}/models/${name}/info`,
+      { timeout: 10000 }
+    )
+    return response.data.data
   },
 
   async deleteModel(name: string): Promise<void> {
-    await axios.delete(`${MODEL_SERVER_URL}/models/${name}`, { timeout: 10000 })
+    await apiClient.delete(`${BASE_URL}/models/${name}`, { timeout: 10000 })
   },
 }
