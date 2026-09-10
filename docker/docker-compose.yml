@@ -39,8 +39,9 @@ services:
       dockerfile: Dockerfile
     container_name: anu-model-server-dev
     command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8002
-    ports:
-      - "18713:8002"
+    # Deliberately not published on the host: the server has no authentication and
+    # unpickles uploaded .pt weights. api-core proxies it at /api/v1/model-server
+    # behind a JWT, and reaches it here as http://model-server:8002.
     volumes:
       - ../apps/model-server/models:/code/models
     environment:

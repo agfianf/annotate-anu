@@ -10,18 +10,24 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, union
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from app.core.security import (
+    QC_CROP_TOKEN_EXPIRE_MINUTES,
+    create_qc_crop_token,
+    verify_qc_crop_token,
+)
 from app.dependencies.auth import get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
+from app.helpers.logger import logger
 from app.helpers.response_api import JsonResponse
 from app.models.annotation import detections, segmentations
 from app.models.image import images
 from app.models.project import labels
 from app.models.qc import qc_consolidated, qc_sessions, qc_verdicts
-from app.models.storage import storage_connections
 from app.schemas.auth import UserBase
 from app.services.job_status import JobStatusService
 from app.services.qc import DEFAULT_CONFIG, QCService
 from app.services.roi_crop import ROICropService
+from app.services.storage_connection import StorageConnectionService
 from app.services.storage_s3 import S3Service
 
 router = APIRouter(prefix="/api/v1/qc", tags=["QC"])
@@ -98,6 +104,31 @@ async def _require_session(connection: AsyncConnection, session_id: UUID) -> dic
     if not session:
         raise HTTPException(status_code=404, detail="QC session not found")
     return session
+
+
+def _manifest_key(key: str | None, session: dict, session_id: UUID) -> str:
+    """Resolve the object key the manifest is written to, keeping it a manifest.
+
+    The caller may name the key, so without this the publish endpoints would happily
+    PUT JSON over any object in the bucket — including the source images the endpoint
+    promises never to touch. Restricting it to a ``.json`` object under ``qc/`` keeps a
+    custom key useful while confining the write to the QC namespace.
+    """
+    if not key:
+        return f"qc/{session['name'].replace('/', '_')}-{session_id}.json"
+
+    candidate = key.strip().lstrip("/")
+    segments = candidate.split("/")
+    if (
+        not candidate.startswith("qc/")
+        or not candidate.endswith(".json")
+        or any(s in ("", ".", "..") for s in segments)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Manifest key must be a .json object under 'qc/'",
+        )
+    return candidate
 
 
 @router.post("/sessions", response_model=JsonResponse[dict, None], status_code=201)
@@ -346,7 +377,10 @@ async def get_roi_tiles(
                 "label_name": row["label_name"],
                 "label_color": row["label_color"],
                 "confidence": row["confidence"],
-                "crop_url": f"/api/v1/qc/crop/{row['id']}",
+                "crop_url": (
+                    f"/api/v1/qc/crop/{row['id']}"
+                    f"?token={create_qc_crop_token(str(row['id']))}"
+                ),
             }
         )
 
@@ -387,9 +421,17 @@ async def get_roi_tiles(
 async def get_crop(
     annotation_id: UUID,
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+    token: str | None = Query(default=None, description="Signed crop token minted by /roi-tiles"),
 ):
-    """Serve one cached ROI crop (no auth so it can be used as an img src)."""
+    """Serve one cached ROI crop, authorised by the signed token in the URL.
+
+    A browser <img src> cannot carry an Authorization header, so authorisation rides in the query string instead: /roi-tiles is authenticated and mints a short-lived token bound to this one annotation.
+    """
     from fastapi.responses import FileResponse
+
+    # A missing token gets the same 403 as a bad one: whether the annotation exists is itself information an anonymous caller should not get
+    if not token or not verify_qc_crop_token(token, str(annotation_id)):
+        raise HTTPException(status_code=403, detail="Invalid or expired crop token")
 
     result = await connection.execute(
         select(
@@ -418,7 +460,12 @@ async def get_crop(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
-    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+    # The response is only as public as the token that fetched it, so keep it out of shared caches and let it expire with the token
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": f"private, max-age={QC_CROP_TOKEN_EXPIRE_MINUTES * 60}"},
+    )
 
 
 @router.post("/sessions/{session_id}/verdicts/bulk", response_model=JsonResponse[dict, None])
@@ -556,12 +603,9 @@ async def publish_manifest(
     """Write the verdict manifest into the bucket. Source objects are never touched."""
     session = await _require_session(connection, session_id)
 
-    result = await connection.execute(
-        select(storage_connections).where(storage_connections.c.id == payload.connection_id)
+    row = await StorageConnectionService.require_usable(
+        connection, payload.connection_id, current_user
     )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Storage connection not found")
 
     entries = await QCService.manifest(connection, session_id)
     if payload.settled_only:
@@ -579,11 +623,13 @@ async def publish_manifest(
         "refine": [e["item"] for e in entries if e["verdict"] == "refine"],
     }
 
-    key = payload.key or f"qc/{session['name'].replace('/', '_')}-{session_id}.json"
+    key = _manifest_key(payload.key, session, session_id)
     try:
-        written = S3Service(dict(row)).put_json(key, manifest)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Manifest write failed: {exc}")
+        written = S3Service(row).put_json(key, manifest)
+    except Exception:
+        # boto3 errors quote endpoint, bucket and credential detail; keep them in the log.
+        logger.exception(f"Manifest write failed for storage connection {payload.connection_id}")
+        raise HTTPException(status_code=502, detail="Manifest write failed")
 
     return JsonResponse(
         data={"bucket": row["bucket"], "key": written, "entries": len(entries), "counts": manifest["counts"]},
@@ -616,12 +662,9 @@ async def sync_session(
 
     published = None
     if payload.connection_id:
-        conn_result = await connection.execute(
-            select(storage_connections).where(storage_connections.c.id == payload.connection_id)
+        row = await StorageConnectionService.require_usable(
+            connection, payload.connection_id, current_user
         )
-        row = conn_result.mappings().first()
-        if not row:
-            raise HTTPException(status_code=404, detail="Storage connection not found")
 
         entries = await QCService.manifest(connection, session_id)
         manifest = {
@@ -637,13 +680,16 @@ async def sync_session(
             "entries": entries,
             "refine": [e["item"] for e in entries if e["verdict"] == "refine"],
         }
-        key = payload.key or f"qc/{session['name'].replace('/', '_')}-{session_id}.json"
+        key = _manifest_key(payload.key, session, session_id)
         try:
-            service = S3Service(dict(row))
+            service = S3Service(row)
             written = service.put_json(key, manifest)
             published = {"bucket": row["bucket"], "key": written, "entries": len(entries)}
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Manifest write failed: {exc}")
+        except Exception:
+            logger.exception(
+                f"Manifest write failed for storage connection {payload.connection_id}"
+            )
+            raise HTTPException(status_code=502, detail="Manifest write failed")
 
     return JsonResponse(
         data={"applied": applied, "job": job_result, "published": published},

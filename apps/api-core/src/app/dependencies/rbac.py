@@ -10,6 +10,58 @@ from app.dependencies.database import get_async_conn
 from app.repositories.project import ProjectMemberRepository, ProjectRepository
 from app.schemas.auth import UserBase
 
+# Single source of truth for project role ranking, shared by the permission dependencies
+# below and by any query that has to express the same rule in SQL.
+ROLE_HIERARCHY = {
+    "owner": 4,
+    "maintainer": 3,
+    "annotator": 2,
+    "viewer": 1,
+}
+
+
+async def resolve_project_role(
+    connection: AsyncConnection,
+    project_id: int,
+    current_user: UserBase,
+) -> str | None:
+    """Resolve a user's effective role on a project.
+
+    Same rule as :class:`ProjectPermission`, without the dependency plumbing, for callers
+    whose project id arrives in a request body instead of the path.
+
+    Parameters
+    ----------
+    connection : AsyncConnection
+        Database connection
+    project_id : int
+        Project to resolve the role against
+    current_user : UserBase
+        Current authenticated user
+
+    Returns
+    -------
+    str | None
+        Effective role name, or None when the project is missing or the user is unrelated
+    """
+    # Existence is checked before the admin shortcut, the same order :class:`ProjectPermission`
+    # uses. Short-circuiting on admin would report "owner" for a project id that does not
+    # exist, and the caller would go on to write a row whose foreign key cannot resolve.
+    project = await ProjectRepository.get_by_id(connection, project_id)
+    if not project:
+        return None
+
+    if current_user.role == "admin":
+        return "owner"
+
+    if project["owner_id"] == current_user.id:
+        return "owner"
+
+    membership = await ProjectMemberRepository.get_by_project_and_user(
+        connection, project_id, current_user.id
+    )
+    return membership["role"] if membership else None
+
 
 class ProjectPermission:
     """Dependency for checking project permissions.
@@ -31,12 +83,7 @@ class ProjectPermission:
             Minimum required role: owner, maintainer, annotator, viewer
         """
         self.required_role = required_role
-        self.role_hierarchy = {
-            "owner": 4,
-            "maintainer": 3,
-            "annotator": 2,
-            "viewer": 1,
-        }
+        self.role_hierarchy = ROLE_HIERARCHY
 
     async def __call__(
         self,
@@ -118,12 +165,7 @@ class TaskPermission:
 
     def __init__(self, required_role: str = "viewer"):
         self.required_role = required_role
-        self.role_hierarchy = {
-            "owner": 4,
-            "maintainer": 3,
-            "annotator": 2,
-            "viewer": 1,
-        }
+        self.role_hierarchy = ROLE_HIERARCHY
 
     async def __call__(
         self,
@@ -202,12 +244,7 @@ class JobPermission:
 
     def __init__(self, required_role: str = "viewer"):
         self.required_role = required_role
-        self.role_hierarchy = {
-            "owner": 4,
-            "maintainer": 3,
-            "annotator": 2,
-            "viewer": 1,
-        }
+        self.role_hierarchy = ROLE_HIERARCHY
 
     async def __call__(
         self,

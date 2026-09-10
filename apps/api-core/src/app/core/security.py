@@ -181,3 +181,67 @@ def verify_token_type(payload: dict, expected_type: str) -> bool:
         True if token type matches, False otherwise
     """
     return payload.get("type") == expected_type
+
+
+# A crop URL travels as a plain <img src>, so it leaks wherever URLs leak: browser history, referrer headers, proxy and access logs. Fifteen minutes is long enough for a reviewer to work through a tile grid whose URLs were all minted in one request, including tiles lazily loaded further down, and short enough that a leaked URL is dead well before anyone finds it in a log.
+QC_CROP_TOKEN_TYPE = "qc_crop"
+QC_CROP_TOKEN_EXPIRE_MINUTES = 15
+
+
+def create_qc_crop_token(
+    annotation_id: str,
+    expires_delta: timedelta | None = None,
+) -> str:
+    """Create a short-lived token granting read access to one ROI crop.
+
+    Parameters
+    ----------
+    annotation_id : str
+        Annotation the token is bound to; it grants access to no other crop
+    expires_delta : timedelta, optional
+        Custom expiration time, defaults to QC_CROP_TOKEN_EXPIRE_MINUTES
+
+    Returns
+    -------
+    str
+        Encoded JWT crop token
+    """
+    expire = datetime.now(timezone.utc) + (
+        expires_delta or timedelta(minutes=QC_CROP_TOKEN_EXPIRE_MINUTES)
+    )
+    to_encode = {
+        "sub": str(annotation_id),
+        "exp": expire,
+        "type": QC_CROP_TOKEN_TYPE,
+    }
+    return jwt.encode(
+        to_encode,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+
+
+def verify_qc_crop_token(token: str, annotation_id: str) -> bool:
+    """Check that a crop token is valid, unexpired and issued for this annotation.
+
+    Parameters
+    ----------
+    token : str
+        JWT crop token from the request
+    annotation_id : str
+        Annotation being requested
+
+    Returns
+    -------
+    bool
+        True only if signature, expiry, token type and subject all match
+    """
+    payload = decode_token(token)
+    if not payload:
+        return False
+
+    # The type claim is what stops an access token being spent here, and a crop token being spent on the authenticated API
+    if not verify_token_type(payload, QC_CROP_TOKEN_TYPE):
+        return False
+
+    return payload.get("sub") == str(annotation_id)

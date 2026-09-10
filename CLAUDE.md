@@ -62,7 +62,7 @@ Exact env var names, which are easy to get wrong:
 | File | Variables |
 | --- | --- |
 | `apps/api-inference/.env` | `HF_TOKEN`, `SAM3_MODEL_NAME`, `SAM3_DEVICE` (`auto`/`cuda`/`cpu`), `MAX_IMAGE_SIZE_MB` |
-| `apps/api-core/.env` | `DATABASE_URL`, `DATABASE_URL_SYNC`, `REDIS_URL`, `SAM3_API_URL`, `JWT_SECRET_KEY`, `CORS_ORIGINS` |
+| `apps/api-core/.env` | `DATABASE_URL`, `DATABASE_URL_SYNC`, `REDIS_URL`, `SAM3_API_URL`, `MODEL_SERVER_URL`, `JWT_SECRET_KEY`, `CORS_ORIGINS` |
 | `apps/web/.env` | `VITE_SAM3_API_URL`, `VITE_CORE_API_URL`, `VITE_ENV` |
 
 - It is `JWT_SECRET_KEY`, not `JWT_SECRET`.
@@ -75,6 +75,14 @@ Exact env var names, which are easy to get wrong:
 `make docker-up` folds the override in automatically. Compose only auto-loads an override when no `-f` flag is used and every Makefile target passes `-f`, so the Makefile adds a second `-f` via a `wildcard` check — present or absent, both work. Running compose by hand needs both files named explicitly.
 
 Serving the UI from a non-localhost address means three things must name that host: the `VITE_*` URLs (Vite reads `VITE_`-prefixed process env and it wins over `apps/web/.env`), `CORS_ORIGINS` on api-core, and the `VITE_*` build args for `frontend-prod`. Container-to-container URLs stay on service names — `SAM3_API_URL=http://backend:8000`, `VITE_MODEL_SERVER_INTERNAL_URL=http://model-server:8002`.
+
+## Security boundaries
+
+Three rules that are easy to undo by accident:
+
+- **model-server publishes no host port.** It loads `.pt` files, which are pickles, so unpickling one runs arbitrary code — an open upload endpoint is remote code execution. It is reachable only on the compose network, and the browser talks to it through api-core's authenticated proxy at `/api/v1/model-server`. Never add a `ports:` entry for it. Inference still goes container-to-container via the BYOM registry, which is why `modelEndpointUrl()` keeps returning the `http://model-server:8002` form.
+- **QC crops are served against a signed token, not a session.** A browser `<img src>` cannot send an `Authorization` header, so `/api/v1/qc/crop/{id}` takes a short-lived token minted by the authenticated `/roi-tiles` endpoint and bound to one annotation. Helpers live in `core/security.py`. A missing token and an invalid one both return 403 on purpose: distinguishing them would reveal whether an annotation exists.
+- **Storage connections are access-scoped in SQL.** `StorageConnectionRepository.access_clause` is the single definition of who may see a connection — creator, project members, or admin. Denied access returns 404, never 403, so it cannot be used to probe for rows. Anything reading `storage_connections` must go through `StorageConnectionService`, including the QC manifest publish path.
 
 ## Conventions
 

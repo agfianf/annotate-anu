@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { getApiErrorMessage } from '@/lib/api-error'
@@ -27,11 +27,18 @@ export function ROITileGrid({ sessionId, onStats }: ROITileGridProps) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
 
+  // Crop URLs carry a short-lived signed token minted when the list was fetched. The grid
+  // lazy-loads, so a tile scrolled into view long after that will 403 on an expired token
+  // and render broken with no way back. Refetching the list re-mints every token. Guarded
+  // to once per list so a crop that is genuinely missing cannot spin.
+  const staleTokenRetryRef = useRef(false)
+
   const load = useCallback(
     async (labelId: string | null) => {
       setLoading(true)
       try {
         const result = await qcClient.getROITiles(sessionId, labelId, 120)
+        staleTokenRetryRef.current = false
         setTiles(result.tiles)
         setRemaining(result.remaining)
         setClasses(result.classes)
@@ -49,6 +56,12 @@ export function ROITileGrid({ sessionId, onStats }: ROITileGridProps) {
   )
 
   useEffect(() => { load(activeClass) }, [activeClass, load])
+
+  const handleTileError = useCallback(() => {
+    if (staleTokenRetryRef.current) return
+    staleTokenRetryRef.current = true
+    load(activeClass)
+  }, [activeClass, load])
 
   const activeClassName = useMemo(
     () => classes.find((c) => c.label_id === activeClass)?.label_name ?? 'all',
@@ -146,6 +159,7 @@ export function ROITileGrid({ sessionId, onStats }: ROITileGridProps) {
                     src={`${API_BASE}${tile.crop_url}`}
                     alt={tile.filename}
                     loading="lazy"
+                    onError={handleTileError}
                     className="w-full h-full object-cover bg-gray-900"
                   />
                   {isSelected && (
