@@ -133,6 +133,14 @@ export const shareApi = {
   /**
    * Create nested directories in a single API call
    */
+  deletePaths: async (paths: string[]): Promise<{ deleted: string[]; failed: { path: string; error: string }[] }> => {
+    const response = await apiClient.post<ApiResponse<{ deleted: string[]; failed: { path: string; error: string }[] }>>(
+      '/api/v1/share/delete',
+      { paths }
+    )
+    return response.data.data
+  },
+
   createNestedDirectories: async (
     basePath: string,
     nestedPath: string

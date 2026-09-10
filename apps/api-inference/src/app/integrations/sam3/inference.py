@@ -23,6 +23,8 @@ class SAM3Inference:
         self.device = self._get_device()
         self.model = None
         self.processor = None
+        self.tracker_model = None
+        self.tracker_processor = None
         self.visualizer = Sam3Visualizer()
 
         logger.info(f"SAM3 inference initialized - Model: {self.model_name}, Device: {self.device}")
@@ -64,6 +66,99 @@ class SAM3Inference:
         )
 
         logger.info(f"SAM3 model loaded successfully on {self.device}")
+
+    def load_tracker(self):
+        """Lazily load the tracker model used for point prompts."""
+        if self.tracker_model is not None:
+            return
+
+        from transformers import Sam3TrackerModel, Sam3TrackerProcessor
+
+        logger.info("Loading SAM3 tracker for point prompts")
+        self.tracker_model = Sam3TrackerModel.from_pretrained(
+            self.model_name, cache_dir=settings.SAM3_CACHE_DIR, token=settings.HF_TOKEN
+        ).to(self.device)
+        self.tracker_model.eval()
+        self.tracker_processor = Sam3TrackerProcessor.from_pretrained(
+            self.model_name, cache_dir=settings.SAM3_CACHE_DIR, token=settings.HF_TOKEN
+        )
+        logger.info(f"SAM3 tracker loaded on {self.device}")
+
+    async def inference_point(
+        self,
+        image_file: UploadFile,
+        points: list[list[float]],
+        point_labels: list[int],
+        simplify_tolerance: float = 1.5,
+    ) -> dict:
+        """Point-prompted instance segmentation.
+
+        Parameters
+        ----------
+        image_file : UploadFile
+            Image file
+        points : list[list[float]]
+            Click points as [[x, y], ...]
+        point_labels : list[int]
+            1 for foreground, 0 for background
+        simplify_tolerance : float
+            Polygon simplification tolerance
+
+        Returns
+        -------
+        dict
+            Single best instance with box, score and mask polygons
+        """
+        start_time = time.perf_counter()
+
+        self.load_tracker()
+        image = await self._load_image_from_upload(image_file)
+
+        inputs = self.tracker_processor(
+            images=image,
+            input_points=[[points]],
+            input_labels=[[point_labels]],
+            return_tensors="pt",
+        ).to(self.device)
+
+        with torch.no_grad():
+            outputs = self.tracker_model(**inputs)
+
+        masks = self.tracker_processor.post_process_masks(
+            outputs.pred_masks, inputs["original_sizes"]
+        )[0]
+
+        # The decoder returns competing hypotheses; keep the highest-IoU one
+        scores = outputs.iou_scores.squeeze().tolist()
+        if isinstance(scores, float):
+            scores = [scores]
+        best = max(range(len(scores)), key=lambda i: scores[i])
+
+        best_mask = masks[best] if masks.ndim == 3 else masks[0][best]
+        binary = (best_mask > 0).to(torch.uint8)
+
+        ys, xs = torch.nonzero(binary, as_tuple=True)
+        if xs.numel() == 0:
+            return {
+                "num_objects": 0, "boxes": [], "scores": [], "masks": [],
+                "processing_time_ms": round((time.perf_counter() - start_time) * 1000, 2),
+                "visualization_base64": None,
+            }
+
+        box = [float(xs.min()), float(ys.min()), float(xs.max()), float(ys.max())]
+        mask_data = masks_to_polygon_data(binary.unsqueeze(0), simplify_tolerance)
+
+        processing_time_ms = (time.perf_counter() - start_time) * 1000
+        logger.info(f"Point inference completed - Score: {scores[best]:.3f}, Time: {processing_time_ms:.2f}ms")
+
+        return {
+            "num_objects": 1,
+            "boxes": [box],
+            "scores": [float(scores[best])],
+            "masks": mask_data,
+            "processing_time_ms": round(processing_time_ms, 2),
+            "visualization_base64": None,
+        }
 
     async def _load_image_from_upload(self, file: UploadFile) -> Image.Image:
         """Load PIL Image from uploaded file.

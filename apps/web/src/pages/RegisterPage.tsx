@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../lib/api-client';
+import { getApiErrorMessage } from '../lib/api-error';
 
 // Password validation rules
 const passwordRules = [
@@ -17,6 +18,11 @@ const passwordRules = [
   { id: 'uppercase', label: 'One uppercase letter', check: (p: string) => /[A-Z]/.test(p) },
   { id: 'lowercase', label: 'One lowercase letter', check: (p: string) => /[a-z]/.test(p) },
   { id: 'digit', label: 'One digit', check: (p: string) => /\d/.test(p) },
+  {
+    id: 'special',
+    label: 'One special character',
+    check: (p: string) => /[!@#$%^&*(),.?":{}|<>]/.test(p),
+  },
 ];
 
 export default function RegisterPage() {
@@ -117,8 +123,7 @@ export default function RegisterPage() {
         navigate({ to: '/login' });
       }
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Registration failed');
+      toast.error(getApiErrorMessage(err, 'Registration failed'));
     } finally {
       setIsLoading(false);
     }

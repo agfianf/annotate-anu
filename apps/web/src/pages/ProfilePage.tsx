@@ -9,6 +9,7 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../lib/api-client';
+import { getApiErrorMessage } from '../lib/api-error';
 
 const passwordRules = [
   { id: 'length', label: 'At least 8 characters', check: (p: string) => p.length >= 8 },
@@ -42,8 +43,7 @@ export default function ProfilePage() {
       await refreshUser();
       toast.success('Profile updated');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to update profile');
+      toast.error(getApiErrorMessage(err, 'Failed to update profile'));
     } finally {
       setIsUpdatingProfile(false);
     }
@@ -81,8 +81,7 @@ export default function ProfilePage() {
       setNewPassword('');
       setConfirmNewPassword('');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to update password');
+      toast.error(getApiErrorMessage(err, 'Failed to update password'));
     } finally {
       setIsUpdatingPassword(false);
     }

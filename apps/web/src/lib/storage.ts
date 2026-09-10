@@ -1,15 +1,20 @@
-import type { ImageData, Annotation, Label, LabelGroup } from '@/types/annotations'
+import type { ImageData, Annotation, Label, LabelGroup, Project } from '@/types/annotations'
 
 const DB_NAME = 'sam3-annotation-db'
-const DB_VERSION = 3 // Incremented for folder upload support
+const DB_VERSION = 4 // v4: project scoping
 
-// Object store names
+// Every pre-v4 record is adopted by this project so no existing work is orphaned.
+export const DEFAULT_PROJECT_ID = 'default-project'
+
 const STORES = {
   IMAGES: 'images',
   ANNOTATIONS: 'annotations',
   LABELS: 'labels',
   LABEL_GROUPS: 'labelGroups',
+  PROJECTS: 'projects',
 }
+
+const SCOPED_STORES = [STORES.IMAGES, STORES.ANNOTATIONS, STORES.LABELS, STORES.LABEL_GROUPS]
 
 // Initialize IndexedDB
 export function openDB(): Promise<IDBDatabase> {
@@ -72,6 +77,49 @@ export function openDB(): Promise<IDBDatabase> {
         }
       }
 
+      // v3 -> v4: create projects store, backfill projectId, index it
+      if (!db.objectStoreNames.contains(STORES.PROJECTS)) {
+        const projectsStore = db.createObjectStore(STORES.PROJECTS, { keyPath: 'id' })
+        projectsStore.createIndex('createdAt', 'createdAt', { unique: false })
+      }
+
+      if (oldVersion < 4) {
+        // Label names are only unique within a project now
+        if (db.objectStoreNames.contains(STORES.LABELS)) {
+          const labelsStore = transaction.objectStore(STORES.LABELS)
+          if (labelsStore.indexNames.contains('name')) {
+            labelsStore.deleteIndex('name')
+          }
+          labelsStore.createIndex('name', 'name', { unique: false })
+        }
+
+        const projectsStore = transaction.objectStore(STORES.PROJECTS)
+        projectsStore.put({
+          id: DEFAULT_PROJECT_ID,
+          name: 'Default Project',
+          description: 'Work created before projects existed',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        })
+
+        SCOPED_STORES.forEach((storeName) => {
+          if (!db.objectStoreNames.contains(storeName)) return
+          const store = transaction.objectStore(storeName)
+          if (!store.indexNames.contains('projectId')) {
+            store.createIndex('projectId', 'projectId', { unique: false })
+          }
+          const req = store.getAll()
+          req.onsuccess = () => {
+            req.result.forEach((record: any) => {
+              if (!record.projectId) {
+                record.projectId = DEFAULT_PROJECT_ID
+                store.put(record)
+              }
+            })
+          }
+        })
+      }
+
       // Migration: Add folder upload fields (v2 -> v3)
       if (oldVersion < 3 && db.objectStoreNames.contains(STORES.IMAGES)) {
         const imagesStore = transaction.objectStore(STORES.IMAGES)
@@ -101,6 +149,31 @@ async function getAll<T>(storeName: string): Promise<T[]> {
 
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
+  })
+}
+
+async function getAllByProject<T>(storeName: string, projectId: string): Promise<T[]> {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, 'readonly')
+    const index = transaction.objectStore(storeName).index('projectId')
+    const request = index.getAll(projectId)
+
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+async function clearByProject(storeName: string, projectId: string): Promise<void> {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(storeName, 'readwrite')
+    const store = transaction.objectStore(storeName)
+    const request = store.index('projectId').getAllKeys(projectId)
+
+    request.onsuccess = () => request.result.forEach((key) => store.delete(key))
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
   })
 }
 
@@ -167,6 +240,8 @@ async function clear(storeName: string): Promise<void> {
 // Image operations
 export const imageStorage = {
   getAll: () => getAll<ImageData>(STORES.IMAGES),
+  getAllByProject: (projectId: string) => getAllByProject<ImageData>(STORES.IMAGES, projectId),
+  clearByProject: (projectId: string) => clearByProject(STORES.IMAGES, projectId),
   getById: (id: string) => getById<ImageData>(STORES.IMAGES, id),
   add: (image: ImageData) => add(STORES.IMAGES, image),
   update: (image: ImageData) => update(STORES.IMAGES, image),
@@ -177,6 +252,8 @@ export const imageStorage = {
 // Annotation operations
 export const annotationStorage = {
   getAll: () => getAll<Annotation>(STORES.ANNOTATIONS),
+  getAllByProject: (projectId: string) => getAllByProject<Annotation>(STORES.ANNOTATIONS, projectId),
+  clearByProject: (projectId: string) => clearByProject(STORES.ANNOTATIONS, projectId),
   getById: (id: string) => getById<Annotation>(STORES.ANNOTATIONS, id),
   getByImageId: async (imageId: string): Promise<Annotation[]> => {
     const db = await openDB()
@@ -266,6 +343,8 @@ export const annotationStorage = {
 // Label operations
 export const labelStorage = {
   getAll: () => getAll<Label>(STORES.LABELS),
+  getAllByProject: (projectId: string) => getAllByProject<Label>(STORES.LABELS, projectId),
+  clearByProject: (projectId: string) => clearByProject(STORES.LABELS, projectId),
   getById: (id: string) => getById<Label>(STORES.LABELS, id),
   add: (label: Label) => add(STORES.LABELS, label),
   update: (label: Label) => update(STORES.LABELS, label),
@@ -302,6 +381,8 @@ export const labelStorage = {
 // Label group operations
 export const labelGroupStorage = {
   getAll: () => getAll<LabelGroup>(STORES.LABEL_GROUPS),
+  getAllByProject: (projectId: string) => getAllByProject<LabelGroup>(STORES.LABEL_GROUPS, projectId),
+  clearByProject: (projectId: string) => clearByProject(STORES.LABEL_GROUPS, projectId),
   getById: (id: string) => getById<LabelGroup>(STORES.LABEL_GROUPS, id),
   add: (group: LabelGroup) => add(STORES.LABEL_GROUPS, group),
   update: (group: LabelGroup) => update(STORES.LABEL_GROUPS, group),
@@ -361,5 +442,24 @@ export const groupUIState = {
     } catch (error) {
       console.error('Failed to clear group expanded states:', error)
     }
+  },
+}
+
+
+// Project operations
+export const projectStorage = {
+  // Solo mode writes to a single project; this guarantees it exists
+  ensureDefault: async (): Promise<Project> => {
+    const existing = await getAll<Project>(STORES.PROJECTS)
+    if (existing.length > 0) return existing[0]
+    const now = Date.now()
+    const project: Project = { id: DEFAULT_PROJECT_ID, name: 'Default Project', createdAt: now, updatedAt: now }
+    await add(STORES.PROJECTS, project)
+    return project
+  },
+
+  touch: async (id: string): Promise<void> => {
+    const project = await getById<Project>(STORES.PROJECTS, id)
+    if (project) await update(STORES.PROJECTS, { ...project, updatedAt: Date.now() })
   },
 }

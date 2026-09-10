@@ -54,8 +54,7 @@ export function useJobContext(jobId: string | null): JobContext {
     if (!jobId) return
 
     try {
-      // Fetch all images (up to 1000 for now)
-      const response = await imagesApi.listForJob(jobId, 1, 1000)
+      const response = await imagesApi.listAllForJob(jobId)
       setImages(response.images)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch images'

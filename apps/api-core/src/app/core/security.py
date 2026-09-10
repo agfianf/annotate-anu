@@ -1,6 +1,7 @@
 """Security utilities for JWT authentication and password hashing."""
 
 import hashlib
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -130,7 +131,8 @@ def create_refresh_token(
             days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
         )
 
-    to_encode.update({"exp": expire, "type": "refresh"})
+    # jti keeps tokens distinct; exp alone has 1s resolution and collides on the token hash
+    to_encode.update({"exp": expire, "type": "refresh", "jti": uuid.uuid4().hex})
     encoded_jwt = jwt.encode(
         to_encode,
         settings.JWT_SECRET_KEY,

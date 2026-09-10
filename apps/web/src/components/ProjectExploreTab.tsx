@@ -38,6 +38,7 @@ import { useExploreVisibility } from '../hooks/useExploreVisibility';
 import { useInfiniteExploreImages } from '../hooks/useInfiniteExploreImages';
 import { useZoomLevel } from '../hooks/useZoomLevel';
 import { tasksApi } from '../lib/api-client';
+import { getApiErrorMessage } from '../lib/api-error';
 import {
     getFullSizeThumbnailUrl,
     projectImagesApi,
@@ -423,7 +424,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     },
     onError: (error: any) => {
       console.error('Failed to create tag:', error);
-      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to create tag';
+      const errorMessage = getApiErrorMessage(error, 'Failed to create tag');
       toast.error(errorMessage);
     },
   });
@@ -460,7 +461,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     },
     onError: (error: any) => {
       console.error('Failed to add tags:', error);
-      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to add tags';
+      const errorMessage = getApiErrorMessage(error, 'Failed to add tags');
       toast.error(errorMessage);
     },
   });
@@ -483,7 +484,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     },
     onError: (error: any) => {
       console.error('Failed to remove tag:', error);
-      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to remove tag';
+      const errorMessage = getApiErrorMessage(error, 'Failed to remove tag');
       toast.error(errorMessage);
     },
   });
@@ -501,7 +502,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     },
     onError: (error: any) => {
       console.error('Failed to remove tags:', error);
-      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to remove tags';
+      const errorMessage = getApiErrorMessage(error, 'Failed to remove tags');
       toast.error(errorMessage);
     },
   });
@@ -609,7 +610,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       bulkTagMutation.mutate({ imageIds, tagIds });
     } catch (error: any) {
       console.error('Failed to preview bulk tag:', error);
-      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to preview tag operation';
+      const errorMessage = getApiErrorMessage(error, 'Failed to preview tag operation');
       toast.error(errorMessage);
     }
   };

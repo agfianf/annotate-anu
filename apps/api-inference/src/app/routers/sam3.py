@@ -258,6 +258,74 @@ async def inference_batch(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Batch inference failed")
 
 
+@router.post(
+    "/inference/point",
+    response_model=JsonResponse[InferenceResult, None],
+    status_code=status.HTTP_200_OK,
+    description="Segment the object under a click point. Returns the single best instance mask.",
+)
+async def inference_point(
+    request: Request,
+    response: Response,
+    image: UploadFile = File(..., description="Image file to process"),
+    points: str = Form(..., description="JSON array of [x, y] click points"),
+    point_labels: str | None = Form(None, description="JSON array of 1 (foreground) / 0 (background)"),
+    simplify_tolerance: float = Form(1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance"),
+):
+    """Segment the instance under one or more click points.
+
+    Parameters
+    ----------
+    image : UploadFile
+        Uploaded image file
+    points : str
+        JSON array of [x, y] points
+    point_labels : str | None
+        JSON array of point labels, defaults to all foreground
+    simplify_tolerance : float
+        Polygon simplification tolerance
+
+    Returns
+    -------
+    JsonResponse[InferenceResult, None]
+        Best instance mask for the clicked object
+    """
+    try:
+        parsed_points = json.loads(points)
+        if not parsed_points:
+            raise ValueError("At least one point is required")
+
+        parsed_labels = json.loads(point_labels) if point_labels else [1] * len(parsed_points)
+        if len(parsed_labels) != len(parsed_points):
+            raise ValueError("points and point_labels must be the same length")
+
+        sam3_inference = request.state.sam3_inference
+        result = await sam3_inference.inference_point(
+            image_file=image,
+            points=parsed_points,
+            point_labels=parsed_labels,
+            simplify_tolerance=simplify_tolerance,
+        )
+
+        status_code = status.HTTP_200_OK
+        response.status_code = status_code
+        return JsonResponse(
+            data=InferenceResult(**result),
+            message=f"Segmented {result['num_objects']} object(s) from point prompt.",
+            status_code=status_code,
+        )
+
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in point inference: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid JSON: {e}")
+    except ValueError as e:
+        logger.error(f"Validation error in point inference: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in point inference: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Inference failed")
+
+
 @router.get(
     "/health",
     status_code=status.HTTP_200_OK,

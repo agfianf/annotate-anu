@@ -9,6 +9,7 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { useAuth } from '../contexts/AuthContext';
+import { getApiErrorMessage } from '../lib/api-error';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -36,9 +37,7 @@ export default function LoginPage() {
       const redirectTo = search.redirect || '/dashboard';
       navigate({ to: redirectTo });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Login failed';
-      const axiosError = error as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || message);
+      toast.error(getApiErrorMessage(error, 'Login failed'));
     } finally {
       setIsLoading(false);
     }

@@ -23,6 +23,8 @@ from app.models.history import annotation_events, version_snapshots
 from app.models.image import images
 from app.models.job import jobs
 from app.models.project import labels, project_members, projects
+from app.models.qc import qc_consolidated, qc_sessions, qc_verdicts
+from app.models.storage import storage_connections
 from app.models.task import tasks
 from app.models.user import refresh_tokens, users
 
@@ -48,6 +50,12 @@ __all__ = [
     # History
     "annotation_events",
     "version_snapshots",
+    # Storage
+    "storage_connections",
+    # QC
+    "qc_sessions",
+    "qc_verdicts",
+    "qc_consolidated",
     # Activity
     "project_activity",
     # Data Management

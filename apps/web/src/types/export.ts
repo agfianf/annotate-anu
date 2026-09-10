@@ -6,7 +6,7 @@
 // Enums
 // ============================================================================
 export type ExportMode = 'classification' | 'detection' | 'segmentation';
-export type ExportOutputFormat = 'coco_json' | 'manifest_csv' | 'image_folder';
+export type ExportOutputFormat = 'coco_json' | 'manifest_csv' | 'image_folder' | 'yolo_detect' | 'yolo_seg';
 export type TaskSplit = 'train' | 'val' | 'test';
 export type VersionMode = 'latest' | 'job_version' | 'timestamp';
 export type ClassificationMappingMode = 'categorized' | 'free_form';

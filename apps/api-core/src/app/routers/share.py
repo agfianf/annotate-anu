@@ -10,6 +10,8 @@ from app.dependencies.auth import get_current_active_user
 from app.helpers.response_api import JsonResponse
 from app.schemas.auth import UserBase
 from app.schemas.share import (
+    DeleteRequest,
+    DeleteResponse,
     DirectoryCreateRequest,
     DirectoryCreateResponse,
     DirectoryListResponse,
@@ -248,5 +250,33 @@ async def resolve_selection(
             total_count=len(files),
         ),
         message=f"Resolved {len(files)} file(s)",
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@router.post("/delete", response_model=JsonResponse[DeleteResponse, None])
+async def delete_paths(
+    payload: DeleteRequest,
+    current_user: Annotated[UserBase, Depends(get_current_active_user)],
+    fs: FileSystemService = Depends(get_filesystem_service),
+):
+    """Delete files and directories from the share.
+
+    Parameters
+    ----------
+    payload : DeleteRequest
+        Paths to delete, relative to the share root
+
+    Returns
+    -------
+    JsonResponse[DeleteResponse, None]
+        Deleted paths and per-path failures
+    """
+    result = await fs.delete_paths(payload.paths)
+    response = DeleteResponse(**result)
+
+    return JsonResponse(
+        data=response,
+        message=f"Deleted {len(response.deleted)} item(s), {len(response.failed)} failed",
         status_code=status.HTTP_200_OK,
     )

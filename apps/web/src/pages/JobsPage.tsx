@@ -19,6 +19,7 @@ import Toggle from '../components/Toggle';
 import JobTable from '../components/table/JobTable';
 import { useAuth } from '../contexts/AuthContext';
 import type { Job, TaskDetail } from '../lib/api-client';
+import { getApiErrorMessage } from '../lib/api-error';
 import { jobsApi, tasksApi } from '../lib/api-client';
 
 export default function JobsPage() {
@@ -66,8 +67,7 @@ export default function JobsPage() {
       setTask(taskData);
       setJobs(jobsData);
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to load jobs');
+      toast.error(getApiErrorMessage(err, 'Failed to load jobs'));
     } finally {
       setIsLoading(false);
     }
@@ -140,8 +140,7 @@ export default function JobsPage() {
       }
       setJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j));
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to update assignment');
+      toast.error(getApiErrorMessage(err, 'Failed to update assignment'));
     }
   };
 

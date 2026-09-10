@@ -43,6 +43,9 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
       } else if (event.key === 'o' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && config.onSelectTool) {
         event.preventDefault()
         config.onSelectTool('point')
+      } else if (event.key === 'g' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey && config.onSelectTool) {
+        event.preventDefault()
+        config.onSelectTool('magic')
       }
 
       // Delete shortcut
