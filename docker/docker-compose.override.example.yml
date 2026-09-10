@@ -83,6 +83,11 @@ services:
     #           capabilities: [gpu]
 
   api-core:
+    # Real secrets live here, not in the committed apps/api-core/.env, which holds
+    # REPLACE_ME placeholders. env_file APPENDS, so the base file is still read and
+    # this one wins on duplicate keys. .env.local is gitignored.
+    env_file:
+      - ../apps/api-core/.env.local
     volumes:
       - ../apps/api-core/src:/app/src
     command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
@@ -91,6 +96,8 @@ services:
       - CORS_ORIGINS=["http://10.0.0.5:18712","http://localhost:18712"]
 
   api-core-worker:
+    env_file:
+      - ../apps/api-core/.env.local
     volumes:
       - ../apps/api-core/src:/app/src
     # Celery has no --reload; restart the container after changing task code.

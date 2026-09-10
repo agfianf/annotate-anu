@@ -80,3 +80,8 @@ node_modules/.vite
 # Machine-specific compose overrides (host address, ports, GPU layout).
 # Template: docker/docker-compose.override.example.yml
 docker/docker-compose.override.yml
+
+# Real secrets and per-machine config. The committed .env files hold placeholders;
+# these are layered on top via env_file in docker-compose.override.yml.
+.env.local
+*.env.local
