@@ -10,6 +10,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select, union
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from app.core.security import (
+    QC_CROP_TOKEN_EXPIRE_MINUTES,
+    create_qc_crop_token,
+    verify_qc_crop_token,
+)
 from app.dependencies.auth import get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
 from app.helpers.response_api import JsonResponse
@@ -346,7 +351,10 @@ async def get_roi_tiles(
                 "label_name": row["label_name"],
                 "label_color": row["label_color"],
                 "confidence": row["confidence"],
-                "crop_url": f"/api/v1/qc/crop/{row['id']}",
+                "crop_url": (
+                    f"/api/v1/qc/crop/{row['id']}"
+                    f"?token={create_qc_crop_token(str(row['id']))}"
+                ),
             }
         )
 
@@ -387,9 +395,17 @@ async def get_roi_tiles(
 async def get_crop(
     annotation_id: UUID,
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
+    token: str | None = Query(default=None, description="Signed crop token minted by /roi-tiles"),
 ):
-    """Serve one cached ROI crop (no auth so it can be used as an img src)."""
+    """Serve one cached ROI crop, authorised by the signed token in the URL.
+
+    A browser <img src> cannot carry an Authorization header, so authorisation rides in the query string instead: /roi-tiles is authenticated and mints a short-lived token bound to this one annotation.
+    """
     from fastapi.responses import FileResponse
+
+    # A missing token gets the same 403 as a bad one: whether the annotation exists is itself information an anonymous caller should not get
+    if not token or not verify_qc_crop_token(token, str(annotation_id)):
+        raise HTTPException(status_code=403, detail="Invalid or expired crop token")
 
     result = await connection.execute(
         select(
@@ -418,7 +434,12 @@ async def get_crop(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
-    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+    # The response is only as public as the token that fetched it, so keep it out of shared caches and let it expire with the token
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": f"private, max-age={QC_CROP_TOKEN_EXPIRE_MINUTES * 60}"},
+    )
 
 
 @router.post("/sessions/{session_id}/verdicts/bulk", response_model=JsonResponse[dict, None])
