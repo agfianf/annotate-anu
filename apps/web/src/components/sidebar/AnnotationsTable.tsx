@@ -34,7 +34,6 @@ import {
 import { LabelDropdownCell } from './LabelDropdownCell';
 import type { AnnotationsTableProps, AnnotationTableRow } from './types';
 import type { Label } from '@/types/annotations';
-import ConfirmationModal from '../ConfirmationModal';
 
 const columnHelper = createColumnHelper<AnnotationTableRow>();
 
@@ -175,7 +174,6 @@ export function AnnotationsTable({
   onEditAttributes,
 }: AnnotationsTableProps & { onBulkToggleVisibility?: (ids: string[]) => void }) {
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [expandedLabels, setExpandedLabels] = useState<Record<string, boolean>>(() => {
     // Default all labels to expanded
     const initial: Record<string, boolean> = {};
@@ -439,17 +437,17 @@ export function AnnotationsTable({
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setDeleteTargetId(info.row.original.id);
+              onDelete(info.row.original.id);
             }}
             className="p-0.5 hover:bg-red-100 rounded transition-colors text-gray-400 hover:text-red-500"
-            title="Delete"
+            title="Delete (Del)"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         ),
       }),
     ],
-    [onToggleVisibility]
+    [onToggleVisibility, onDelete]
   );
 
   const table = useReactTable({
@@ -648,23 +646,6 @@ export function AnnotationsTable({
           </div>
         );
       })}
-
-      {/* Delete Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={deleteTargetId !== null}
-        onClose={() => setDeleteTargetId(null)}
-        onConfirm={() => {
-          if (deleteTargetId) {
-            onDelete(deleteTargetId);
-            setDeleteTargetId(null);
-          }
-        }}
-        title="Delete Annotation"
-        message="Are you sure you want to delete this annotation? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
-        isDangerous={true}
-      />
     </div>
   );
 }

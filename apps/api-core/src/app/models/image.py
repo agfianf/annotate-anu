@@ -112,6 +112,12 @@ images = Table(
         comment="Has any annotations",
     ),
     Column(
+        "qc_verdict",
+        String(20),
+        nullable=True,
+        comment="Instance QC outcome: good, refine or bad",
+    ),
+    Column(
         "shared_image_id",
         UUID(as_uuid=True),
         ForeignKey("shared_images.id", ondelete="SET NULL"),

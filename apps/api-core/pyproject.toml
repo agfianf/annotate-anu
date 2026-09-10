@@ -13,6 +13,10 @@ dependencies = [
     "pydantic-settings>=2.15.0",
     "email-validator>=2.3.0",
     "httpx>=0.28.1",
+    # Required by services/storage_s3.py, which routers/storage.py imports at
+    # module scope via main.py. Without it api-core fails to start, not just when
+    # the storage endpoints are called.
+    "boto3>=1.43.0",
     # Upper bound is required by kombu[redis] (celery's transport layer), which
     # pins `redis!=4.5.5,!=5.0.2,<6.5,>=4.5.2`. Do not widen until kombu does.
     "redis>=6.4.0,<6.5",

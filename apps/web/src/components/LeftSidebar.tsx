@@ -1,6 +1,6 @@
 import type { Annotation, ImageData, Label, PromptMode, Tool } from '@/types/annotations'
 import type { AvailableModel } from '@/types/byom'
-import { FileText, Keyboard, Maximize2, MousePointer, Pentagon, Redo, Scissors, Square, Target, Undo, ZoomIn, ZoomOut } from 'lucide-react'
+import { FileText, Keyboard, Maximize2, MousePointer, Pentagon, Redo, Scissors, Square, Target, Undo, ZoomIn, ZoomOut, Wand2 } from 'lucide-react'
 import { useState } from 'react'
 import { AutoDetectPanel } from './AutoDetectPanel'
 import { BboxPromptPanel } from './BboxPromptPanel'
@@ -287,6 +287,28 @@ export function LeftSidebar({
           selectedLabelId={selectedLabelId}
           onSelectLabel={onSelectLabel}
           disabled={activeTool === 'bbox-prompt'}
+        />
+
+        <ToolButton
+          icon={<Wand2 className="w-5 h-5" />}
+          tooltipTitle="Magic Select"
+          tooltipDescription="Click an object and SAM3 segments that whole instance with the selected label"
+          shortcut="G"
+          onClick={() => {
+            if (activeTool !== null) {
+              setActiveTool(null)
+              if (onAIPanelActiveChange) onAIPanelActiveChange(false)
+              if (onBboxPromptModeChange) onBboxPromptModeChange(false)
+              if (onPromptBboxesChange) onPromptBboxesChange([])
+            }
+            onToolChange('magic')
+          }}
+          isActive={selectedTool === 'magic'}
+          activeColor="purple"
+          showLabelSelector={true}
+          labels={labels}
+          selectedLabelId={selectedLabelId}
+          onSelectLabel={onSelectLabel}
         />
 
         <div className="w-full h-px bg-gray-300 my-2" />

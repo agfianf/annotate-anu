@@ -72,9 +72,9 @@ export const byomClient = {
     } catch (error) {
       console.error('[byomClient] Failed to register model:', error)
       if (axios.isAxiosError(error)) {
-        const axiosError = error as AxiosError<{ detail: string }>
-        if (axiosError.response?.data?.detail) {
-          throw new Error(axiosError.response.data.detail)
+        const axiosError = error as AxiosError<{ message?: string }>
+        if (axiosError.response?.data?.message) {
+          throw new Error(axiosError.response.data.message)
         }
       }
       throw error
@@ -210,9 +210,9 @@ export const byomClient = {
         if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
           throw new Error('Cannot connect to API Core service. Is it running?')
         }
-        const axiosError = error as AxiosError<{ detail: string }>
-        if (axiosError.response?.data?.detail) {
-          throw new Error(axiosError.response.data.detail)
+        const axiosError = error as AxiosError<{ message?: string }>
+        if (axiosError.response?.data?.message) {
+          throw new Error(axiosError.response.data.message)
         }
       }
       throw error
@@ -252,9 +252,9 @@ export const byomClient = {
         if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
           throw new Error('Cannot connect to API Core service. Is it running?')
         }
-        const axiosError = error as AxiosError<{ detail: string }>
-        if (axiosError.response?.data?.detail) {
-          throw new Error(axiosError.response.data.detail)
+        const axiosError = error as AxiosError<{ message?: string }>
+        if (axiosError.response?.data?.message) {
+          throw new Error(axiosError.response.data.message)
         }
       }
       throw error

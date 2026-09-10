@@ -1,5 +1,5 @@
 // Tool types
-export type Tool = 'select' | 'rectangle' | 'polygon' | 'point'
+export type Tool = 'select' | 'rectangle' | 'polygon' | 'point' | 'magic'
 
 // Annotation types
 export type AnnotationType = 'rectangle' | 'polygon' | 'point'
@@ -10,6 +10,7 @@ export type PromptMode = 'single' | 'auto-apply' | 'batch'
 // Label group definition
 export interface LabelGroup {
   id: string
+  projectId?: string
   name: string
   isExpanded?: boolean // UI state: expanded/collapsed
   isVisible?: boolean // Group-level visibility toggle (affects all child labels)
@@ -36,6 +37,7 @@ export interface LabelAttributeDefinition {
 // Label definition
 export interface Label {
   id: string
+  projectId?: string
   name: string
   color: string
   createdAt: number
@@ -53,6 +55,7 @@ export type AttributeValue = string | number | boolean;
 // Base annotation interface
 export interface BaseAnnotation {
   id: string
+  projectId?: string
   imageId: string
   labelId: string
   type: AnnotationType
@@ -95,6 +98,7 @@ export type Annotation = RectangleAnnotation | PolygonAnnotation | PointAnnotati
 // Image metadata
 export interface ImageData {
   id: string
+  projectId?: string
   name: string
   relativePath?: string
   displayName: string
@@ -112,6 +116,7 @@ export interface ImageData {
 export interface Project {
   id: string
   name: string
+  description?: string
   createdAt: number
   updatedAt: number
 }

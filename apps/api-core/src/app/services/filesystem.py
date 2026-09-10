@@ -409,6 +409,54 @@ class FileSystemService:
 
         return sorted(set(resolved_files))  # Remove duplicates and sort
 
+    async def delete_paths(self, relative_paths: list[str]) -> dict:
+        """Delete files and directories under the share root.
+
+        Parameters
+        ----------
+        relative_paths : list[str]
+            Paths to delete, relative to the share root
+
+        Returns
+        -------
+        dict
+            Deleted paths and per-path failures
+        """
+        import shutil
+
+        deleted: list[str] = []
+        failed: list[dict] = []
+
+        for relative_path in relative_paths:
+            if not relative_path or relative_path.strip("/") == "":
+                failed.append({"path": relative_path, "error": "Refusing to delete the share root"})
+                continue
+
+            try:
+                absolute_path = self._validate_path(relative_path)
+            except HTTPException as exc:
+                failed.append({"path": relative_path, "error": exc.detail})
+                continue
+
+            if absolute_path == self.base_path.resolve():
+                failed.append({"path": relative_path, "error": "Refusing to delete the share root"})
+                continue
+
+            if not absolute_path.exists():
+                failed.append({"path": relative_path, "error": "Not found"})
+                continue
+
+            try:
+                if absolute_path.is_dir():
+                    shutil.rmtree(absolute_path)
+                else:
+                    absolute_path.unlink()
+                deleted.append(relative_path)
+            except OSError as exc:
+                failed.append({"path": relative_path, "error": str(exc)})
+
+        return {"deleted": deleted, "failed": failed}
+
     def get_absolute_path(self, relative_path: str) -> Path:
         """Get absolute path for a relative path.
 

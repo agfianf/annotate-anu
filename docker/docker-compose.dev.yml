@@ -27,6 +27,32 @@ services:
               count: 1
               capabilities: [gpu]
 
+  # Model Server - serves local Ultralytics/YOLO .pt weights over the BYOM contract
+  model-server:
+    build:
+      context: ../apps/model-server
+      dockerfile: Dockerfile
+    container_name: anu-model-server-dev
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+    ports:
+      - "18713:8002"
+    volumes:
+      - ../apps/model-server/src:/code/src
+      - ../apps/model-server/models:/code/models
+    environment:
+      - MODELS_DIR=/code/models
+      - MODEL_SERVER_DEVICE=auto
+    restart: unless-stopped
+    networks:
+      - anu-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
   # API Core - Model Registry Service
   api-core:
     build:

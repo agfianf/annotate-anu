@@ -20,6 +20,7 @@ import CreateTaskWizard from '../components/CreateTaskWizard';
 import Toggle from '../components/Toggle';
 import { useAuth } from '../contexts/AuthContext';
 import type { ProjectDetail, Task } from '../lib/api-client';
+import { getApiErrorMessage } from '../lib/api-error';
 import { projectsApi, tasksApi } from '../lib/api-client';
 
 export default function TasksPage() {
@@ -66,8 +67,7 @@ export default function TasksPage() {
       setProject(projectData);
       setTasks(tasksData);
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to load tasks');
+      toast.error(getApiErrorMessage(err, 'Failed to load tasks'));
     } finally {
       setIsLoading(false);
     }
@@ -141,8 +141,7 @@ export default function TasksPage() {
       setNewTask({ name: '', description: '' });
       toast.success('Task created');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      toast.error(axiosError.response?.data?.detail || 'Failed to create task');
+      toast.error(getApiErrorMessage(err, 'Failed to create task'));
     } finally {
       setIsCreating(false);
     }

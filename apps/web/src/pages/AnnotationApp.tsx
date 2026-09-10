@@ -5,6 +5,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import '../App.css'
 import Canvas from '../components/Canvas'
 import { ExportModal } from '../components/ExportModal'
+import { ImportLabelsModal } from '../components/ImportLabelsModal'
 import { LeftSidebar } from '../components/LeftSidebar'
 import { ModelSelector } from '../components/ModelSelector'
 import { AnnotationsSidebar } from '../components/sidebar'
@@ -22,6 +23,9 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useModelRegistry } from '../hooks/useModelRegistry'
 import { imagesApi } from '../lib/api-client'
 import { DEFAULT_LABEL_COLOR } from '../lib/colors'
+import { DEFAULT_PROJECT_ID } from '../lib/storage'
+import { getApiErrorMessage } from '../lib/api-error'
+import { sam3Client } from '../lib/sam3-client'
 import { ALLOWED_IMAGE_EXTENSIONS, getDisplayName, getRelativePath, isAllowedImageFile, isFolderUploadSupported } from '../lib/file-utils'
 import { annotationStorage } from '../lib/storage'
 import { generateUUID } from '../lib/utils'
@@ -178,6 +182,8 @@ function AnnotationApp() {
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null)
   const [showLabelManager, setShowLabelManager] = useState(false)
   const [showExportModal, setShowExportModal] = useState(false)
+  const [isMagicLoading, setIsMagicLoading] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [showResetModal, setShowResetModal] = useState(false)
   const [showShortcutsModal, setShowShortcutsModal] = useState(false)
   const [resetOptions, setResetOptions] = useState({
@@ -223,7 +229,6 @@ function AnnotationApp() {
   const pendingNavigationRef = useRef<(() => void) | null>(null)
 
   // Keyboard delete confirmation state
-  const [showKeyboardDeleteConfirm, setShowKeyboardDeleteConfirm] = useState(false)
 
   // Zoom and pan state
   const [zoomLevel, setZoomLevel] = useState(1)
@@ -269,7 +274,7 @@ function AnnotationApp() {
   })
 
   // Use job-aware storage (falls back to local storage if no jobId)
-  const storage = useJobStorage(jobId)
+  const storage = useJobStorage(jobId, DEFAULT_PROJECT_ID)
   const {
     images,
     labels,
@@ -443,6 +448,13 @@ function AnnotationApp() {
   const handleCancelNavigation = () => {
     setShowUnsavedChangesDialog(false)
     pendingNavigationRef.current = null
+  }
+
+  const handleImportLabels = async (newLabels: Label[], newAnnotations: Annotation[]) => {
+    for (const label of newLabels) {
+      await addLabel(label)
+    }
+    await addManyAnnotations(newAnnotations)
   }
 
   const handleImageUpload = async (files: FileList) => {
@@ -760,6 +772,65 @@ function AnnotationApp() {
     } catch (error) {
       console.error('Failed to bulk toggle visibility:', error)
       toast.error('Failed to toggle visibility')
+    }
+  }
+
+  const fetchImageAsBlob = async (url: string): Promise<Blob> => {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`)
+    return await response.blob()
+  }
+
+  // Magic Select: one click becomes a small box prompt, and SAM3 returns that instance
+  const handleMagicClick = async (point: { x: number; y: number }) => {
+    if (!currentImage || !currentImageId) return
+    if (!selectedLabelId) {
+      toast.error('Select a label first')
+      return
+    }
+    if (isMagicLoading) return
+
+    setIsMagicLoading(true)
+    try {
+      let imageBlob: Blob
+      if (currentImage.s3Key && currentImage.jobId && currentImage.jobImageId) {
+        imageBlob = await fetchImageAsBlob(
+          imagesApi.getFullImageUrl(currentImage.s3Key, currentImage.jobId.toString(), currentImage.jobImageId)
+        )
+      } else if (currentImage.blob && currentImage.blob.size > 0) {
+        imageBlob = currentImage.blob
+      } else {
+        throw new Error('No valid image data available')
+      }
+
+      const imageFile = new File([imageBlob], currentImage.name, { type: imageBlob.type || 'image/jpeg' })
+
+      const result = (await sam3Client.pointPrompt({
+        image: imageFile,
+        points: [[Math.round(point.x), Math.round(point.y)]],
+        point_labels: [1],
+        simplify_tolerance: 1.5,
+      })).data
+
+      if (!result.num_objects) {
+        toast.error('Nothing found there. Try clicking nearer the object centre.')
+        return
+      }
+
+      const hasMask = (result.masks?.[0]?.polygons?.[0]?.length ?? 0) >= 3
+      await handleAutoAnnotateResults({
+        boxes: [result.boxes[0]],
+        masks: hasMask ? [result.masks[0]] : [],
+        scores: [result.scores[0]],
+        annotationType: hasMask ? 'polygon' : 'bbox',
+        labelId: selectedLabelId,
+        modelId: selectedModel?.id,
+      })
+    } catch (error) {
+      console.error('Magic select failed:', error)
+      toast.error(getApiErrorMessage(error, 'Magic select failed'))
+    } finally {
+      setIsMagicLoading(false)
     }
   }
 
@@ -1113,10 +1184,13 @@ function AnnotationApp() {
   useKeyboardShortcuts({
     onSelectTool: setSelectedTool,
     onDelete: () => {
-      // Show confirmation dialog before deleting
-      if (selectedAnnotations.length > 0) {
-        setShowKeyboardDeleteConfirm(true)
+      if (selectedAnnotations.length === 0) return
+      if (selectedAnnotations.length === 1) {
+        handleDeleteAnnotation(selectedAnnotations[0])
+      } else {
+        handleBulkDeleteAnnotations(selectedAnnotations)
       }
+      setSelectedAnnotations([])
     },
     onNewAnnotation: () => {
       // If on select tool, switch to rectangle; otherwise keep current drawing tool
@@ -1293,6 +1367,17 @@ function AnnotationApp() {
             <Download className="w-4 h-4" />
             Export
           </button>
+          {!isJobMode && (
+            <button
+              onClick={() => setShowImportModal(true)}
+              disabled={images.length === 0}
+              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded transition-colors flex items-center gap-1.5"
+              title="Import YOLO label files for the images in this project"
+            >
+              <Upload className="w-4 h-4" />
+              Import
+            </button>
+          )}
           <button
             onClick={() => setShowResetModal(true)}
             className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm rounded transition-colors flex items-center gap-1.5"
@@ -1432,16 +1517,17 @@ function AnnotationApp() {
                 showHoverTooltips={appearanceSettings.showHoverTooltips}
                 highlightMode={appearanceSettings.highlightMode}
                 dimLevel={appearanceSettings.dimLevel}
+                onMagicClick={handleMagicClick}
                 onDeleteAnnotation={handleDeleteAnnotation}
                 onLabelChange={handleLabelChange}
                 onUpdateAnnotationAttributes={handleUpdateAnnotationAttributes}
               />
               {/* Auto-apply loading overlay */}
-              {isAutoApplyLoading && (
+              {(isAutoApplyLoading || isMagicLoading) && (
                 <div className="absolute inset-0 bg-black/30 flex items-center justify-center pointer-events-none">
                   <div className="glass-strong px-6 py-4 rounded-lg shadow-xl flex items-center gap-3">
                     <Loader2 className="w-5 h-5 text-emerald-600 animate-spin" />
-                    <span className="text-gray-900 font-medium">Auto-detecting objects...</span>
+                    <span className="text-gray-900 font-medium">{isMagicLoading ? 'Segmenting object...' : 'Auto-detecting objects...'}</span>
                   </div>
                 </div>
               )}
@@ -1625,6 +1711,7 @@ function AnnotationApp() {
           {/* Sidebar */}
           <AnnotationsSidebar
             annotations={currentAnnotations}
+            allAnnotations={annotations}
             labels={labels}
             selectedAnnotations={selectedAnnotations}
             selectedLabelId={selectedLabelId}
@@ -1750,7 +1837,9 @@ function AnnotationApp() {
               <form
                 onSubmit={async (e) => {
                   e.preventDefault()
-                  const formData = new FormData(e.currentTarget)
+                  // currentTarget is nulled once the handler yields, so capture it first
+                  const form = e.currentTarget
+                  const formData = new FormData(form)
                   const name = formData.get('name') as string
 
                   if (!name.trim()) {
@@ -1790,13 +1879,12 @@ function AnnotationApp() {
                       toast.success('Label created')
                     }
 
-                    // Reset form
-                    e.currentTarget.reset()
+                    form.reset()
                     setSelectedColor(DEFAULT_LABEL_COLOR)
                     setShowColorPicker(false)
                   } catch (error) {
                     console.error('Failed to save label:', error)
-                    toast.error('Failed to save label')
+                    toast.error(getApiErrorMessage(error, 'Failed to save label'))
                   }
                 }}
                 className="mt-4 space-y-2"
@@ -2255,6 +2343,14 @@ function AnnotationApp() {
         labels={labels}
       />
 
+      <ImportLabelsModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        images={images}
+        labels={labels}
+        onImport={handleImportLabels}
+      />
+
       {/* Unsaved Changes Dialog (Job Mode) */}
       {isJobMode && (
         <UnsavedChangesDialog
@@ -2266,25 +2362,6 @@ function AnnotationApp() {
           onCancel={handleCancelNavigation}
         />
       )}
-
-      {/* Keyboard Delete Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={showKeyboardDeleteConfirm}
-        onClose={() => setShowKeyboardDeleteConfirm(false)}
-        onConfirm={() => {
-          if (selectedAnnotations.length === 1) {
-            handleDeleteAnnotation(selectedAnnotations[0])
-          } else {
-            handleBulkDeleteAnnotations(selectedAnnotations)
-          }
-          setShowKeyboardDeleteConfirm(false)
-        }}
-        title="Delete Annotations"
-        message={`Are you sure you want to delete ${selectedAnnotations.length} annotation${selectedAnnotations.length !== 1 ? 's' : ''}? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        isDangerous={true}
-      />
 
       {/* Toast Notifications */}
       <Toaster

@@ -582,10 +582,25 @@ export function ExportWizardModal({
                       <option value="manifest_csv">CSV Manifest</option>
                       <option value="image_folder">Image Folder Structure</option>
                     </>
+                  ) : state.exportMode === 'segmentation' ? (
+                    <>
+                      <option value="coco_json">COCO JSON</option>
+                      <option value="yolo_seg">YOLO11 Segmentation</option>
+                      <option value="yolo_detect">YOLO11 Detection (boxes)</option>
+                    </>
                   ) : (
-                    <option value="coco_json">COCO JSON</option>
+                    <>
+                      <option value="coco_json">COCO JSON</option>
+                      <option value="yolo_detect">YOLO11 Detection</option>
+                    </>
                   )}
                 </select>
+                {state.outputFormat.startsWith('yolo') && (
+                  <p className="mt-1.5 text-xs text-gray-600">
+                    Writes labels/&#123;train,val,test&#125;, data.yaml and classes.txt using each
+                    image's split. Tick "include images" for a dataset you can train on directly.
+                  </p>
+                )}
               </div>
 
               {/* Include Images */}
