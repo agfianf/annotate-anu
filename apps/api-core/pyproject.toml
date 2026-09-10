@@ -13,6 +13,10 @@ dependencies = [
     "pydantic-settings>=2.12.0",
     "email-validator>=2.1.0",
     "httpx>=0.28.1",
+    # Required by services/storage_s3.py, which routers/storage.py imports at
+    # module scope via main.py. Without it api-core fails to start, not just when
+    # the storage endpoints are called.
+    "boto3>=1.35.0",
     "redis>=5.0.0,<6.5",
     "celery>=5.4.0",
     "cryptography>=46.0.3",
