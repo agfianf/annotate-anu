@@ -107,13 +107,13 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     error_response = ErrorResponse(
         error="Validation Error",
         message="Request validation failed",
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         details=errors,
     )
 
     logger.warning(f"Validation error: {errors}")
 
-    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, content=error_response.model_dump())
+    return JSONResponse(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content=error_response.model_dump())
 
 
 @app.exception_handler(Exception)

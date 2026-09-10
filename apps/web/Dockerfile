@@ -1,5 +1,5 @@
 # Stage 1: Development
-FROM node:20 AS development
+FROM node:22 AS development
 
 WORKDIR /app
 
@@ -23,7 +23,7 @@ EXPOSE 5173
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 # Stage 2: Build the application
-FROM node:20 AS builder
+FROM node:22 AS builder
 
 WORKDIR /app
 

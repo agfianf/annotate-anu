@@ -4,31 +4,33 @@ version = "0.1.0"
 description = "Core API service for model registry and management"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.123.0",
-    "uvicorn[standard]>=0.38.0",
-    "sqlalchemy>=2.0.44",
-    "asyncpg>=0.30.0",
-    "psycopg2-binary>=2.9.10",
-    "pydantic>=2.12.5",
-    "pydantic-settings>=2.12.0",
-    "email-validator>=2.1.0",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.52.1",
+    "sqlalchemy>=2.0.51",
+    "asyncpg>=0.31.0",
+    "psycopg2-binary>=2.9.12",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.15.0",
+    "email-validator>=2.3.0",
     "httpx>=0.28.1",
     # Required by services/storage_s3.py, which routers/storage.py imports at
     # module scope via main.py. Without it api-core fails to start, not just when
     # the storage endpoints are called.
-    "boto3>=1.35.0",
-    "redis>=5.0.0,<6.5",
-    "celery>=5.4.0",
-    "cryptography>=46.0.3",
-    "python-multipart>=0.0.20",
-    "alembic>=1.17.2",
-    "python-jose[cryptography]>=3.3.0",
+    "boto3>=1.43.0",
+    # Upper bound is required by kombu[redis] (celery's transport layer), which
+    # pins `redis!=4.5.5,!=5.0.2,<6.5,>=4.5.2`. Do not widen until kombu does.
+    "redis>=6.4.0,<6.5",
+    "celery>=5.6.3",
+    "cryptography>=50.0.0",
+    "python-multipart>=0.0.32",
+    "alembic>=1.19.0",
+    "python-jose[cryptography]>=3.5.0",
     "passlib[bcrypt]>=1.7.4",
-    "aiofiles>=24.1.0",
-    "pillow>=10.0.0",
-    "opencv-python-headless>=4.8.0",
-    "imagehash>=4.3.0",
-    "numpy>=1.26.0",
+    "aiofiles>=25.1.0",
+    "pillow>=12.3.0",
+    "opencv-python-headless>=5.0.0.93",
+    "imagehash>=4.3.2",
+    "numpy>=2.5.1",
 ]
 
 [build-system]
@@ -40,10 +42,10 @@ packages = ["src/app"]
 
 [tool.uv]
 dev-dependencies = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.24.0",
-    "ruff>=0.7.0",
-    "testcontainers[postgres]>=4.9.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.2",
+    "testcontainers[postgres]>=4.15.0",
 ]
 
 [tool.pytest.ini_options]

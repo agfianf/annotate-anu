@@ -5,7 +5,7 @@ import axios from 'axios'
 // Browser reaches the server on the published port
 const MODEL_SERVER_URL = import.meta.env.VITE_MODEL_SERVER_URL !== undefined
   ? import.meta.env.VITE_MODEL_SERVER_URL
-  : 'http://localhost:8002'
+  : 'http://localhost:18713'
 
 // api-core proxies inference server-side, so it needs the docker network address
 const MODEL_SERVER_INTERNAL_URL = import.meta.env.VITE_MODEL_SERVER_INTERNAL_URL !== undefined

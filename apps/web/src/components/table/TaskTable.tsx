@@ -3,14 +3,16 @@
  * TanStack Table implementation for task list
  */
 
+import { flexRender, type SortingState } from '@tanstack/react-table';
+// v9 moved the v8 table API behind the `/legacy` entry point. Aliasing here keeps
+// the rest of this file on the v8 call style until we migrate to `useTable`.
 import {
-  createColumnHelper,
-  flexRender,
+  legacyCreateColumnHelper as createColumnHelper,
   getCoreRowModel,
   getSortedRowModel,
-  useReactTable,
-  type SortingState,
-} from '@tanstack/react-table';
+  useLegacyTable as useReactTable,
+  type LegacyColumnDef,
+} from '@tanstack/react-table/legacy';
 import { useState } from 'react';
 import { Briefcase, Image, ArrowUp, ArrowDown } from 'lucide-react';
 import type { KanbanTaskWithStats, TaskTableProps } from './types';
@@ -66,7 +68,10 @@ export default function TaskTable({
   const [sorting, setSorting] = useState<SortingState>([]);
 
   // Column definitions
-  const columns = [
+  // `any` for TValue is the upstream-documented shape for a heterogeneous column
+  // array: TValue is contravariant, so `unknown` rejects per-column accessor types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const columns: LegacyColumnDef<KanbanTaskWithStats, any>[] = [
     columnHelper.accessor('id', {
       header: 'ID',
       size: 80,

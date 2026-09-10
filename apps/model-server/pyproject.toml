@@ -4,14 +4,17 @@ version = "0.1.0"
 description = "Generic BYOM-compatible server for local Ultralytics/YOLO .pt weights"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
-    "python-multipart>=0.0.12",
-    "pillow>=10.4.0",
-    "numpy>=1.26.0",
+    "fastapi>=0.141.1",
+    "uvicorn[standard]>=0.52.1",
+    "python-multipart>=0.0.32",
+    "pillow>=12.3.0",
+    "numpy>=2.5.1",
     "ultralytics>=8.3.0",
-    "torch>=2.5.0",
-    "torchvision>=0.20.0",
+    # Unlike api-inference, torch here needs no version cap: the explicit cu128
+    # index below pins the CUDA channel directly, so a newer torch cannot silently
+    # pull the cu13 wheels that require driver >= 580.65.
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
 ]
 
 # cu128 wheels match the host driver (CUDA 12.8) and carry their own runtime

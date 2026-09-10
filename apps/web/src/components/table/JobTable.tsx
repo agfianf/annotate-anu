@@ -3,14 +3,16 @@
  * TanStack Table implementation for job list
  */
 
+import { flexRender, type SortingState } from '@tanstack/react-table';
+// v9 moved the v8 table API behind the `/legacy` entry point. Aliasing here keeps
+// the rest of this file on the v8 call style until we migrate to `useTable`.
 import {
-  createColumnHelper,
-  flexRender,
+  legacyCreateColumnHelper as createColumnHelper,
   getCoreRowModel,
   getSortedRowModel,
-  useReactTable,
-  type SortingState,
-} from '@tanstack/react-table';
+  useLegacyTable as useReactTable,
+  type LegacyColumnDef,
+} from '@tanstack/react-table/legacy';
 import { useState } from 'react';
 import { Image, ArrowUp, ArrowDown, Archive, Trash2 } from 'lucide-react';
 import type { Job } from '@/lib/api-client';
@@ -105,7 +107,10 @@ export default function JobTable({
   const isAdmin = userRole === 'admin';
 
   // Column definitions
-  const columns = [
+  // `any` for TValue is the upstream-documented shape for a heterogeneous column
+  // array: TValue is contravariant, so `unknown` rejects per-column accessor types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const columns: LegacyColumnDef<Job, any>[] = [
     columnHelper.accessor('id', {
       header: 'ID',
       size: 80,

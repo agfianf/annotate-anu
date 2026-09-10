@@ -1,5 +1,9 @@
 # 1. Change Base Image to NVIDIA CUDA (Devel version ensures compatibility with Transformers/PyTorch extensions)
-# Note: Use CUDA 12.1 or 12.4 depending on your PyTorch version requirements. 12.1 is widely supported.
+# Note: torch ships its own CUDA runtime as nvidia-*-cu12 wheels, so this base image
+# mainly supplies the toolchain, not the runtime torch uses.
+# torch is pinned to <2.11 in pyproject.toml because 2.11+ default wheels are CUDA 13
+# (nvidia-*-cu13) and need an NVIDIA driver >= 580.65; this deployment runs driver 550.
+# Keep that cap, this base image, and the host driver consistent when bumping torch.
 FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
 
 WORKDIR /code
@@ -28,9 +32,12 @@ RUN --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-cache
 
-# 6. Install transformers (and ensure PyTorch uses CUDA)
-# Note: If you need specific CUDA PyTorch, you might need to define extra-index-url in pyproject.toml
-RUN uv pip install git+https://github.com/huggingface/transformers.git
+# 6. transformers is now a normal locked dependency in pyproject.toml (>=5.14.1),
+# so it is installed by the `uv sync` above. It used to be installed here from
+# git main, which meant every rebuild pulled an unpinned snapshot and silently
+# overrode the lockfile. Sam3Model / Sam3Processor have been in stable
+# transformers since 5.0, so the git install is no longer needed.
+# Do not reintroduce a `uv pip install` here without also updating uv.lock.
 
 # Copy application code
 COPY src/ ./src/

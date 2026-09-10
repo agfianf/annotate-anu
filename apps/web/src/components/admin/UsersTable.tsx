@@ -3,15 +3,17 @@
  * TanStack Table implementation for admin user management
  */
 
+import { flexRender, type SortingState } from '@tanstack/react-table';
+// v9 moved the v8 table API behind the `/legacy` entry point. Aliasing here keeps
+// the rest of this file on the v8 call style until we migrate to `useTable`.
 import {
-  createColumnHelper,
-  flexRender,
+  legacyCreateColumnHelper as createColumnHelper,
   getCoreRowModel,
   getFilteredRowModel,
   getSortedRowModel,
-  useReactTable,
-  type SortingState,
-} from '@tanstack/react-table';
+  useLegacyTable as useReactTable,
+  type LegacyColumnDef,
+} from '@tanstack/react-table/legacy';
 import { useState, useMemo } from 'react';
 import {
   ArrowUp,
@@ -90,7 +92,10 @@ export default function UsersTable({
   const [globalFilter, setGlobalFilter] = useState('');
 
   // Column definitions
-  const columns = useMemo(
+  // `any` for TValue is the upstream-documented shape for a heterogeneous column
+  // array: TValue is contravariant, so `unknown` rejects per-column accessor types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const columns = useMemo<LegacyColumnDef<User, any>[]>(
     () => [
       columnHelper.accessor('full_name', {
         header: 'User',

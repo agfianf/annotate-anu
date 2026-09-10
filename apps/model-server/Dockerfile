@@ -13,8 +13,11 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.11 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1
 
-RUN --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --no-cache
+# --frozen installs exactly what uv.lock pins, so image builds are reproducible
+# instead of re-resolving (and silently drifting) on every rebuild.
+RUN --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-cache
 
 COPY src/ ./src/
 

@@ -4,14 +4,16 @@
  */
 
 import { useMemo, useCallback, useEffect, useRef, useState } from 'react';
+import { flexRender, type SortingState } from '@tanstack/react-table';
+// v9 moved the v8 table API behind the `/legacy` entry point. Aliasing here keeps
+// the rest of this file on the v8 call style until we migrate to `useTable`.
 import {
-  createColumnHelper,
-  flexRender,
+  legacyCreateColumnHelper as createColumnHelper,
   getCoreRowModel,
   getSortedRowModel,
-  useReactTable,
-  type SortingState,
-} from '@tanstack/react-table';
+  useLegacyTable as useReactTable,
+  type LegacyColumnDef,
+} from '@tanstack/react-table/legacy';
 import {
   AlertTriangle,
   ArrowUp,
@@ -219,7 +221,10 @@ export function AnnotationsTable({
   }, [selectedIds, data, expandedLabels]);
 
   // Create columns (simplified for grouped view)
-  const columns = useMemo(
+  // `any` for TValue is the upstream-documented shape for a heterogeneous column
+  // array: TValue is contravariant, so `unknown` rejects per-column accessor types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const columns = useMemo<LegacyColumnDef<AnnotationTableRow, any>[]>(
     () => [
       // Index Column
       columnHelper.accessor('index', {
