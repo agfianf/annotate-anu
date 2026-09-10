@@ -44,12 +44,15 @@ async def resolve_project_role(
     str | None
         Effective role name, or None when the project is missing or the user is unrelated
     """
-    if current_user.role == "admin":
-        return "owner"
-
+    # Existence is checked before the admin shortcut, the same order :class:`ProjectPermission`
+    # uses. Short-circuiting on admin would report "owner" for a project id that does not
+    # exist, and the caller would go on to write a row whose foreign key cannot resolve.
     project = await ProjectRepository.get_by_id(connection, project_id)
     if not project:
         return None
+
+    if current_user.role == "admin":
+        return "owner"
 
     if project["owner_id"] == current_user.id:
         return "owner"

@@ -106,6 +106,31 @@ async def _require_session(connection: AsyncConnection, session_id: UUID) -> dic
     return session
 
 
+def _manifest_key(key: str | None, session: dict, session_id: UUID) -> str:
+    """Resolve the object key the manifest is written to, keeping it a manifest.
+
+    The caller may name the key, so without this the publish endpoints would happily
+    PUT JSON over any object in the bucket — including the source images the endpoint
+    promises never to touch. Restricting it to a ``.json`` object under ``qc/`` keeps a
+    custom key useful while confining the write to the QC namespace.
+    """
+    if not key:
+        return f"qc/{session['name'].replace('/', '_')}-{session_id}.json"
+
+    candidate = key.strip().lstrip("/")
+    segments = candidate.split("/")
+    if (
+        not candidate.startswith("qc/")
+        or not candidate.endswith(".json")
+        or any(s in ("", ".", "..") for s in segments)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Manifest key must be a .json object under 'qc/'",
+        )
+    return candidate
+
+
 @router.post("/sessions", response_model=JsonResponse[dict, None], status_code=201)
 async def create_session(
     payload: SessionCreate,
@@ -598,7 +623,7 @@ async def publish_manifest(
         "refine": [e["item"] for e in entries if e["verdict"] == "refine"],
     }
 
-    key = payload.key or f"qc/{session['name'].replace('/', '_')}-{session_id}.json"
+    key = _manifest_key(payload.key, session, session_id)
     try:
         written = S3Service(row).put_json(key, manifest)
     except Exception:
@@ -655,7 +680,7 @@ async def sync_session(
             "entries": entries,
             "refine": [e["item"] for e in entries if e["verdict"] == "refine"],
         }
-        key = payload.key or f"qc/{session['name'].replace('/', '_')}-{session_id}.json"
+        key = _manifest_key(payload.key, session, session_id)
         try:
             service = S3Service(row)
             written = service.put_json(key, manifest)

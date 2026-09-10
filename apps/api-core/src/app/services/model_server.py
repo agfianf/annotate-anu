@@ -4,7 +4,7 @@ The model server has no authentication of its own and is not published on the ho
 so every browser-facing call reaches it through api-core over the compose network.
 """
 
-import re
+from urllib.parse import quote
 
 import httpx
 from fastapi import HTTPException, UploadFile
@@ -15,9 +15,15 @@ from app.helpers.logger import logger
 DEFAULT_TIMEOUT = 30.0
 # An upload is hundreds of megabytes and the server loads the weights before replying
 UPLOAD_TIMEOUT = 900.0
+# Mirrors MAX_UPLOAD_MB on the model server, so an oversized body is refused here instead
+# of being streamed across the network and rejected on arrival.
+MAX_UPLOAD_BYTES = 500 * 1024 * 1024
 
-# The upstream turns a name straight into a file path, so keep traversal out of the proxied URL
-_MODEL_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
+# The upstream turns a name straight into a file path, so path separators and dot segments
+# must never reach the proxied URL. Everything else is left alone on purpose: a name is
+# just the uploaded filename minus ".pt", so it routinely carries spaces, parentheses and
+# other characters, and the upstream's own model_path() is what confines it to MODELS_DIR.
+_UNSAFE_NAME_CHARS = ("/", "\\", "\x00")
 
 
 class ModelServerService:
@@ -45,6 +51,11 @@ class ModelServerService:
     def validate_name(name: str) -> str:
         """Reject model names that would escape the upstream's model directory.
 
+        Only path separators, dot segments and NUL are refused. A stricter character set
+        would lock the owner out of any model whose uploaded filename contained a space or
+        a parenthesis — the upload endpoint does not filter those, so listing would show a
+        model that info and delete then answer 400 for.
+
         Parameters
         ----------
         name : str
@@ -53,16 +64,16 @@ class ModelServerService:
         Returns
         -------
         str
-            The validated name
+            The name, percent-encoded for use as a single URL path segment
 
         Raises
         ------
         HTTPException
-            400 if the name contains anything but letters, digits, dot, dash or underscore
+            400 if the name is empty, a dot segment, or contains a path separator
         """
-        if not _MODEL_NAME.match(name):
+        if not name or name in (".", "..") or any(c in name for c in _UNSAFE_NAME_CHARS):
             raise HTTPException(status_code=400, detail="Invalid model name")
-        return name
+        return quote(name, safe="")
 
     async def health(self) -> dict:
         """Return the model server's health payload."""
@@ -84,7 +95,18 @@ class ModelServerService:
         -------
         dict
             Upload result: name, size, task, classes and endpoint path
+
+        Raises
+        ------
+        HTTPException
+            413 if the body is larger than the upstream would accept anyway
         """
+        if file.size is not None and file.size > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File exceeds {MAX_UPLOAD_BYTES // 1024 // 1024}MB",
+            )
+
         # Hand httpx the spooled file object rather than bytes so the weights are
         # streamed upstream instead of buffered a second time in this process.
         files = {
