@@ -9,11 +9,13 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Shapes,
   Sparkles,
   Trash2,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { DEFAULT_DEDUP_OPTIONS, findDuplicateAnnotations } from '@/lib/annotation-dedup';
 import { AnnotationsTable } from './AnnotationsTable';
 import { FilterTabs } from './FilterTabs';
 import { BulkActionsPanel } from './BulkActionsPanel';
@@ -97,6 +99,7 @@ function getAreaPercentage(annotation: Annotation, imageWidth?: number, imageHei
 export function AnnotationsSidebar({
   annotations,
   labels,
+  allAnnotations,
   selectedAnnotations,
   selectedLabelId,
   onSelectAnnotations,
@@ -151,6 +154,10 @@ export function AnnotationsSidebar({
   const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
   const [showThresholdModal, setShowThresholdModal] = useState(false);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.5);
+  const [showDedupModal, setShowDedupModal] = useState(false);
+  const [dedupIoU, setDedupIoU] = useState(DEFAULT_DEDUP_OPTIONS.iouThreshold);
+  const [dedupSameLabelOnly, setDedupSameLabelOnly] = useState(DEFAULT_DEDUP_OPTIONS.sameLabelOnly);
+  const [dedupScope, setDedupScope] = useState<'image' | 'dataset'>('image');
 
   // Attributes editor state
   const [editingAttributesId, setEditingAttributesId] = useState<string | null>(null);
@@ -410,6 +417,33 @@ export function AnnotationsSidebar({
     }
   };
 
+  // Duplicate/overlap scan, recomputed live as the modal settings change
+  const dedupSource = dedupScope === 'dataset' && allAnnotations ? allAnnotations : annotations;
+
+  const dedupResult = useMemo(() => {
+    if (!showDedupModal) return { groups: [], removeIds: [] };
+    return findDuplicateAnnotations(dedupSource, {
+      iouThreshold: dedupIoU,
+      containmentThreshold: DEFAULT_DEDUP_OPTIONS.containmentThreshold,
+      sameLabelOnly: dedupSameLabelOnly,
+    });
+  }, [showDedupModal, dedupSource, dedupIoU, dedupSameLabelOnly]);
+
+  const handleRemoveDuplicates = () => {
+    if (dedupResult.removeIds.length > 0) {
+      onBulkDeleteAnnotations(dedupResult.removeIds);
+      setSelectedIds(new Set());
+    }
+    setShowDedupModal(false);
+  };
+
+  // Preview the duplicates on canvas instead of deleting them
+  const handleSelectDuplicates = () => {
+    setSelectedIds(new Set(dedupResult.removeIds));
+    onSelectAnnotations(dedupResult.removeIds);
+    setShowDedupModal(false);
+  };
+
   // Handle remove low confidence
   const handleRemoveLowConfidence = () => {
     const lowConfidenceIds = annotations
@@ -549,6 +583,14 @@ export function AnnotationsSidebar({
                       <Trash2 className="w-3 h-3" />
                       Clear All
                     </button>
+                    <button
+                      onClick={() => setShowDedupModal(true)}
+                      className="flex-1 px-2 py-1 bg-white hover:bg-gray-100 text-gray-600 text-[10px] rounded border border-gray-200 transition-colors flex items-center justify-center gap-1"
+                      title="Find and remove overlapping or duplicate annotations"
+                    >
+                      <Copy className="w-3 h-3" />
+                      Duplicates
+                    </button>
                   </div>
                 </div>
               )}
@@ -596,6 +638,114 @@ export function AnnotationsSidebar({
           onToggle={() => toggleSection('appearance')}
         />
       </div>
+
+      {/* Duplicate Cleanup Modal */}
+      {createPortal(
+        <Modal
+          isOpen={showDedupModal}
+          onClose={() => setShowDedupModal(false)}
+          title="Clean Duplicate Annotations"
+          maxWidth="md"
+        >
+          <div className="space-y-4">
+            <p className="text-gray-800 text-sm">
+              Finds annotations that overlap heavily and keeps the best one from each cluster.
+              Manual annotations win over auto-generated, then higher confidence, then polygons
+              over boxes.
+            </p>
+
+            {allAnnotations && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-800">Scope</label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDedupScope('image')}
+                    className={`flex-1 px-3 py-1.5 text-sm rounded transition-colors border ${
+                      dedupScope === 'image'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-gray-900 border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    This image ({annotations.length})
+                  </button>
+                  <button
+                    onClick={() => setDedupScope('dataset')}
+                    className={`flex-1 px-3 py-1.5 text-sm rounded transition-colors border ${
+                      dedupScope === 'dataset'
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-gray-900 border-gray-300 hover:bg-gray-100'
+                    }`}
+                  >
+                    All images ({allAnnotations.length})
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-800">Overlap threshold (IoU)</label>
+                <span className="text-sm text-emerald-600 font-mono">{dedupIoU.toFixed(2)}</span>
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max="1"
+                step="0.05"
+                value={dedupIoU}
+                onChange={(e) => setDedupIoU(parseFloat(e.target.value))}
+                className="w-full accent-emerald-600"
+              />
+              <p className="text-xs text-gray-600">
+                Lower removes more aggressively. An annotation almost entirely inside another is
+                always treated as a duplicate.
+              </p>
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-gray-800 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={dedupSameLabelOnly}
+                onChange={(e) => setDedupSameLabelOnly(e.target.checked)}
+                className="w-4 h-4 accent-emerald-600"
+              />
+              Only compare annotations with the same label
+            </label>
+
+            <div className="glass rounded p-3 border border-gray-200/50 text-sm text-gray-800">
+              <span className="font-bold text-emerald-600">{dedupResult.removeIds.length}</span>
+              {' '}duplicate{dedupResult.removeIds.length === 1 ? '' : 's'} across{' '}
+              <span className="font-bold">{dedupResult.groups.length}</span> cluster
+              {dedupResult.groups.length === 1 ? '' : 's'}.
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDedupModal(false)}
+                className="px-4 py-2 glass hover:glass-strong text-gray-900 rounded transition-colors border border-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSelectDuplicates}
+                disabled={dedupResult.removeIds.length === 0 || dedupScope === 'dataset'}
+                className="px-4 py-2 bg-white hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 rounded transition-colors border border-gray-300"
+                title={dedupScope === 'dataset' ? 'Preview only works on the current image' : 'Select them on the canvas instead of deleting'}
+              >
+                Select Only
+              </button>
+              <button
+                onClick={handleRemoveDuplicates}
+                disabled={dedupResult.removeIds.length === 0}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded transition-colors"
+              >
+                Remove {dedupResult.removeIds.length}
+              </button>
+            </div>
+          </div>
+        </Modal>,
+        document.body
+      )}
 
       {/* Delete All Confirmation Modal */}
       {createPortal(
