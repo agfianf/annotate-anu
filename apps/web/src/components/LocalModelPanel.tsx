@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, Cpu, Loader2, Trash2, Upload } from 'lucide-
 import toast from 'react-hot-toast'
 import { byomClient } from '@/lib/byom-client'
 import { getApiErrorMessage } from '@/lib/api-error'
-import { modelEndpointUrl, modelServerClient, modelServerUrl, type ServerModel } from '@/lib/model-server-client'
+import { modelEndpointUrl, modelServerClient, modelServerInternalUrl, type ServerModel } from '@/lib/model-server-client'
 import type { OutputType } from '@/types/byom'
 
 interface LocalModelPanelProps {
@@ -114,7 +114,8 @@ export function LocalModelPanel({ onModelRegistered }: LocalModelPanelProps) {
           </h3>
           <p className="text-sm text-gray-600 mt-1">
             Upload Ultralytics/YOLO <code className="text-xs">.pt</code> weights and register them
-            for annotation. Served from <code className="text-xs">{modelServerUrl}</code>.
+            for annotation. Served from <code className="text-xs">{modelServerInternalUrl}</code> on the
+            internal network, proxied through the API.
           </p>
         </div>
         <button
@@ -129,7 +130,7 @@ export function LocalModelPanel({ onModelRegistered }: LocalModelPanelProps) {
         <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-xl">
           <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-amber-800">
-            Model server is not reachable at <code>{modelServerUrl}</code>. Start it with{' '}
+            The API cannot reach the model server at <code>{modelServerInternalUrl}</code>. Start it with{' '}
             <code>docker compose -f docker/docker-compose.yml up -d model-server</code>.
           </div>
         </div>

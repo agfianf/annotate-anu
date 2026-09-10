@@ -35,7 +35,10 @@ export interface UploadedModel {
 }
 
 /** Where the weights are served from. Reachable from api-core, not from the browser. */
-export const modelServerUrl = MODEL_SERVER_INTERNAL_URL
+// The compose-network address, not something a browser can open: management
+// traffic goes through api-core's authenticated proxy, and this is only shown so
+// an operator can see where the service actually lives.
+export const modelServerInternalUrl = MODEL_SERVER_INTERNAL_URL
 
 /** URL to register as a BYOM endpoint. Must resolve from api-core, not the browser. */
 export function modelEndpointUrl(name: string): string {
