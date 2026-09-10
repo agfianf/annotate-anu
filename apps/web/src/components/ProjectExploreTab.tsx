@@ -1423,7 +1423,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
                 className="p-2.5 bg-red-500/60 hover:bg-red-500/80 disabled:bg-white/10 disabled:cursor-not-allowed backdrop-blur-sm text-white rounded-full flex items-center transition-all shadow-lg shadow-red-500/30"
                 title="Remove Tags"
               >
-                <Delete className="w-4 h-4 rotate-45" />
+                <Delete className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setSelectedImages(new Set())}
