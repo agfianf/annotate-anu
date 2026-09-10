@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { X } from '@/components/ui/icons';
 import { type ReactNode, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';

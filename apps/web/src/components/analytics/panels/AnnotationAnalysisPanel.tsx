@@ -21,7 +21,7 @@ import {
   Grid3X3,
   Square,
   Hexagon,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useAnalyticsToast } from '@/hooks/useAnalyticsToast';
 import type { DensityBucket, BboxCountBucket, PolygonCountBucket, PanelProps } from '@/types/analytics';
 import { useAnnotationAnalysis } from '@/hooks/useAnnotationAnalysis';

@@ -3,7 +3,7 @@
  * Sorting controls for Kanban task board
  */
 
-import { ArrowUpDown, Calendar, Clock } from 'lucide-react';
+import { ArrowUpDown, Calendar, Clock } from '@/components/ui/icons';
 import type { SortField, SortOrder } from './useKanbanStats';
 
 interface KanbanSortControlsProps {

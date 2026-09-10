@@ -3,7 +3,7 @@
  * Type definitions for the flexible analytics panel system
  */
 
-import type { LucideIcon } from 'lucide-react';
+import type { IconComponent } from '@/components/ui/icons';
 import type { ExploreFilters } from '@/lib/data-management-client';
 
 /**
@@ -62,7 +62,7 @@ export interface PanelDefinition {
   type: PanelType;
   name: string;
   description: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   component: React.LazyExoticComponent<React.ComponentType<PanelProps>>;
   category: PanelCategory;             // Panel category for organization
   features?: string[];                 // Features list for coming soon panels

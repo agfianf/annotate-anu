@@ -11,7 +11,7 @@
  * - Responsive positioning (resize/scroll listeners)
  */
 
-import { Check, Loader2, Plus, Search, Tag } from 'lucide-react';
+import { Check, Loader2, Plus, Search, Tag } from '@/components/ui/icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Tag as TagType, TagCategory } from '../lib/data-management-client';

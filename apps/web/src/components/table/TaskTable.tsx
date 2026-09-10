@@ -14,7 +14,7 @@ import {
   type LegacyColumnDef,
 } from '@tanstack/react-table/legacy';
 import { useState } from 'react';
-import { Briefcase, Image, ArrowUp, ArrowDown } from 'lucide-react';
+import { Briefcase, Image, ArrowUp, ArrowDown } from '@/components/ui/icons';
 import type { KanbanTaskWithStats, TaskTableProps } from './types';
 import SplitDropdown from './SplitDropdown';
 import AssigneeDropdownCell from './AssigneeDropdownCell';

@@ -4,7 +4,7 @@
  */
 
 import { memo } from 'react';
-import { LayoutGrid, LayoutPanelTop } from 'lucide-react';
+import { LayoutGrid, LayoutPanelTop } from '@/components/ui/icons';
 import { PanelLibrary } from './PanelLibrary';
 import { useAnalyticsPanels } from '@/hooks/useAnalyticsPanels';
 

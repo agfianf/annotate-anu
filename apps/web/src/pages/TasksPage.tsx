@@ -10,7 +10,7 @@ import {
     Loader2,
     Plus,
     X,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';

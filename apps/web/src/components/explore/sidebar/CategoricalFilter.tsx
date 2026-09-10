@@ -1,5 +1,5 @@
 import type { CategoricalAggregation } from '@/lib/data-management-client';
-import { List } from 'lucide-react';
+import { List } from '@/components/ui/icons';
 import { SidebarSection } from './SidebarSection';
 
 interface CategoricalFilterProps {

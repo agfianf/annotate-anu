@@ -3,7 +3,7 @@
  * Tab navigation for project detail page sections
  */
 
-import { BookOpen, History, Image, ListTodo, Settings } from 'lucide-react';
+import { BookOpen, History, Image, ListTodo, Settings } from '@/components/ui/icons';
 
 export type ProjectTabId = 'readme' | 'tasks' | 'configuration' | 'history' | 'explore';
 

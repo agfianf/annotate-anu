@@ -6,7 +6,7 @@ import {
   FolderOpen,
   File,
   Image,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { useQueryClient } from '@tanstack/react-query'
 import { useDirectoryContents } from '../hooks/useFileTree'
 import { useFileSelectionStore } from '../stores/fileSelectionStore'

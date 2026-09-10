@@ -8,7 +8,7 @@ import {
   Sparkles,
   Tag,
   Target,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import { FadeIn, TiltCard } from '../ui/animate'
 
 const features = [

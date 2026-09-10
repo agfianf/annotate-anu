@@ -1,5 +1,5 @@
 import { Modal } from './Modal'
-import { Check, X, Loader2 } from 'lucide-react'
+import { Check, X, Loader2 } from '@/components/ui/icons'
 
 export interface BatchProgressItem {
   imageName: string

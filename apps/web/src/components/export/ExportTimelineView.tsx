@@ -4,7 +4,7 @@
 
 import { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { History, Clock } from 'lucide-react';
+import { History, Clock } from '@/components/ui/icons';
 import type { Export, ExportMode } from '@/types/export';
 import { TimelineNode } from './TimelineNode';
 import { useReducedMotion } from '@/hooks/useReducedMotion';

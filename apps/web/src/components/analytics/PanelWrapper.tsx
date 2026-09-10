@@ -4,7 +4,7 @@
  */
 
 import { memo } from 'react';
-import { X } from 'lucide-react';
+import { X } from '@/components/ui/icons';
 import { motion } from 'framer-motion';
 import { useAnalyticsPanels } from '@/hooks/useAnalyticsPanels';
 import { getPanelDefinition } from './panelRegistry';

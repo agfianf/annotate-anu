@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, Cpu, Loader2, Trash2, Upload } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Cpu, Loader2, Trash2, Upload } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { byomClient } from '@/lib/byom-client'
 import { getApiErrorMessage } from '@/lib/api-error'

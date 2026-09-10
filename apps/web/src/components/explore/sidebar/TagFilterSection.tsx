@@ -1,5 +1,5 @@
 import type { TagCount } from '@/lib/data-management-client';
-import { Tag } from 'lucide-react';
+import { Tag } from '@/components/ui/icons';
 import { SidebarSection } from './SidebarSection';
 
 interface TagFilterSectionProps {

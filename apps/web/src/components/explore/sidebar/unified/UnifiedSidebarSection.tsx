@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, HelpCircle, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, HelpCircle, Plus } from '@/components/ui/icons';
 import { useState, type ReactNode } from 'react';
 import { VisibilityToggleButton, type VisibilityState as VisibilityStateType, type VisibilityColorTheme } from '@/components/ui/VisibilityToggleButton';
 

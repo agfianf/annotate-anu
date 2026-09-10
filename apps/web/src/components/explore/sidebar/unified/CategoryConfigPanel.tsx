@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, X } from '@/components/ui/icons';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import type { TagCategory } from '@/lib/data-management-client';
 import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';

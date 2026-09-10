@@ -3,7 +3,7 @@
  * Shows Apply Filter and Clear buttons when items are selected
  */
 
-import { Check, X } from 'lucide-react';
+import { Check, X } from '@/components/ui/icons';
 import { motion } from 'framer-motion';
 
 interface SelectionActionBarProps {

@@ -1,5 +1,5 @@
 import type { NumericAggregation } from '@/lib/data-management-client';
-import { ChevronDown, ChevronRight, Eye, EyeOff, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye, EyeOff, SlidersHorizontal } from '@/components/ui/icons';
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import { ColorBorderWrapper } from '@/components/ui/ColorBorderWrapper';
 

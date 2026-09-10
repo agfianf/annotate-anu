@@ -14,7 +14,7 @@ import {
   Download,
   Image,
   FileText,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import type { Export, ExportMode } from '@/types/export';
 import { ExportDiffSummary } from './ExportDiffSummary';
 import { getExportModeLabel, getOutputFormatLabel, formatFileSize } from '@/lib/export-client';

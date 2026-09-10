@@ -1,4 +1,4 @@
-import { MousePointer, Square, Pentagon, Upload } from 'lucide-react'
+import { MousePointer, Square, Pentagon, Upload } from '@/components/ui/icons'
 import type { Tool } from '../types/annotations'
 
 interface ToolbarProps {

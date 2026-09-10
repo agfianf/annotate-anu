@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2 } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { getApiErrorMessage } from '@/lib/api-error'
 import { qcClient, type ROIClass, type ROITile } from '@/lib/qc-client'

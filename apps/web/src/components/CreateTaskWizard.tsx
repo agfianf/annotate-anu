@@ -20,7 +20,7 @@ import {
   Trash2,
   Upload,
   X,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';

@@ -4,7 +4,7 @@
  */
 
 import { useState } from 'react';
-import { Eye, EyeOff, Trash2, X } from 'lucide-react';
+import { Eye, EyeOff, Trash2, X } from '@/components/ui/icons';
 import type { BulkActionsPanelProps } from './types';
 import ConfirmationModal from '../ConfirmationModal';
 

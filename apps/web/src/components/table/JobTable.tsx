@@ -14,7 +14,7 @@ import {
   type LegacyColumnDef,
 } from '@tanstack/react-table/legacy';
 import { useState } from 'react';
-import { Image, ArrowUp, ArrowDown, Archive, Trash2 } from 'lucide-react';
+import { Image, ArrowUp, ArrowDown, Archive, Trash2 } from '@/components/ui/icons';
 import type { Job } from '@/lib/api-client';
 import AssigneeDropdownCell from './AssigneeDropdownCell';
 import {
@@ -23,7 +23,7 @@ import {
   Clock,
   Play,
   User,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 
 const columnHelper = createColumnHelper<Job>();
 

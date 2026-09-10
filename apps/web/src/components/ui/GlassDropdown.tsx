@@ -3,7 +3,7 @@
  * Features liquid glass effect with smooth animations
  */
 
-import { Check, ChevronDown, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, Loader2 } from '@/components/ui/icons';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';

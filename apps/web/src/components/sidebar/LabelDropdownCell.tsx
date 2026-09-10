@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check } from '@/components/ui/icons';
 import { createPortal } from 'react-dom';
 import type { LabelDropdownCellProps } from './types';
 

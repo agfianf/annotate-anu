@@ -10,7 +10,7 @@
  */
 
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { MapPin, Target, Grid3X3 } from 'lucide-react';
+import { MapPin, Target, Grid3X3 } from '@/components/ui/icons';
 
 import type { PanelProps } from '@/types/analytics';
 import { useSpatialHeatmap } from '@/hooks/useSpatialHeatmap';

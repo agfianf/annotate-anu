@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { RefreshCw, Upload, FolderPlus, Check, CheckSquare, Square, Trash2 } from 'lucide-react'
+import { RefreshCw, Upload, FolderPlus, Check, CheckSquare, Square, Trash2 } from '@/components/ui/icons'
 import { useQueryClient } from '@tanstack/react-query'
 import { useCreateDirectory, fileTreeKeys } from '../hooks/useFileTree'
 import { validateFolderPath } from '../utils/validation'

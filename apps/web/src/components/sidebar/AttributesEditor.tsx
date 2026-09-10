@@ -6,7 +6,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Plus, Trash2, X, Check } from 'lucide-react'
+import { Plus, Trash2, X, Check } from '@/components/ui/icons'
 import type { AttributeValue } from '@/types/annotations'
 
 type AttributeType = 'text' | 'number' | 'boolean'

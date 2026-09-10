@@ -28,7 +28,7 @@ import {
   GitBranch,
   ArrowLeftRight,
   X,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import type { Export, ExportMode, ExportSortBy, SortOrder } from '@/types/export';
 import {

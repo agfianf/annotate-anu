@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Database, Eye, EyeOff, RefreshCw, Tag } from 'lucide-react';
+import { Database, Eye, EyeOff, RefreshCw, Tag } from '@/components/ui/icons';
 import { useState } from 'react';
 import type { UseExploreVisibilityReturn } from '@/hooks/useExploreVisibility';
 import type { MetadataFieldKey } from '@/hooks/useExploreVisibility';

@@ -227,3 +227,122 @@ input[type="range"].slider-blue::-moz-range-progress {
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* ============================================================
+   Icon hover motion
+   ------------------------------------------------------------
+   Icons from `@/components/ui/icons` carry `.anu-icon` plus a
+   `--<gesture>` modifier. The gesture fires when the enclosing
+   control is hovered, because a 16px glyph is too small to be a
+   reliable hover target on its own; hovering a bare icon works too.
+
+   Everything sits inside a `no-preference` query, so a reader who
+   asks for reduced motion gets the icons completely still.
+
+   The rules live in `@layer components` on purpose: unlayered CSS
+   outranks every Tailwind utility regardless of specificity, and an
+   unlayered `transition` here would silently cancel the
+   `transition-transform` / `transition-colors` classes call sites
+   already put on their icons. Inside the layer, utilities still win.
+   ============================================================ */
+
+@layer components {
+  @media (prefers-reduced-motion: no-preference) {
+    .anu-icon {
+      transition-property: transform;
+      transition-duration: 200ms;
+      transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+      transform-origin: center;
+    }
+
+    /* A half-turn needs longer than a nudge, in both directions. */
+    .anu-icon--spin {
+      transition-duration: 400ms;
+    }
+
+    /* The hover surfaces that drive an icon's motion. A control that
+       cannot be actioned must not advertise one. */
+    :is(button, a, summary, label, [role='button'], [role='tab'], [role='menuitem']):not(:disabled):not([aria-disabled='true']):hover
+      .anu-icon,
+    .anu-icon:hover {
+      transform: scale(1.12);
+    }
+
+    :is(button, a, summary, label, [role='button'], [role='tab'], [role='menuitem']):not(:disabled):not([aria-disabled='true']):hover
+      .anu-icon--spin,
+    .anu-icon--spin:hover {
+      transform: rotate(180deg);
+    }
+
+    :is(button, a, summary, label, [role='button'], [role='tab'], [role='menuitem']):not(:disabled):not([aria-disabled='true']):hover
+      .anu-icon--pop,
+    .anu-icon--pop:hover {
+      transform: scale(1.22);
+    }
+
+    :is(button, a, summary, label, [role='button'], [role='tab'], [role='menuitem']):not(:disabled):not([aria-disabled='true']):hover
+      .anu-icon--right,
+    .anu-icon--right:hover {
+      transform: translateX(2px);
+    }
+
+    :is(button, a, summary, label, [role='button'], [role='tab'], [role='menuitem']):not(:disabled):not([aria-disabled='true']):hover
+      .anu-icon--left,
+    .anu-icon--left:hover {
+      transform: translateX(-2px);
+    }
+
+    :is(button, a, summary, label, [role='button'], [role='tab'], [role='menuitem']):not(:disabled):not([aria-disabled='true']):hover
+      .anu-icon--up,
+    .anu-icon--up:hover {
+      transform: translateY(-2px);
+    }
+
+    :is(button, a, summary, label, [role='button'], [role='tab'], [role='menuitem']):not(:disabled):not([aria-disabled='true']):hover
+      .anu-icon--down,
+    .anu-icon--down:hover {
+      transform: translateY(2px);
+    }
+
+    /* Destructive actions recoil rather than invite: the keyframes own the
+       transform, and `none` keeps the icon from popping to 1.12 the moment
+       the 400ms animation stops filling. */
+    :is(button, a, summary, label, [role='button'], [role='tab'], [role='menuitem']):not(:disabled):not([aria-disabled='true']):hover
+      .anu-icon--wiggle,
+    .anu-icon--wiggle:hover {
+      transform: none;
+      animation: anu-icon-wiggle 400ms cubic-bezier(0.36, 0.07, 0.19, 0.97);
+    }
+
+    /* A spinner supplies its own animation; never fight it. Tailwind's
+       `spin` keyframes declare only a `to` frame, so any transform we leave
+       on the element becomes the implicit `from` and the spinner sweeps a
+       fraction of a turn instead of a full one. */
+    .anu-icon.animate-spin,
+    .anu-icon.animate-pulse,
+    .anu-icon.animate-bounce {
+      transition: none;
+    }
+
+    :is(button, a, summary, label, [role='button'], [role='tab'], [role='menuitem']):not(:disabled):not([aria-disabled='true']):hover
+      :is(.anu-icon.animate-spin, .anu-icon.animate-pulse, .anu-icon.animate-bounce),
+    .anu-icon.animate-spin:hover,
+    .anu-icon.animate-pulse:hover,
+    .anu-icon.animate-bounce:hover {
+      transform: none;
+    }
+  }
+}
+
+@keyframes anu-icon-wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-9deg);
+  }
+  75% {
+    transform: rotate(9deg);
+  }
+}

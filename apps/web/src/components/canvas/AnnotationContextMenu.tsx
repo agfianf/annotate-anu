@@ -3,7 +3,7 @@
  * Right-click context menu for editing annotation attributes on canvas
  */
 
-import { Check, Edit3, Trash2, X } from 'lucide-react';
+import { Check, Edit3, Trash2, X } from '@/components/ui/icons';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';

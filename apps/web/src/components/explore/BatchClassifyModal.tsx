@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, ChevronDown, ChevronUp, FolderPlus, Loader2, Sparkles, Tag, X } from 'lucide-react'
+import { AlertCircle, ChevronDown, ChevronUp, FolderPlus, Loader2, Sparkles, Tag, X } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { classificationApi, type BatchClassifyProgress } from '../../lib/classification-client'

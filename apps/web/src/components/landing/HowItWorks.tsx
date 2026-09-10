@@ -1,4 +1,4 @@
-import { Download, Image, Sparkles, Tag } from 'lucide-react'
+import { Download, Image, Sparkles, Tag } from '@/components/ui/icons'
 
 const steps = [
   {

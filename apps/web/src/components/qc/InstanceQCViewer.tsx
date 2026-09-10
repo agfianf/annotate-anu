@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ImageOff } from 'lucide-react'
+import { ImageOff } from '@/components/ui/icons'
 import type { QCItem } from '@/lib/qc-client'
 
 interface InstanceQCViewerProps {

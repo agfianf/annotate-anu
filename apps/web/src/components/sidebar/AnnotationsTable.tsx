@@ -30,7 +30,7 @@ import {
   Trash2,
   User,
   XCircle,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { LabelDropdownCell } from './LabelDropdownCell';
 import type { AnnotationsTableProps, AnnotationTableRow } from './types';
 import type { Label } from '@/types/annotations';

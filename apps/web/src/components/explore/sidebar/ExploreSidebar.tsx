@@ -1,5 +1,5 @@
 import { useSidebarAggregations, type ExploreFiltersState } from '@/hooks/useExploreFilters';
-import { ArrowRight, Database, Filter, Layers, RefreshCw, X } from 'lucide-react';
+import { ArrowRight, Database, Filter, Layers, RefreshCw, X } from '@/components/ui/icons';
 import { CategoricalFilter } from './CategoricalFilter';
 import { FilepathFilter } from './FilepathFilter';
 import { NumericRangeFilter } from './NumericRangeFilter';

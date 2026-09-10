@@ -4,7 +4,7 @@
 
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, Plus, Trash2, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, RefreshCw, CheckCircle, XCircle } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { useModelRegistry } from '../hooks/useModelRegistry'
 import { byomClient } from '../lib/byom-client'

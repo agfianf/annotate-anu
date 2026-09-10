@@ -4,7 +4,7 @@
  * page with special admin setup flow if this is the first user.
  */
 
-import { Loader2 } from 'lucide-react';
+import { Loader2 } from '@/components/ui/icons';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
 import { authApi } from '../lib/api-client';

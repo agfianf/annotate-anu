@@ -1,4 +1,4 @@
-import { Cloud, Plug } from 'lucide-react'
+import { Cloud, Plug } from '@/components/ui/icons'
 
 const roadmapItems = [
   {

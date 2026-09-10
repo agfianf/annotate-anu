@@ -4,7 +4,7 @@
  */
 
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Loader2 } from 'lucide-react';
+import { Loader2 } from '@/components/ui/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { VisibilityState } from '../../hooks/useExploreVisibility';
 import { useJustifiedRows } from '../../hooks/useJustifiedRows';

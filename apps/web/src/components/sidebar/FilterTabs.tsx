@@ -3,7 +3,7 @@
  * Three-tab pill selector for filtering annotations (All / Manual / Auto)
  */
 
-import { Sparkles } from 'lucide-react';
+import { Sparkles } from '@/components/ui/icons';
 import type { FilterTabsProps, FilterMode } from './types';
 
 export function FilterTabs({ filterMode, onFilterChange, counts }: FilterTabsProps) {

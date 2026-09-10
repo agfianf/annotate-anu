@@ -13,7 +13,7 @@ import {
   SuccessCheckmark,
 } from '@/components/ui/animate';
 import { Button } from '@/components/ui/button';
-import { Folder, Check, Tag, Sparkles } from 'lucide-react';
+import { Folder, Check, Tag, Sparkles } from '@/components/ui/icons';
 
 export default function AnimationDemoPage() {
   const [showParticles, setShowParticles] = useState(false);

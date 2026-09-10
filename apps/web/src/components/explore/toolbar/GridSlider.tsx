@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useRef, useState } from 'react';
-import { Grid3X3, Grid2X2, LayoutGrid, Square, Grip } from 'lucide-react';
+import { Grid3X3, Grid2X2, LayoutGrid, Square, Grip } from '@/components/ui/icons';
 
 export type GridSize = 'xs' | 's' | 'm' | 'l' | 'xl';
 

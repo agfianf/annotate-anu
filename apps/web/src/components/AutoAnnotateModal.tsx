@@ -4,7 +4,7 @@ import { Button } from './ui/button'
 import type { Label, ImageData } from '@/types/annotations'
 import { sam3Client } from '@/lib/sam3-client'
 import { imagesApi } from '@/lib/api-client'
-import { Sparkles, Loader2 } from 'lucide-react'
+import { Sparkles, Loader2 } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 
 /**

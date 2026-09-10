@@ -1,4 +1,4 @@
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 
 export type VisibilityState = boolean | 'partial';

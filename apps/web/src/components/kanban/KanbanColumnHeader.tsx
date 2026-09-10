@@ -3,7 +3,7 @@
  * Displays column title and animated stats
  */
 
-import { Briefcase, Image, CheckCircle2 } from 'lucide-react';
+import { Briefcase, Image, CheckCircle2 } from '@/components/ui/icons';
 import { CountingNumber } from '@/components/ui/animate';
 import type { KanbanColumnHeaderProps } from './types';
 

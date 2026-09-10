@@ -6,7 +6,7 @@
 
 import { Suspense, memo, useMemo, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X } from '@/components/ui/icons';
 import { useAnalyticsPanels } from '@/hooks/useAnalyticsPanels';
 import { getPanelDefinition } from './panelRegistry';
 import { PanelWrapper } from './PanelWrapper';

@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, Briefcase, Image, Plus } from 'lucide-react';
+import { ChevronDown, Briefcase, Image, Plus } from '@/components/ui/icons';
 import { CountingNumber } from '@/components/ui/animate';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { TableSectionProps } from './types';

@@ -6,7 +6,7 @@
 
 import { forwardRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import { Plus } from '@/components/ui/icons';
 import { FadeIn } from '@/components/ui/animate';
 import { KanbanColumnHeader } from './KanbanColumnHeader';
 import { KanbanTaskCard } from './KanbanTaskCard';

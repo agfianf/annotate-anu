@@ -1,4 +1,4 @@
-import { File, FolderUp, Upload } from 'lucide-react'
+import { File, FolderUp, Upload } from '@/components/ui/icons'
 import { useCallback, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
 

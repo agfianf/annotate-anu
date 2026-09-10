@@ -34,7 +34,7 @@ import {
   Fingerprint,
   ExternalLink,
   Palette,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { PanelProps } from '@/types/analytics';
 import { useEnhancedDatasetStats } from '@/hooks/useEnhancedDatasetStats';

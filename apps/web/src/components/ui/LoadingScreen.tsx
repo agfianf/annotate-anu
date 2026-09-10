@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, type Variants } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { Scan } from 'lucide-react';
+import { Scan } from '@/components/ui/icons';
 
 interface LoadingScreenProps {
   /**

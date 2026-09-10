@@ -1,4 +1,4 @@
-import { ArrowRight, LogIn, Shield, User, UserPlus, Users, Zap } from 'lucide-react'
+import { ArrowRight, LogIn, Shield, User, UserPlus, Users, Zap } from '@/components/ui/icons'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { FadeIn, GradientText, TiltCard } from '../ui/animate'
 import { useAuth } from '../../contexts/AuthContext'

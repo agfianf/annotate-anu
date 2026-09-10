@@ -3,7 +3,7 @@
  * User management with TanStack Table, toggle for status, and user overview panel
  */
 
-import { Loader2, Users } from 'lucide-react';
+import { Loader2, Users } from '@/components/ui/icons';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import type { User } from '@/lib/api-client';

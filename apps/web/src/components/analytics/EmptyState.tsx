@@ -4,7 +4,7 @@
  */
 
 import { memo } from 'react';
-import { BarChart3, Plus, Sparkles } from 'lucide-react';
+import { BarChart3, Plus, Sparkles } from '@/components/ui/icons';
 import { motion } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 

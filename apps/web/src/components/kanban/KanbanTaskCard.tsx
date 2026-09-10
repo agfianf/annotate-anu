@@ -6,7 +6,7 @@
 
 import { useRef, useEffect, memo } from 'react';
 import { motion } from 'framer-motion';
-import { Briefcase, Image, GripVertical, ExternalLink, Calendar, Clock } from 'lucide-react';
+import { Briefcase, Image, GripVertical, ExternalLink, Calendar, Clock } from '@/components/ui/icons';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { KanbanTaskCardProps, Split } from './types';
 import { SPLIT_ORDER } from './types';

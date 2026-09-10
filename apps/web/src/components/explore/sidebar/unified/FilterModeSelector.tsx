@@ -1,4 +1,4 @@
-import { Settings, ChevronDown, ChevronRight } from 'lucide-react';
+import { Settings, ChevronDown, ChevronRight } from '@/components/ui/icons';
 import React, { useState } from 'react';
 
 interface FilterModeSelectorProps {

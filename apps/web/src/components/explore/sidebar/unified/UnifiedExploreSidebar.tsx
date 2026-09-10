@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Database, Droplet, Eye, EyeOff, Hexagon, Layers, Lightbulb, Paintbrush, Percent, RefreshCw, RotateCcw, Shapes, Square, Sun, Tag, Trash2, Type } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Droplet, Eye, EyeOff, Hexagon, Layers, Lightbulb, Paintbrush, Percent, RefreshCw, RotateCcw, Shapes, Square, Sun, Tag, Trash2, Type } from '@/components/ui/icons';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import type { UseExploreVisibilityReturn } from '@/hooks/useExploreVisibility';

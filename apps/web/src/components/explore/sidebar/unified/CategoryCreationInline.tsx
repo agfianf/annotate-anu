@@ -1,4 +1,4 @@
-import { Check, X } from 'lucide-react';
+import { Check, X } from '@/components/ui/icons';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';
 

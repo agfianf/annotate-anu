@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, FolderOpen, Loader2, Upload } from 'lucide-react'
+import { AlertTriangle, FolderOpen, Loader2, Upload } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { Modal } from './ui/Modal'
 import { Button } from './ui/button'

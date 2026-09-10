@@ -1,4 +1,4 @@
-import { RotateCcw } from 'lucide-react'
+import { RotateCcw } from '@/components/ui/icons'
 import type { Label, DetectionLabelMappingConfig } from '@/types/annotations'
 
 interface LabelMappingSectionProps {

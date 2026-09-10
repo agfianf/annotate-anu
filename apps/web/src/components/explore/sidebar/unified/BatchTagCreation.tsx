@@ -1,4 +1,4 @@
-import { Check, Plus, X, Trash2 } from 'lucide-react';
+import { Check, Plus, X, Trash2 } from '@/components/ui/icons';
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';
 
