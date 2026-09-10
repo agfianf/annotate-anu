@@ -51,6 +51,31 @@ services:
         - VITE_SAM3_API_URL=http://10.0.0.5:18710
         - VITE_CORE_API_URL=http://10.0.0.5:18711
 
+  # --- volumes and env_file: both are safe to override ---
+  #
+  # Neither field replaces what docker-compose.yml already defines, so you cannot
+  # accidentally drop the hot-reload mount or the model cache by touching them here.
+  #
+  #   volumes  -> merged by CONTAINER path. Same target replaces, new target is added.
+  #   env_file -> appended. The base file is still read; yours is layered on top,
+  #               and later files win on duplicate keys.
+  #
+  # Relocate the Hugging Face cache to a bigger disk. /code/src is untouched and
+  # keeps hot-reloading, because only /root/.cache/huggingface is named:
+  # backend:
+  #   volumes:
+  #     - /mnt/big-disk/hf-cache:/root/.cache/huggingface
+
+  # Layer machine-local secrets on top of the committed .env instead of editing it:
+  # backend:
+  #   env_file:
+  #     - ../apps/api-inference/.env.local
+
+  # Keep .pt weights outside the repo:
+  # model-server:
+  #   volumes:
+  #     - /mnt/big-disk/yolo-weights:/code/models
+
   # --- Optional: everything below is commented out ---
 
   # Host port already taken by another stack? Remap it here. Only the left-hand
