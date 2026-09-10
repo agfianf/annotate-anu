@@ -74,7 +74,7 @@ services:
       - SHARE_THUMBNAIL_CACHE_DIR=/data/cache/thumbnails
       - EXPORT_ROOT=/data/exports
       - API_CORE_DEBUG=true
-      - CORS_ORIGINS=["http://10.8.0.106:18712","http://10.8.0.106:18711","http://10.8.0.106:3000","http://localhost:18712","http://localhost:3000","http://10.8.0.106:80"]
+      - CORS_ORIGINS=["http://localhost:18712","http://localhost:18711","http://localhost:3000","http://localhost:80"]
     restart: unless-stopped
     networks:
       - anu-network
@@ -176,8 +176,8 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        - VITE_SAM3_API_URL=http://10.8.0.106:18710
-        - VITE_CORE_API_URL=http://10.8.0.106:18711
+        - VITE_SAM3_API_URL=http://localhost:18710
+        - VITE_CORE_API_URL=http://localhost:18711
         - VITE_ENV=production
     container_name: anu-frontend-prod
     ports:

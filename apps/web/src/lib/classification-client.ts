@@ -3,9 +3,9 @@
  */
 
 const API_URL =
-  import.meta.env.VITE_API_CORE_URL !== undefined
-    ? import.meta.env.VITE_API_CORE_URL
-    : 'http://localhost:8001'
+  import.meta.env.VITE_CORE_API_URL !== undefined
+    ? import.meta.env.VITE_CORE_API_URL
+    : 'http://localhost:18711'
 
 /** Per-class config for uncategorized mode */
 export interface UncategorizedClassConfig {

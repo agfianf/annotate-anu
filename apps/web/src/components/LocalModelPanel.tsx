@@ -130,7 +130,7 @@ export function LocalModelPanel({ onModelRegistered }: LocalModelPanelProps) {
           <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-amber-800">
             Model server is not reachable at <code>{modelServerUrl}</code>. Start it with{' '}
-            <code>docker compose -f docker/docker-compose.dev.yml up -d model-server</code>.
+            <code>docker compose -f docker/docker-compose.yml up -d model-server</code>.
           </div>
         </div>
       )}

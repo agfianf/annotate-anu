@@ -124,10 +124,10 @@ Diagram source: `docs/architecture/system-overview.mmd`.
 
 Host ports use the `18710-18712` block instead of the defaults (`8000`, `8001`, `5173`) to avoid clashing with other services on the same machine. Only the host side is remapped — inside the `anu-network` bridge the services still talk over their standard ports, so `SAM3_API_URL=http://backend:8000` and friends stay unchanged.
 
-To use a different block, edit the `ports:` entries in `docker/docker-compose.dev.yml` and keep these in sync:
+To use a different block, edit the `ports:` entries in `docker/docker-compose.yml` and keep these in sync:
 
 - `apps/web/.env` — `VITE_SAM3_API_URL`, `VITE_CORE_API_URL` (baked into the browser bundle, so they must be host-reachable URLs)
-- `apps/api-core/.env` and the `CORS_ORIGINS` override in `docker/docker-compose.dev.yml` — must list the web app's origin
+- `apps/api-core/.env` and the `CORS_ORIGINS` override in `docker/docker-compose.yml` — must list the web app's origin
 - `Makefile` — the URLs echoed by the `docker-up` / `docker-rebuild` targets
 
 ## Quick Start

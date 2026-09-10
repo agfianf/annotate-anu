@@ -294,7 +294,7 @@ export const refreshTokenIfNeeded = async (): Promise<boolean> => {
 
     const coreApiUrl = import.meta.env.VITE_CORE_API_URL !== undefined
       ? import.meta.env.VITE_CORE_API_URL
-      : 'http://localhost:8001';
+      : 'http://localhost:18711';
     const response = await axios.post<ApiResponse<TokenOnlyResponse>>(
       `${coreApiUrl}/api/v1/auth/refresh`,
       formData,
@@ -316,10 +316,10 @@ export const refreshTokenIfNeeded = async (): Promise<boolean> => {
 
 // API Base URL - Uses VITE_CORE_API_URL for management APIs (auth, projects, admin, etc.)
 // In production, this should be empty string since nginx proxies /api/v1/* to the backend
-// In development, this should be http://localhost:8001
+// In development, this should be http://localhost:18711
 const API_BASE_URL = import.meta.env.VITE_CORE_API_URL !== undefined
   ? import.meta.env.VITE_CORE_API_URL
-  : 'http://localhost:8001';
+  : 'http://localhost:18711';
 
 // Create axios instance
 export const apiClient: AxiosInstance = axios.create({

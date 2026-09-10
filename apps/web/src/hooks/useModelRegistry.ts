@@ -10,7 +10,7 @@ import type { AvailableModel, RegisteredModel } from '../types/byom'
 const STORAGE_KEY = 'selected_model_id'
 const API_URL = import.meta.env.VITE_SAM3_API_URL !== undefined
   ? import.meta.env.VITE_SAM3_API_URL
-  : 'http://localhost:8000'
+  : 'http://localhost:18710'
 
 /**
  * SAM3 built-in model definition

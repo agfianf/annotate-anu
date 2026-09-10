@@ -1,0 +1,85 @@
+version: '3.8'
+
+# Machine-specific overrides. Copy to docker-compose.override.yml and edit:
+#
+#   cp docker/docker-compose.override.example.yml docker/docker-compose.override.yml
+#
+# docker-compose.override.yml is gitignored, so your host address, ports and GPU
+# layout stay on your machine and never land in a commit. docker-compose.yml keeps
+# generic localhost defaults that work for a fresh clone with no override at all.
+#
+# The Makefile passes this file with a second -f only when it exists. Compose does
+# not auto-load an override once any -f flag is used, so running docker-compose by
+# hand needs both files spelled out:
+#
+#   docker-compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml up -d
+#
+# Use `make docker-up` and you get this for free.
+
+services:
+
+  # Serving the UI on something other than localhost — a LAN address, a VPN
+  # address, a hostname — means three things have to name that same host:
+  #
+  #   1. the VITE_* URLs the browser bundle is built with (frontend)
+  #   2. CORS_ORIGINS on api-core, or the browser blocks every request
+  #   3. the VITE_* build args for the production image (frontend-prod)
+  #
+  # Container-to-container URLs are NOT among them: SAM3_API_URL stays
+  # http://backend:8000 and VITE_MODEL_SERVER_INTERNAL_URL stays
+  # http://model-server:8002, because those resolve on the compose network.
+
+  api-core:
+    environment:
+      # Must list every origin the UI is actually served from.
+      - CORS_ORIGINS=["http://10.0.0.5:18712","http://localhost:18712"]
+
+  frontend:
+    environment:
+      # Vite reads VITE_-prefixed process env alongside apps/web/.env, and these
+      # win. Keeps the committed apps/web/.env on localhost while this machine
+      # serves from a real address.
+      - VITE_SAM3_API_URL=http://10.0.0.5:18710
+      - VITE_CORE_API_URL=http://10.0.0.5:18711
+      - VITE_MODEL_SERVER_URL=http://10.0.0.5:18713
+
+  frontend-prod:
+    build:
+      args:
+        # VITE_* values are baked into the bundle at build time, so the
+        # production image needs them here as build args, not as environment.
+        - VITE_SAM3_API_URL=http://10.0.0.5:18710
+        - VITE_CORE_API_URL=http://10.0.0.5:18711
+
+  # --- Optional: everything below is commented out ---
+
+  # Host port already taken by another stack? Remap it here. Only the left-hand
+  # side may change; the container port is what the other services dial.
+  # backend:
+  #   ports:
+  #     - "28710:8000"
+
+  # No GPU, or a different device index. SAM3_DEVICE=auto falls back to CPU,
+  # which works but is very slow.
+  # backend:
+  #   environment:
+  #     - SAM3_DEVICE=cpu
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices: []
+
+  # Pin model-server to a second GPU.
+  # model-server:
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             device_ids: ['1']
+  #             capabilities: [gpu]
+
+  # Expose postgres to a local client.
+  # postgres:
+  #   ports:
+  #     - "15432:5432"

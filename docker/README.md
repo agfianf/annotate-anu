@@ -4,7 +4,7 @@ This directory contains Docker Compose files for different deployment modes of A
 
 ## Available Configurations
 
-### 🔧 Development Mode (`docker-compose.dev.yml`)
+### 🔧 Development Mode (`docker-compose.yml`)
 
 **Purpose**: Local development with hot-reload enabled
 
@@ -16,7 +16,7 @@ This directory contains Docker Compose files for different deployment modes of A
 ```bash
 make docker-up
 # or
-docker-compose -f docker/docker-compose.dev.yml up
+docker-compose -f docker/docker-compose.yml up
 ```
 
 **Features**:
@@ -94,6 +94,32 @@ docker-compose -f docker/docker-compose.team.yml up
 - Redis: localhost:6379
 
 ---
+
+## Local Overrides (`docker-compose.override.yml`)
+
+Everything committed to git points at `localhost`. Anything specific to one machine — a LAN or VPN address, remapped host ports, GPU device ids — goes in a gitignored override instead, so a real host address never lands in a commit:
+
+```bash
+cp docker/docker-compose.override.example.yml docker/docker-compose.override.yml
+# edit it, then:
+make docker-up
+```
+
+`make docker-up` picks the override up automatically when it exists, and works fine when it does not — a fresh clone needs no override at all.
+
+One gotcha if you run compose by hand: it only auto-loads `docker-compose.override.yml` when **no** `-f` flag is given. Pass `-f` and you must name both files:
+
+```bash
+docker-compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml up -d
+```
+
+Serving the UI from anything other than `localhost` means three things have to name that same host, or the browser blocks the requests:
+
+1. the `VITE_*` URLs for the `frontend` service — Vite reads `VITE_`-prefixed process env and it takes precedence over `apps/web/.env`
+2. `CORS_ORIGINS` on `api-core`
+3. the `VITE_*` **build args** for `frontend-prod`, since those are baked into the bundle at build time
+
+Container-to-container URLs are not among them. `SAM3_API_URL=http://backend:8000` and `VITE_MODEL_SERVER_INTERNAL_URL=http://model-server:8002` resolve on the compose network and keep their internal ports.
 
 ## Environment Variables
 

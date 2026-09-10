@@ -4,7 +4,7 @@
 
 ## Architecture
 
-Three apps in `apps/`, run together by `docker/docker-compose.dev.yml`:
+Three apps in `apps/`, run together by `docker/docker-compose.yml`:
 
 | Path | Responsibility | Compose service | Container | Host port → container port |
 | --- | --- | --- | --- | --- |
@@ -67,8 +67,14 @@ Exact env var names, which are easy to get wrong:
 
 - It is `JWT_SECRET_KEY`, not `JWT_SECRET`.
 - `VITE_*` values are baked into the browser bundle, so they must be host-reachable URLs (`http://localhost:18711`), never container names.
-- `apps/web/src/lib/classification-client.ts` reads `VITE_API_CORE_URL`, while every other client reads `VITE_CORE_API_URL`. That variable is unset, so the client falls back to a hardcoded `http://localhost:8001` — a port nothing listens on any more. **Use `VITE_CORE_API_URL` in new code**; fixing the existing typo is a pending cleanup.
-- Changing a host port means updating four places in lockstep: `ports:` in `docker/docker-compose.dev.yml`, `apps/web/.env`, `CORS_ORIGINS` (in *both* the compose override and `apps/api-core/.env`), and the URLs echoed by the `Makefile`.
+- Every client reads `VITE_CORE_API_URL`. `classification-client.ts` used to read `VITE_API_CORE_URL`, an unset variable that silently fell through to a stale hardcoded port; that is fixed, and the hardcoded fallbacks across the client layer now match the 1871x block.
+- Changing a host port means updating `ports:` in `docker/docker-compose.yml`, `apps/web/.env`, `CORS_ORIGINS` in `apps/api-core/.env`, and the URLs echoed by the `Makefile`, in lockstep.
+
+**Committed config is generic; machine-specific config is not.** Everything tracked in git points at `localhost`. Anything specific to one host — a LAN or VPN address, remapped ports, GPU device ids — belongs in `docker/docker-compose.override.yml`, which is gitignored. Copy `docker/docker-compose.override.example.yml` to start, and never put a real host address in a tracked file.
+
+`make docker-up` folds the override in automatically. Compose only auto-loads an override when no `-f` flag is used and every Makefile target passes `-f`, so the Makefile adds a second `-f` via a `wildcard` check — present or absent, both work. Running compose by hand needs both files named explicitly.
+
+Serving the UI from a non-localhost address means three things must name that host: the `VITE_*` URLs (Vite reads `VITE_`-prefixed process env and it wins over `apps/web/.env`), `CORS_ORIGINS` on api-core, and the `VITE_*` build args for `frontend-prod`. Container-to-container URLs stay on service names — `SAM3_API_URL=http://backend:8000`, `VITE_MODEL_SERVER_INTERNAL_URL=http://model-server:8002`.
 
 ## Conventions
 

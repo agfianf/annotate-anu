@@ -29,8 +29,8 @@ WORKDIR /app
 
 # Build arguments for environment variables
 # These defaults can be overridden via docker-compose build args
-ARG VITE_SAM3_API_URL=http://10.8.0.106:8000
-ARG VITE_CORE_API_URL=http://10.8.0.106:8001
+ARG VITE_SAM3_API_URL=http://localhost:8000
+ARG VITE_CORE_API_URL=http://localhost:8001
 ARG VITE_ENV=production
 
 # Set environment variables from build args

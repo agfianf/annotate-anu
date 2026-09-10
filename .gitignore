@@ -77,3 +77,7 @@ htmlcov/
 .agent
 backend/docs
 node_modules/.vite
+
+# Machine-specific compose overrides (host address, ports, GPU layout).
+# Template: docker/docker-compose.override.example.yml
+docker/docker-compose.override.yml

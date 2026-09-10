@@ -16,7 +16,7 @@ separate inference service for SAM3.
 
 ## Supported Stack
 
-The supported runtime is the Docker dev stack in `docker/docker-compose.dev.yml`
+The supported runtime is the Docker dev stack in `docker/docker-compose.yml`
 with the services listed above.
 
 ## Request Flows

@@ -54,10 +54,18 @@ help:
 	@echo "  docker-shell     - Open shell in container (usage: make docker-shell service=backend|api-core|frontend)"
 
 # Development
+# docker-compose.override.yml holds machine-specific settings (host address, ports,
+# GPU) and is gitignored. Compose only auto-loads an override file when no -f flag
+# is given, and every target here passes -f, so it has to be added explicitly.
+# The wildcard makes it optional: a fresh clone with no override still works.
+COMPOSE_FILE := docker/docker-compose.yml
+COMPOSE_OVERRIDE := docker/docker-compose.override.yml
+COMPOSE := docker-compose -f $(COMPOSE_FILE) $(if $(wildcard $(COMPOSE_OVERRIDE)),-f $(COMPOSE_OVERRIDE),)
+
 dev:
 	@echo "Starting development environment..."
 	@echo "This will start both backend and frontend services using Docker Compose"
-	docker-compose -f docker/docker-compose.dev.yml up
+	$(COMPOSE) up
 
 install: check-node
 	@echo "Installing frontend dependencies..."
@@ -160,7 +168,7 @@ frontend-build: check-node
 
 docker-up:
 	@echo "Starting Docker services (development mode)..."
-	docker-compose -f docker/docker-compose.dev.yml --profile dev up -d
+	$(COMPOSE) --profile dev up -d
 	@echo ""
 	@echo "✓ Services started:"
 	@echo "  Backend API (SAM3): http://localhost:18710"
@@ -172,11 +180,11 @@ docker-up:
 
 docker-down:
 	@echo "Stopping Docker services..."
-	docker-compose -f docker/docker-compose.dev.yml --profile dev down
+	$(COMPOSE) --profile dev down
 
 docker-up-prod:
 	@echo "Starting Docker services (production mode)..."
-	docker-compose -f docker/docker-compose.dev.yml --profile prod up -d
+	$(COMPOSE) --profile prod up -d
 	@echo ""
 	@echo "✓ Production services started:"
 	@echo "  Backend API (SAM3): http://localhost:18710"
@@ -188,7 +196,7 @@ docker-up-prod:
 
 docker-down-prod:
 	@echo "Stopping production services..."
-	docker-compose -f docker/docker-compose.dev.yml --profile prod down
+	$(COMPOSE) --profile prod down
 
 docker-up-solo:
 	@echo "Starting Docker services (SOLO mode - minimal)..."
@@ -222,29 +230,29 @@ docker-down-team:
 docker-logs:
 ifdef service
 	@echo "Viewing logs for $(service)..."
-	docker-compose -f docker/docker-compose.dev.yml logs -f $(service)
+	$(COMPOSE) logs -f $(service)
 else
 	@echo "Viewing all logs..."
-	docker-compose -f docker/docker-compose.dev.yml logs -f
+	$(COMPOSE) logs -f
 endif
 
 docker-build:
 	@echo "Building Docker images..."
-	docker-compose -f docker/docker-compose.dev.yml build
+	$(COMPOSE) build
 
-# --renew-anon-volumes matters for `frontend`: docker-compose.dev.yml mounts an
+# --renew-anon-volumes matters for `frontend`: docker-compose.yml mounts an
 # anonymous volume at /app/node_modules, which survives a plain recreate and would
 # otherwise shadow the freshly built node_modules with the previous dependency set.
 docker-rebuild:
 	@echo "Rebuilding Docker services (build -> down -> up)..."
 	@echo "Step 1/3: Building images..."
-	@docker-compose -f docker/docker-compose.dev.yml --profile dev build
+	@$(COMPOSE) --profile dev build
 	@echo ""
 	@echo "Step 2/3: Stopping services..."
-	@docker-compose -f docker/docker-compose.dev.yml --profile dev down
+	@$(COMPOSE) --profile dev down
 	@echo ""
 	@echo "Step 3/3: Starting services..."
-	@docker-compose -f docker/docker-compose.dev.yml --profile dev up -d --renew-anon-volumes
+	@$(COMPOSE) --profile dev up -d --renew-anon-volumes
 	@echo ""
 	@echo "✓ Services rebuilt and restarted:"
 	@echo "  Backend API (SAM3): http://localhost:18710"
@@ -257,13 +265,13 @@ docker-rebuild:
 docker-rebuild-prod:
 	@echo "Rebuilding production Docker services (build -> down -> up)..."
 	@echo "Step 1/3: Building production images..."
-	@docker-compose -f docker/docker-compose.dev.yml --profile prod build
+	@$(COMPOSE) --profile prod build
 	@echo ""
 	@echo "Step 2/3: Stopping services..."
-	@docker-compose -f docker/docker-compose.dev.yml --profile prod down
+	@$(COMPOSE) --profile prod down
 	@echo ""
 	@echo "Step 3/3: Starting services..."
-	@docker-compose -f docker/docker-compose.dev.yml --profile prod up -d
+	@$(COMPOSE) --profile prod up -d
 	@echo ""
 	@echo "✓ Production services rebuilt and restarted:"
 	@echo "  Backend API (SAM3): http://localhost:18710"
@@ -278,7 +286,7 @@ docker-rebuild-prod:
 docker-rebuild-service:
 ifdef service
 	@echo "Rebuilding $(service)..."
-	docker-compose -f docker/docker-compose.dev.yml up -d --build --renew-anon-volumes $(service)
+	$(COMPOSE) up -d --build --renew-anon-volumes $(service)
 	@echo "✓ $(service) rebuilt and restarted"
 else
 	@echo "Error: Please specify service (e.g., make docker-rebuild-service service=frontend)"
@@ -288,16 +296,16 @@ endif
 docker-restart:
 ifdef service
 	@echo "Restarting $(service) service..."
-	docker-compose -f docker/docker-compose.dev.yml restart $(service)
+	$(COMPOSE) restart $(service)
 else
 	@echo "Restarting all services..."
-	docker-compose -f docker/docker-compose.dev.yml restart
+	$(COMPOSE) restart
 endif
 
 docker-shell:
 ifdef service
 	@echo "Opening shell in $(service) container..."
-	docker-compose -f docker/docker-compose.dev.yml exec $(service) sh
+	$(COMPOSE) exec $(service) sh
 else
 	@echo "Error: Please specify service (e.g., make docker-shell service=backend)"
 endif
@@ -305,4 +313,4 @@ endif
 
 frontend-clear-cache:
 	rm -rf apps/web/node_modules/.vite
-	docker-compose -f docker/docker-compose.dev.yml restart frontend
+	$(COMPOSE) restart frontend
