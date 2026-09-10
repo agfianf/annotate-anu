@@ -25,7 +25,7 @@ export type SAM3Response = APIResponse<InferenceResult>
 
 const API_BASE_URL = import.meta.env.VITE_SAM3_API_URL !== undefined
   ? import.meta.env.VITE_SAM3_API_URL
-  : 'http://localhost:8000'
+  : 'http://localhost:18710'
 
 export const sam3Client = {
   /**

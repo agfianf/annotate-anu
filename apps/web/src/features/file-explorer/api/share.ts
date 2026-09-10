@@ -100,7 +100,7 @@ export const shareApi = {
   getThumbnailUrl: (path: string): string => {
     const baseUrl = import.meta.env.VITE_CORE_API_URL !== undefined
       ? import.meta.env.VITE_CORE_API_URL
-      : 'http://localhost:8001'
+      : 'http://localhost:18711'
     return `${baseUrl}${BASE_URL}/thumbnail/${encodeURIComponent(path)}`
   },
 

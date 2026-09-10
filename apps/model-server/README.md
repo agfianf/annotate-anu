@@ -12,7 +12,7 @@ is required. This is that server, kept generic so any `.pt` works.
 ## Run
 
 ```bash
-docker compose -f docker/docker-compose.dev.yml up -d model-server
+docker compose -f docker/docker-compose.yml up -d model-server
 ```
 
 Drop `.pt` files into `apps/model-server/models/`, or upload them from

@@ -1,6 +1,12 @@
 version: '3.8'
 
-# Development Environment - Full hot-reload setup
+# Default stack: runs from built images. No source bind mounts, no --reload.
+# Editing code means rebuilding the image.
+#
+# For hot-reload, copy docker-compose.override.example.yml to
+# docker-compose.override.yml and uncomment its development block — it mounts the
+# source back over each image and switches the servers to --reload.
+# make docker-up picks the override up automatically.
 services:
   # Backend - SAM3 FastAPI Application
   backend:
@@ -8,11 +14,10 @@ services:
       context: ../apps/api-inference
       dockerfile: Dockerfile
     container_name: anu-backend-inference-dev
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
       - "18710:8000"
     volumes:
-      - ../apps/api-inference/src:/code/src  # Hot-reload enabled
       - huggingface_cache:/root/.cache/huggingface
     env_file:
       - ../apps/api-inference/.env
@@ -33,11 +38,10 @@ services:
       context: ../apps/model-server
       dockerfile: Dockerfile
     container_name: anu-model-server-dev
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8002
     ports:
       - "18713:8002"
     volumes:
-      - ../apps/model-server/src:/code/src
       - ../apps/model-server/models:/code/models
     environment:
       - MODELS_DIR=/code/models
@@ -62,7 +66,6 @@ services:
     ports:
       - "18711:8001"
     volumes:
-      - ../apps/api-core/src:/app/src
       - api-core-data:/app/data
       - share-data:/data/share
       - thumbnail-cache:/data/cache/thumbnails
@@ -74,7 +77,7 @@ services:
       - SHARE_THUMBNAIL_CACHE_DIR=/data/cache/thumbnails
       - EXPORT_ROOT=/data/exports
       - API_CORE_DEBUG=true
-      - CORS_ORIGINS=["http://10.8.0.106:18712","http://10.8.0.106:18711","http://10.8.0.106:3000","http://localhost:18712","http://localhost:3000","http://10.8.0.106:80"]
+      - CORS_ORIGINS=["http://localhost:18712","http://localhost:18711","http://localhost:3000","http://localhost:80"]
     restart: unless-stopped
     networks:
       - anu-network
@@ -90,7 +93,6 @@ services:
     container_name: anu-api-core-worker-dev
     command: uv run celery -A app.tasks.main worker --loglevel=info
     volumes:
-      - ../apps/api-core/src:/app/src
       - api-core-data:/app/data
       - share-data:/data/share
       - export-data:/data/exports
@@ -155,9 +157,6 @@ services:
     container_name: anu-frontend-dev
     ports:
       - "18712:5173"
-    volumes:
-      - ../apps/web:/app
-      - /app/node_modules
     env_file:
       - ../apps/web/.env
     depends_on:
@@ -176,8 +175,8 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        - VITE_SAM3_API_URL=http://10.8.0.106:18710
-        - VITE_CORE_API_URL=http://10.8.0.106:18711
+        - VITE_SAM3_API_URL=http://localhost:18710
+        - VITE_CORE_API_URL=http://localhost:18711
         - VITE_ENV=production
     container_name: anu-frontend-prod
     ports:

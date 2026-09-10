@@ -16,6 +16,11 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install
 
+# Copy app files. Without this the dev image has no application code and only
+# works when docker-compose bind-mounts the source over /app. Baking it in makes
+# the default run self-contained; mount the source in an override for hot-reload.
+COPY . .
+
 # Expose Vite dev server port
 EXPOSE 5173
 
@@ -29,8 +34,8 @@ WORKDIR /app
 
 # Build arguments for environment variables
 # These defaults can be overridden via docker-compose build args
-ARG VITE_SAM3_API_URL=http://10.8.0.106:8000
-ARG VITE_CORE_API_URL=http://10.8.0.106:8001
+ARG VITE_SAM3_API_URL=http://localhost:18710
+ARG VITE_CORE_API_URL=http://localhost:18711
 ARG VITE_ENV=production
 
 # Set environment variables from build args

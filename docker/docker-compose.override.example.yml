@@ -1,0 +1,131 @@
+version: '3.8'
+
+# Machine-specific overrides. Copy to docker-compose.override.yml and edit:
+#
+#   cp docker/docker-compose.override.example.yml docker/docker-compose.override.yml
+#
+# docker-compose.override.yml is gitignored, so your host address, ports, GPU
+# layout and hot-reload setup stay on your machine and never land in a commit.
+# docker-compose.yml keeps generic localhost defaults that work for a fresh clone
+# with no override at all.
+#
+# The Makefile passes this file with a second -f only when it exists. Compose does
+# not auto-load an override once any -f flag is used, so running compose by hand
+# needs both files spelled out:
+#
+#   docker-compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml up -d
+#
+# Use `make docker-up` and you get this for free.
+#
+# ---------------------------------------------------------------------------
+# TWO THINGS THIS FILE IS USUALLY FOR
+#
+# 1. Hot-reload. docker-compose.yml runs from built images with no source
+#    mounted, so editing code does nothing until you rebuild. The `volumes` and
+#    `command` lines below mount your working tree back and switch the servers to
+#    --reload. This is the normal setup while you are writing code.
+#
+# 2. A non-localhost host address. Serving the UI from a LAN or VPN address means
+#    three things must name that same host, or the browser blocks every request:
+#      - the VITE_* URLs on `frontend`
+#      - CORS_ORIGINS on `api-core`
+#      - the VITE_* build args on `frontend-prod`
+#    Container-to-container URLs are NOT among them: SAM3_API_URL stays
+#    http://backend:8000 and VITE_MODEL_SERVER_INTERNAL_URL stays
+#    http://model-server:8002, because those resolve on the compose network.
+#
+# HOW MERGING WORKS (verified against compose v2.21)
+#
+#   volumes  -> merged by CONTAINER path. Same target replaces, new target is
+#               added, and anything you do not name survives. Overriding the HF
+#               cache will not drop the named volumes docker-compose.yml declares.
+#   env_file -> appended. The base file is still read and yours is layered on
+#               top, so machine-local secrets can live in a separate .env.local
+#               instead of editing a committed file.
+#   command  -> replaced outright.
+#
+# Each service may appear only ONCE. YAML rejects a duplicate mapping key, so
+# keep hot-reload and host settings together in one entry per service, as below.
+# ---------------------------------------------------------------------------
+
+services:
+
+  backend:
+    # Hot-reload
+    volumes:
+      - ../apps/api-inference/src:/code/src
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # Move the Hugging Face cache to a bigger disk. The /code/src mount above is
+    # untouched, because volumes merge by container path:
+    #   - /mnt/big-disk/hf-cache:/root/.cache/huggingface
+    #
+    # Layer machine-local secrets instead of editing a committed .env:
+    # env_file:
+    #   - ../apps/api-inference/.env.local
+    #
+    # No GPU? SAM3_DEVICE=auto falls back to CPU, which works but is very slow:
+    # environment:
+    #   - SAM3_DEVICE=cpu
+
+  model-server:
+    volumes:
+      - ../apps/model-server/src:/code/src
+      # Keep .pt weights outside the repo:
+      # - /mnt/big-disk/yolo-weights:/code/models
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+    # Pin to a second GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           device_ids: ['1']
+    #           capabilities: [gpu]
+
+  api-core:
+    # Real secrets live here, not in the committed apps/api-core/.env, which holds
+    # REPLACE_ME placeholders. env_file APPENDS, so the base file is still read and
+    # this one wins on duplicate keys. .env.local is gitignored.
+    env_file:
+      - ../apps/api-core/.env.local
+    volumes:
+      - ../apps/api-core/src:/app/src
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+    environment:
+      # Must list every origin the UI is actually served from.
+      - CORS_ORIGINS=["http://10.0.0.5:18712","http://localhost:18712"]
+
+  api-core-worker:
+    env_file:
+      - ../apps/api-core/.env.local
+    volumes:
+      - ../apps/api-core/src:/app/src
+    # Celery has no --reload; restart the container after changing task code.
+
+  frontend:
+    volumes:
+      - ../apps/web:/app
+      # Anonymous volume stops the host's node_modules from shadowing the image's,
+      # which are installed for a different platform. Do not drop this line.
+      - /app/node_modules
+    environment:
+      # Vite reads VITE_-prefixed process env alongside apps/web/.env, and these
+      # win. Keeps the committed apps/web/.env on localhost while this machine
+      # serves from a real address.
+      - VITE_SAM3_API_URL=http://10.0.0.5:18710
+      - VITE_CORE_API_URL=http://10.0.0.5:18711
+      - VITE_MODEL_SERVER_URL=http://10.0.0.5:18713
+
+  frontend-prod:
+    build:
+      args:
+        # VITE_* values are baked into the bundle at build time, so the
+        # production image needs them as build args, not as environment.
+        - VITE_SAM3_API_URL=http://10.0.0.5:18710
+        - VITE_CORE_API_URL=http://10.0.0.5:18711
+
+  # Host port already taken by another stack? Remap here. Only the left-hand side
+  # may change; the container port is what the other services dial.
+  # postgres:
+  #   ports:
+  #     - "15432:5432"
