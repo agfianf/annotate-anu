@@ -1,20 +1,17 @@
 """Storage connection router: register S3/MinIO buckets and browse them."""
 
-from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.dependencies.auth import get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
 from app.helpers.response_api import JsonResponse
-from app.models.storage import storage_connections
 from app.schemas.auth import UserBase
-from app.services.storage_s3 import IMAGE_SUFFIXES, S3Service, encrypt_secret
+from app.services.storage_connection import StorageConnectionService
 
 router = APIRouter(prefix="/api/v1/storage", tags=["Storage"])
 
@@ -31,21 +28,6 @@ class ConnectionCreate(BaseModel):
     project_id: int | None = None
 
 
-def _public(row: dict) -> dict:
-    """Never return the stored secret."""
-    return {k: v for k, v in row.items() if k != "secret_key"}
-
-
-async def _require_connection(connection: AsyncConnection, connection_id: UUID) -> dict:
-    result = await connection.execute(
-        select(storage_connections).where(storage_connections.c.id == connection_id)
-    )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Storage connection not found")
-    return dict(row)
-
-
 @router.post("/connections", response_model=JsonResponse[dict, None], status_code=201)
 async def create_connection(
     payload: ConnectionCreate,
@@ -53,25 +35,11 @@ async def create_connection(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Register a bucket. Credentials are encrypted before storage."""
-    values = payload.model_dump()
-    values["secret_key"] = encrypt_secret(payload.secret_key)
-    values["created_by"] = current_user.id
-
-    result = await connection.execute(
-        insert(storage_connections).values(**values).returning(storage_connections)
+    data = await StorageConnectionService.create(
+        connection, payload.model_dump(), current_user
     )
-    row = dict(result.mappings().first())
-
-    healthy, message = S3Service(row).check()
-    await connection.execute(
-        update(storage_connections)
-        .where(storage_connections.c.id == row["id"])
-        .values(last_checked_at=datetime.now(timezone.utc), last_status=message)
-    )
-    row["last_status"] = message
-
     return JsonResponse(
-        data={**_public(row), "healthy": healthy},
+        data=data,
         message="Storage connection created",
         status_code=status.HTTP_201_CREATED,
     )
@@ -83,15 +51,14 @@ async def list_connections(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
     project_id: int | None = None,
 ):
-    """List registered buckets."""
-    query = select(storage_connections).order_by(storage_connections.c.created_at.desc())
-    if project_id is not None:
-        query = query.where(storage_connections.c.project_id == project_id)
-    result = await connection.execute(query)
+    """List the buckets the caller may see."""
+    connections = await StorageConnectionService.list_for_user(
+        connection, current_user, project_id=project_id
+    )
     return JsonResponse(
-        data=[_public(dict(r)) for r in result.mappings().all()],
+        data=connections,
         message="Storage connections",
-        status_code=200,
+        status_code=status.HTTP_200_OK,
     )
 
 
@@ -102,11 +69,12 @@ async def delete_connection(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Remove a stored bucket connection."""
-    row = await _require_connection(connection, connection_id)
-    await connection.execute(
-        delete(storage_connections).where(storage_connections.c.id == connection_id)
+    name = await StorageConnectionService.delete(connection, connection_id, current_user)
+    return JsonResponse(
+        data={"deleted": str(connection_id)},
+        message=f"Deleted '{name}'",
+        status_code=status.HTTP_200_OK,
     )
-    return JsonResponse(data={"deleted": str(connection_id)}, message=f"Deleted '{row['name']}'", status_code=200)
 
 
 @router.post("/connections/{connection_id}/check", response_model=JsonResponse[dict, None])
@@ -116,14 +84,14 @@ async def check_connection(
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """Re-test credentials against the bucket."""
-    row = await _require_connection(connection, connection_id)
-    healthy, message = S3Service(row).check()
-    await connection.execute(
-        update(storage_connections)
-        .where(storage_connections.c.id == connection_id)
-        .values(last_checked_at=datetime.now(timezone.utc), last_status=message)
+    healthy, message = await StorageConnectionService.check(
+        connection, connection_id, current_user
     )
-    return JsonResponse(data={"healthy": healthy, "status": message}, message=message, status_code=200)
+    return JsonResponse(
+        data={"healthy": healthy, "status": message},
+        message=message,
+        status_code=status.HTTP_200_OK,
+    )
 
 
 @router.get("/connections/{connection_id}/browse", response_model=JsonResponse[dict, None])
@@ -135,17 +103,11 @@ async def browse(
     limit: int = Query(default=200, ge=1, le=1000),
 ):
     """List sub-prefixes (batches) and images under a prefix."""
-    row = await _require_connection(connection, connection_id)
-    service = S3Service(row)
-    try:
-        return JsonResponse(
-            data={
-                "path": path,
-                "prefixes": service.list_prefixes(path),
-                "objects": service.list_objects(path, IMAGE_SUFFIXES, limit),
-            },
-            message="Bucket listing",
-            status_code=200,
-        )
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Bucket listing failed: {exc}")
+    listing = await StorageConnectionService.browse(
+        connection, connection_id, current_user, path=path, limit=limit
+    )
+    return JsonResponse(
+        data=listing,
+        message="Bucket listing",
+        status_code=status.HTTP_200_OK,
+    )

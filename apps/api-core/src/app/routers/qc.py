@@ -17,16 +17,17 @@ from app.core.security import (
 )
 from app.dependencies.auth import get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
+from app.helpers.logger import logger
 from app.helpers.response_api import JsonResponse
 from app.models.annotation import detections, segmentations
 from app.models.image import images
 from app.models.project import labels
 from app.models.qc import qc_consolidated, qc_sessions, qc_verdicts
-from app.models.storage import storage_connections
 from app.schemas.auth import UserBase
 from app.services.job_status import JobStatusService
 from app.services.qc import DEFAULT_CONFIG, QCService
 from app.services.roi_crop import ROICropService
+from app.services.storage_connection import StorageConnectionService
 from app.services.storage_s3 import S3Service
 
 router = APIRouter(prefix="/api/v1/qc", tags=["QC"])
@@ -577,12 +578,9 @@ async def publish_manifest(
     """Write the verdict manifest into the bucket. Source objects are never touched."""
     session = await _require_session(connection, session_id)
 
-    result = await connection.execute(
-        select(storage_connections).where(storage_connections.c.id == payload.connection_id)
+    row = await StorageConnectionService.require_usable(
+        connection, payload.connection_id, current_user
     )
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Storage connection not found")
 
     entries = await QCService.manifest(connection, session_id)
     if payload.settled_only:
@@ -602,9 +600,11 @@ async def publish_manifest(
 
     key = payload.key or f"qc/{session['name'].replace('/', '_')}-{session_id}.json"
     try:
-        written = S3Service(dict(row)).put_json(key, manifest)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Manifest write failed: {exc}")
+        written = S3Service(row).put_json(key, manifest)
+    except Exception:
+        # boto3 errors quote endpoint, bucket and credential detail; keep them in the log.
+        logger.exception(f"Manifest write failed for storage connection {payload.connection_id}")
+        raise HTTPException(status_code=502, detail="Manifest write failed")
 
     return JsonResponse(
         data={"bucket": row["bucket"], "key": written, "entries": len(entries), "counts": manifest["counts"]},
@@ -637,12 +637,9 @@ async def sync_session(
 
     published = None
     if payload.connection_id:
-        conn_result = await connection.execute(
-            select(storage_connections).where(storage_connections.c.id == payload.connection_id)
+        row = await StorageConnectionService.require_usable(
+            connection, payload.connection_id, current_user
         )
-        row = conn_result.mappings().first()
-        if not row:
-            raise HTTPException(status_code=404, detail="Storage connection not found")
 
         entries = await QCService.manifest(connection, session_id)
         manifest = {
@@ -660,11 +657,14 @@ async def sync_session(
         }
         key = payload.key or f"qc/{session['name'].replace('/', '_')}-{session_id}.json"
         try:
-            service = S3Service(dict(row))
+            service = S3Service(row)
             written = service.put_json(key, manifest)
             published = {"bucket": row["bucket"], "key": written, "entries": len(entries)}
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Manifest write failed: {exc}")
+        except Exception:
+            logger.exception(
+                f"Manifest write failed for storage connection {payload.connection_id}"
+            )
+            raise HTTPException(status_code=502, detail="Manifest write failed")
 
     return JsonResponse(
         data={"applied": applied, "job": job_result, "published": published},
