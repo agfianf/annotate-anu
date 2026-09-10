@@ -33,6 +33,8 @@ version: '3.8'
 #    Container-to-container URLs are NOT among them: SAM3_API_URL stays
 #    http://backend:8000 and VITE_MODEL_SERVER_INTERNAL_URL stays
 #    http://model-server:8002, because those resolve on the compose network.
+#    The model server itself publishes no host port at all — the browser reaches it
+#    through api-core at /api/v1/model-server — so there is nothing to remap here.
 #
 # HOW MERGING WORKS (verified against compose v2.21)
 #
@@ -114,7 +116,6 @@ services:
       # serves from a real address.
       - VITE_SAM3_API_URL=http://10.0.0.5:18710
       - VITE_CORE_API_URL=http://10.0.0.5:18711
-      - VITE_MODEL_SERVER_URL=http://10.0.0.5:18713
 
   frontend-prod:
     build:
