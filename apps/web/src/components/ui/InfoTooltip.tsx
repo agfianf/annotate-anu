@@ -8,7 +8,7 @@
  * - Enhanced frosted glass transparency
  */
 
-import { Info } from 'lucide-react'
+import { Info } from '@/components/ui/icons'
 import { useState, useRef, useEffect } from 'react'
 
 interface InfoTooltipProps {

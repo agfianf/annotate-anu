@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Loader2, Scan, X, Images } from 'lucide-react'
+import { Loader2, Scan, X, Images } from '@/components/ui/icons'
 import { Button } from './ui/button'
 import { LabelMappingSection } from './LabelMappingSection'
 import type { Annotation, Label, ImageData, DetectionLabelMappingConfig } from '@/types/annotations'

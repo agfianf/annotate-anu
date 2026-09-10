@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Check, Minus } from 'lucide-react'
+import { Check, Minus } from '@/components/ui/icons'
 import type { SelectionState } from '../types'
 
 interface SelectionCheckboxProps {

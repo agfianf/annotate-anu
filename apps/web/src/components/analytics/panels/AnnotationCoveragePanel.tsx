@@ -5,7 +5,7 @@
  * Now counts actual detections/segmentations, not project-level tags.
  */
 
-import { CheckCircle2, AlertCircle, Tag, BarChart3, Target } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Tag, BarChart3, Target } from '@/components/ui/icons';
 import { useAnalyticsToast } from '@/hooks/useAnalyticsToast';
 import type { DensityBucket, PanelProps } from '@/types/analytics';
 import { useAnnotationCoverage } from '@/hooks/useAnnotationCoverage';

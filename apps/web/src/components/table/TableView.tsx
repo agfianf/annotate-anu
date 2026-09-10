@@ -3,7 +3,7 @@
  * Main container for task table view with collapsible sections
  */
 
-import { Loader2 } from 'lucide-react';
+import { Loader2 } from '@/components/ui/icons';
 import { useKanbanStats, type SortField, type SortOrder } from '../kanban/useKanbanStats';
 import { SPLIT_ORDER, COLUMN_CONFIGS } from '../kanban/types';
 import type { TableViewProps } from './types';

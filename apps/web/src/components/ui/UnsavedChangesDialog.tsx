@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, X, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, X, Save, Trash2 } from '@/components/ui/icons';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useReducedMotion } from '@/hooks/useReducedMotion';

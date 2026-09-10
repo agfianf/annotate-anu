@@ -11,7 +11,7 @@ import {
   UserCircle,
   Users,
   X,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { MemberUserInfo, ProjectMember } from '../lib/api-client';

@@ -9,7 +9,7 @@
  * - Recommended resize suggestion
  */
 
-import { Maximize2, Minimize2, RatioIcon, Target, Lightbulb } from 'lucide-react';
+import { Maximize2, Minimize2, RatioIcon, Target, Lightbulb } from '@/components/ui/icons';
 import {
   BarChart,
   Bar,

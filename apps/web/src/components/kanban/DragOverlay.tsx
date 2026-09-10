@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
-import { Briefcase, Image, GripVertical } from 'lucide-react';
+import { Briefcase, Image, GripVertical } from '@/components/ui/icons';
 import type { KanbanTaskWithStats, ColumnConfig } from './types';
 
 const getStatusColor = (status: string) => {

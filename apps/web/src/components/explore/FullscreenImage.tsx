@@ -1,4 +1,4 @@
-import { ImageOff, Loader2 } from 'lucide-react';
+import { ImageOff, Loader2 } from '@/components/ui/icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
 import { AnnotationOverlay } from './AnnotationOverlay';

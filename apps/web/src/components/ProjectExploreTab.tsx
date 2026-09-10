@@ -28,7 +28,7 @@ import {
     Sparkles,
     Tag,
     X
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from '@tanstack/react-router';

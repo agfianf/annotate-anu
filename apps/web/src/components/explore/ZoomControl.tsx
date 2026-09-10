@@ -3,7 +3,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Grid3X3, LayoutGrid, Grid2X2, Square } from 'lucide-react';
+import { Grid3X3, LayoutGrid, Grid2X2, Square } from '@/components/ui/icons';
 import type { ZoomLevel } from '../../hooks/useZoomLevel';
 import { ZOOM_CONFIGS } from '../../hooks/useZoomLevel';
 

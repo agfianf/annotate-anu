@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Cloud, CloudOff, Copy, Download, Link as LinkIcon, Loader2, RotateCcw, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Cloud, CloudOff, Copy, Download, Link as LinkIcon, Loader2, RotateCcw, Trash2, Upload } from '@/components/ui/icons'
 import { useEffect, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'

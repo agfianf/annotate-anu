@@ -17,7 +17,7 @@ import {
   ShieldX,
   Trash2,
   TrendingUp,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { User } from '@/lib/api-client';
 import type { UserActivity } from '@/hooks/useUserActivity';

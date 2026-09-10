@@ -1,4 +1,4 @@
-import { Upload, X } from 'lucide-react'
+import { Upload, X } from '@/components/ui/icons'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'

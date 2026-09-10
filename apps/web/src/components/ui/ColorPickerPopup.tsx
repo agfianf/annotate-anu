@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from 'lucide-react'
+import { X } from '@/components/ui/icons'
 import { PRESET_COLORS } from '@/lib/colors'
 
 interface ColorPickerPopupProps {

@@ -3,7 +3,7 @@
  * Left section of the toolbar for data filtering
  */
 
-import { Search, ChevronDown } from 'lucide-react';
+import { Search, ChevronDown } from '@/components/ui/icons';
 import { MultiTaskSelect } from '../MultiTaskSelect';
 
 interface Task {

@@ -3,7 +3,7 @@
  * Uses portal for dropdown to avoid overflow issues
  */
 
-import { ChevronDown, Sparkles, Settings, RefreshCw } from 'lucide-react'
+import { ChevronDown, Sparkles, Settings, RefreshCw } from '@/components/ui/icons'
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import type { AvailableModel } from '../types/byom'

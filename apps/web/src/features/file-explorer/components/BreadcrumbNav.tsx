@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { ChevronRight, Home } from 'lucide-react'
+import { ChevronRight, Home } from '@/components/ui/icons'
 
 interface BreadcrumbNavProps {
   currentPath: string

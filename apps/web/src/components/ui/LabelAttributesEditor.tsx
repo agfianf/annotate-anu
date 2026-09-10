@@ -4,7 +4,7 @@
  * Attributes are always optional text fields
  */
 
-import { ChevronDown, ChevronRight, GripVertical, Plus, Settings2, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical, Plus, Settings2, Trash2 } from '@/components/ui/icons';
 import { useState } from 'react';
 import type { LabelAttributeDefinition } from '../../lib/api-client';
 

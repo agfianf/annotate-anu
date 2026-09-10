@@ -3,7 +3,7 @@
  * Shows project configuration including labels and settings with proper color picker
  */
 
-import { Crown, Edit2, Eye, Loader2, Palette, Plus, Save, Settings, Settings2, Shield, Sparkles, Trash2, UserPlus, Users, Wrench, X } from 'lucide-react';
+import { Crown, Edit2, Eye, Loader2, Palette, Plus, Save, Settings, Settings2, Shield, Sparkles, Trash2, UserPlus, Users, Wrench, X } from '@/components/ui/icons';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';

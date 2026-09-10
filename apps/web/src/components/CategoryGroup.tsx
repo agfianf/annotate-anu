@@ -3,7 +3,7 @@
  * Collapsible category with nested tags for tag selection modals
  */
 
-import { Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight } from '@/components/ui/icons';
 import { useEffect, useRef, useState } from 'react';
 import type { TagCategory } from '../lib/data-management-client';
 import { getCategorySelectionState } from '../lib/tag-utils';

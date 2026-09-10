@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { Folder } from 'lucide-react'
+import { Folder } from '@/components/ui/icons'
 import { useDirectoryContents } from '../hooks/useFileTree'
 import type { FileItem } from '../types'
 

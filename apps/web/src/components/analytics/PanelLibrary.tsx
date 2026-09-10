@@ -4,7 +4,7 @@
  */
 
 import { memo, useRef, useState, useEffect } from 'react';
-import { Plus, Sparkles } from 'lucide-react';
+import { Plus, Sparkles } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { getPanelsByCategory } from './panelRegistry';

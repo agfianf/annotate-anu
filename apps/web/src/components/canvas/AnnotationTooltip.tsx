@@ -1,4 +1,4 @@
-import { Copy, Check } from 'lucide-react'
+import { Copy, Check } from '@/components/ui/icons'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'

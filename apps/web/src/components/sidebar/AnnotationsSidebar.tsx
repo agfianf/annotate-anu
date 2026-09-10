@@ -13,7 +13,7 @@ import {
   Shapes,
   Sparkles,
   Trash2,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { Modal } from '@/components/ui/Modal';
 import { DEFAULT_DEDUP_OPTIONS, findDuplicateAnnotations } from '@/lib/annotation-dedup';
 import { AnnotationsTable } from './AnnotationsTable';

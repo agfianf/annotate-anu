@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check } from 'lucide-react';
+import { Check } from '@/components/ui/icons';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { SPRING_CONFIGS } from '@/lib/motion-config';
 

@@ -9,7 +9,7 @@ import {
   Plus,
   RefreshCw,
   Trash2,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { Modal } from '@/components/ui/Modal'
 import { getApiErrorMessage } from '@/lib/api-error'

@@ -11,7 +11,7 @@ import {
     Loader2,
     Save,
     X
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link, useParams, useNavigate, useSearch } from '@tanstack/react-router';

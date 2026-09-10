@@ -5,7 +5,7 @@
 
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Minus, ArrowRight } from 'lucide-react';
+import { Plus, Minus, ArrowRight } from '@/components/ui/icons';
 import type { Export } from '@/types/export';
 import { computeExportDiff, formatDelta } from '@/lib/export-diff';
 import { SPRING_CONFIGS } from '@/lib/motion-config';

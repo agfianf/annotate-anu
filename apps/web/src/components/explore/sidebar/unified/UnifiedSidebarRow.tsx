@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Minus, MoreVertical, Plus, Settings } from 'lucide-react';
+import { ChevronDown, ChevronRight, Minus, MoreVertical, Plus, Settings } from '@/components/ui/icons';
 import { useState, useRef, useEffect, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ColorPickerPopup } from '@/components/ui/ColorPickerPopup';

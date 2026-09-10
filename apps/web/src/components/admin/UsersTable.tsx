@@ -24,7 +24,7 @@ import {
   Search,
   Trash2,
   Loader2,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import type { User } from '@/lib/api-client';
 import Toggle from '@/components/Toggle';
 

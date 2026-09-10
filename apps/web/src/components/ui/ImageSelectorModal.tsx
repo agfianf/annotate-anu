@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Modal } from './Modal'
 import type { ImageData } from '@/types/annotations'
-import { Check } from 'lucide-react'
+import { Check } from '@/components/ui/icons'
 
 interface ImageSelectorModalProps {
   isOpen: boolean

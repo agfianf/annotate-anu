@@ -10,7 +10,7 @@ import {
     Plus,
     RefreshCw,
     Table2,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from '@tanstack/react-router';

@@ -6,7 +6,7 @@ import {
   XCircle,
   Loader2,
   Clock,
-} from 'lucide-react'
+} from '@/components/ui/icons'
 import type { UploadFile } from '../../types'
 
 interface UploadQueueProps {

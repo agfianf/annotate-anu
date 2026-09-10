@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus } from '@/components/ui/icons';
 import { useState } from 'react';
 
 interface VisibilitySectionProps {

@@ -3,7 +3,7 @@
  * Quick summary and stats for the user
  */
 
-import { ArrowRight, Boxes, Briefcase, ClipboardList, Loader2 } from 'lucide-react';
+import { ArrowRight, Boxes, Briefcase, ClipboardList, Loader2 } from '@/components/ui/icons';
 import { useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useAuth } from '../contexts/AuthContext';

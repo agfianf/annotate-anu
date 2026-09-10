@@ -12,7 +12,7 @@ import {
   Save,
   X,
   Check,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import type { SavedFilter, FilterSnapshot } from '@/types/export';
 import { savedFiltersApi } from '@/lib/export-client';

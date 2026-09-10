@@ -4,7 +4,7 @@
  */
 
 import { motion } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import { Sparkles } from '@/components/ui/icons';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { PanelProps } from '@/types/analytics';
 import { getPanelDefinition } from '../panelRegistry';

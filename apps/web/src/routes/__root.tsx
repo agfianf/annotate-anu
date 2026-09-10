@@ -10,7 +10,7 @@ import {
   redirect,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
-import { Loader2 } from 'lucide-react'
+import { Loader2 } from '@/components/ui/icons'
 import { z } from 'zod'
 import type { QueryClient } from '@tanstack/react-query'
 import type { User } from '../lib/api-client'

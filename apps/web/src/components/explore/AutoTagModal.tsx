@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Check, Loader2, Sparkles, Tag, X } from 'lucide-react'
+import { AlertCircle, Check, Loader2, Sparkles, Tag, X } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { useQueryClient } from '@tanstack/react-query'
 import { MoondreamClient } from '../../lib/moondream-client'

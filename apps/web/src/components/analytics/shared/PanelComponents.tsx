@@ -6,7 +6,7 @@
 import { useRef, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Loader2, AlertCircle, Info, type LucideIcon } from 'lucide-react';
+import { Loader2, AlertCircle, Info, type IconComponent } from '@/components/ui/icons';
 import { motion } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
@@ -55,7 +55,7 @@ export function PanelEmptyState({
   title = 'No data',
   message = 'No data available'
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   title?: string;
   message?: string;
 }) {
@@ -163,7 +163,7 @@ export function StatCard({
   color = 'emerald',
   onClick,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   value: string | number;
   subtitle?: string;
@@ -211,7 +211,7 @@ export function ChartSection({
   skipDimensionCheck = false,
   children,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   hint?: string;
   tooltip?: string;
@@ -447,7 +447,7 @@ export function ComingSoonState({
   description,
   features,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   description: string;
   features: string[];

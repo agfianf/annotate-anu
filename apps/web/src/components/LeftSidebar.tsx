@@ -1,6 +1,6 @@
 import type { Annotation, ImageData, Label, PromptMode, Tool } from '@/types/annotations'
 import type { AvailableModel } from '@/types/byom'
-import { FileText, Keyboard, Maximize2, MousePointer, Pentagon, Redo, Scissors, Square, Target, Undo, ZoomIn, ZoomOut, Wand2 } from 'lucide-react'
+import { FileText, Keyboard, Maximize2, MousePointer, Pentagon, Redo, Scissors, Square, Target, Undo, ZoomIn, ZoomOut, Wand2 } from '@/components/ui/icons'
 import { useState } from 'react'
 import { AutoDetectPanel } from './AutoDetectPanel'
 import { BboxPromptPanel } from './BboxPromptPanel'

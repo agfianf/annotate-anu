@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { Plus, X, ChevronDown } from 'lucide-react';
+import { Plus, X, ChevronDown } from '@/components/ui/icons';
 import type {
   ClassificationMappingConfig,
   TagCategoryForExport,

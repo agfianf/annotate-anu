@@ -5,7 +5,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { Check, Eye, EyeOff, Search, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Search, X } from '@/components/ui/icons';
 import { useMemo, useRef, useState } from 'react';
 import { projectImagesApi, getAbsoluteThumbnailUrl, type SharedImage } from '@/lib/data-management-client';
 import { ColorBorderWrapper } from '@/components/ui/ColorBorderWrapper';

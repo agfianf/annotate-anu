@@ -13,7 +13,7 @@ import {
 } from '@/lib/yolo-dataset-export'
 import { exportToYOLO, downloadYOLOFiles, getYOLOPreview, hasPolygonAnnotations } from '@/lib/yolo-export'
 import type { YOLOTask } from '@/lib/yolo-export'
-import { Download, Loader2 } from 'lucide-react'
+import { Download, Loader2 } from '@/components/ui/icons'
 
 interface ExportModalProps {
   isOpen: boolean

@@ -3,7 +3,7 @@
  * Bottom section of the toolbar
  */
 
-import { Search, Ruler, Ratio, Eye, X, Sparkles, AlertTriangle, FolderOpen, Image as ImageIcon, Target } from 'lucide-react';
+import { Search, Ruler, Ratio, Eye, X, Sparkles, AlertTriangle, FolderOpen, Image as ImageIcon, Target } from '@/components/ui/icons';
 import type { AnnotationDisplayState } from '../../../hooks/useExploreVisibility';
 
 // Filter pill component with consistent styling

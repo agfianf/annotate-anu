@@ -6,7 +6,7 @@
  */
 
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Clock, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, CheckCircle2, AlertCircle, RefreshCw } from '@/components/ui/icons'
 import type { DirtyImageInfo, SyncHistoryEntry } from '../hooks/useAutoSave'
 
 export interface SyncStatusPanelProps {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BarChart3, Loader2, Tags, Trophy, X } from 'lucide-react'
+import { BarChart3, Loader2, Tags, Trophy, X } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { Button } from './ui/button'
 import type { ImageData } from '@/types/annotations'

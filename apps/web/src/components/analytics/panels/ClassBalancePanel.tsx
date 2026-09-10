@@ -3,7 +3,7 @@
  * Shows class distribution, imbalance detection (compact version)
  */
 
-import { Scale, AlertTriangle, Tag, CheckCircle, Download } from 'lucide-react';
+import { Scale, AlertTriangle, Tag, CheckCircle, Download } from '@/components/ui/icons';
 import { useAnalyticsToast } from '@/hooks/useAnalyticsToast';
 import {
   BarChart,

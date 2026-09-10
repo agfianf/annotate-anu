@@ -3,7 +3,7 @@
  * Modern glassmorphism design with emerald green accents
  */
 
-import { AlertCircle, Check, Eye, EyeOff, Loader2, UserPlus, X } from 'lucide-react';
+import { AlertCircle, Check, Eye, EyeOff, Loader2, UserPlus, X } from '@/components/ui/icons';
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';

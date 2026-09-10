@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Loader2, X, Trash2, Square } from 'lucide-react'
+import { Loader2, X, Trash2, Square } from '@/components/ui/icons'
 import { Button } from './ui/button'
 import { PromptModeSelector } from './ui/PromptModeSelector'
 import type { Label, ImageData, PromptMode } from '@/types/annotations'

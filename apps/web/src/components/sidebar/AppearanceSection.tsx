@@ -4,7 +4,7 @@
  */
 
 import { useRef, useCallback } from 'react';
-import { ChevronDown, Palette, RotateCcw, Sun, AlertTriangle, XCircle } from 'lucide-react';
+import { ChevronDown, Palette, RotateCcw, Sun, AlertTriangle, XCircle } from '@/components/ui/icons';
 import type { AppearanceSectionProps, DimLevel, TinyThresholdUnit } from './types';
 
 // Dim level labels for display

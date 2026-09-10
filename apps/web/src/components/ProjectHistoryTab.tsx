@@ -3,7 +3,7 @@
  * Shows export history for the project
  */
 
-import { Download } from 'lucide-react';
+import { Download } from '@/components/ui/icons';
 import { ExportHistoryPanel } from './export/ExportHistoryPanel';
 
 interface ProjectHistoryTabProps {

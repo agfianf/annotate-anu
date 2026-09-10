@@ -3,7 +3,7 @@
  * View and edit user profile
  */
 
-import { Check, Eye, EyeOff, Loader2, Save, User, X } from 'lucide-react';
+import { Check, Eye, EyeOff, Loader2, Save, User, X } from '@/components/ui/icons';
 import type { FormEvent } from 'react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';

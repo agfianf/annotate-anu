@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { CheckCircle2, Eye, EyeOff, Loader2, Plus, RotateCcw, ThumbsDown, Trash2, UploadCloud, Wrench } from 'lucide-react'
+import { CheckCircle2, Eye, EyeOff, Loader2, Plus, RotateCcw, ThumbsDown, Trash2, UploadCloud, Wrench } from '@/components/ui/icons'
 import toast from 'react-hot-toast'
 import { Modal } from '@/components/ui/Modal'
 import { InstanceQCViewer } from '@/components/qc/InstanceQCViewer'

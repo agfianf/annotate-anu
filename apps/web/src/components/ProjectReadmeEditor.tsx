@@ -37,7 +37,7 @@ import {
     UndoRedo
 } from '@mdxeditor/editor';
 import '@mdxeditor/editor/style.css';
-import { Code2, Eye, Type } from 'lucide-react';
+import { Code2, Eye, Type } from '@/components/ui/icons';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
 export type EditorMode = 'richtext' | 'raw' | 'preview';

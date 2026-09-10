@@ -4,7 +4,7 @@
  */
 
 import type { Task } from '@/lib/api-client';
-import { Inbox, GraduationCap, FlaskConical, TestTube2 } from 'lucide-react';
+import { Inbox, GraduationCap, FlaskConical, TestTube2 } from '@/components/ui/icons';
 
 // Split type matching the backend
 export type Split = 'train' | 'val' | 'test' | null;

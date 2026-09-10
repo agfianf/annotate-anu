@@ -3,7 +3,7 @@
  * Right section of the toolbar for primary actions
  */
 
-import { Plus } from 'lucide-react';
+import { Plus } from '@/components/ui/icons';
 import { PanelLibrary } from '../../analytics/PanelLibrary';
 
 interface ActionZoneProps {

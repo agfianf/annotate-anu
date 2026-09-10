@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, Circle, Eye, EyeOff, Filter, Palette, Shapes, SortDesc, Sparkles, Square as SquareIcon, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Circle, Eye, EyeOff, Filter, Palette, Shapes, SortDesc, Sparkles, Square as SquareIcon, Trash2 } from '@/components/ui/icons'
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Annotation, Label } from '../types/annotations'

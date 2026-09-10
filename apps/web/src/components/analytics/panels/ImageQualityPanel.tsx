@@ -3,7 +3,7 @@
  * Detects blurry, dark, corrupted images (compact version)
  */
 
-import { Eye, AlertCircle, Camera } from 'lucide-react';
+import { Eye, AlertCircle, Camera } from '@/components/ui/icons';
 
 import type { PanelProps } from '@/types/analytics';
 import { useImageQuality } from '@/hooks/useImageQuality';

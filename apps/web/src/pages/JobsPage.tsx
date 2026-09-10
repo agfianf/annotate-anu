@@ -9,7 +9,7 @@ import {
   Loader2,
   Filter,
   X
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';

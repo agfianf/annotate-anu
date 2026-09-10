@@ -17,7 +17,7 @@ import {
   Plus,
   Minus,
   Equal,
-} from 'lucide-react';
+} from '@/components/ui/icons';
 import type { Export, TagDiff, LabelDiff, NumericDiff } from '@/types/export';
 import { DIFF_COLORS } from '@/types/export-diff';
 import { computeExportDiff, formatDelta } from '@/lib/export-diff';

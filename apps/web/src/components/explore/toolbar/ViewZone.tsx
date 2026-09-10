@@ -3,7 +3,7 @@
  * Middle section of the toolbar for view controls
  */
 
-import { Maximize2, Minimize2 } from 'lucide-react';
+import { Maximize2, Minimize2 } from '@/components/ui/icons';
 import { GridSlider, type GridSize } from './GridSlider';
 
 interface ViewZoneProps {

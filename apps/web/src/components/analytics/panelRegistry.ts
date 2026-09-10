@@ -11,7 +11,7 @@
  */
 
 import { lazy } from 'react';
-import { BarChart3, Target, Brain } from 'lucide-react';
+import { BarChart3, Target, Brain } from '@/components/ui/icons';
 import type { PanelDefinition, PanelType, PanelCategory } from '@/types/analytics';
 
 /**

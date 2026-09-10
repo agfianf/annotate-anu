@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { markAsVisited } from '../../lib/navigation'
 
-// lucide-react v1 dropped all brand icons, so the GitHub mark is inlined here.
+// The icon set carries no brand marks, so the GitHub mark is inlined here.
 function Github({ className }: { className?: string }) {
   return (
     <svg

@@ -3,7 +3,7 @@
  */
 
 import { memo, useMemo } from 'react';
-import { Check, ImageOff, Loader2, X, MousePointer2, Maximize2 } from 'lucide-react';
+import { Check, ImageOff, Loader2, X, MousePointer2, Maximize2 } from '@/components/ui/icons';
 import type { SharedImage } from '../../lib/data-management-client';
 import { getAbsoluteThumbnailUrl } from '../../lib/data-management-client';
 import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
