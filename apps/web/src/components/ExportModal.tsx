@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal } from './ui/Modal'
 import { Button } from './ui/button'
 import type { ImageData, Annotation, Label } from '@/types/annotations'
 import { exportToCOCO, downloadCOCO } from '@/lib/coco-export'
-import { exportToYOLO, downloadYOLOFiles, getYOLOPreview } from '@/lib/yolo-export'
+import { exportToYOLO, downloadYOLOFiles, getYOLOPreview, hasPolygonAnnotations } from '@/lib/yolo-export'
+import type { YOLOTask } from '@/lib/yolo-export'
 import { Download } from 'lucide-react'
 
 interface ExportModalProps {
@@ -24,7 +25,15 @@ export function ExportModal({
   labels,
 }: ExportModalProps) {
   const [format, setFormat] = useState<ExportFormat>('coco')
+  const [yoloTask, setYoloTask] = useState<YOLOTask>('detect')
   const [pathPrefix, setPathPrefix] = useState('')
+
+  const hasPolygons = hasPolygonAnnotations(annotations)
+
+  // Polygon datasets default to segmentation so masks are not silently flattened to boxes
+  useEffect(() => {
+    setYoloTask(hasPolygons ? 'segment' : 'detect')
+  }, [hasPolygons])
 
   const handleExport = async () => {
     if (format === 'coco') {
@@ -36,7 +45,7 @@ export function ExportModal({
       const cocoData = exportToCOCO(modifiedImages, annotations, labels)
       await downloadCOCO(cocoData, 'annotations.json')
     } else {
-      const yoloData = exportToYOLO(images, annotations, labels)
+      const yoloData = exportToYOLO(images, annotations, labels, yoloTask)
       await downloadYOLOFiles(yoloData)
     }
 
@@ -66,7 +75,7 @@ export function ExportModal({
 
       return JSON.stringify(preview, null, 2)
     } else {
-      return getYOLOPreview(images, annotations, labels, 15)
+      return getYOLOPreview(images, annotations, labels, 15, yoloTask)
     }
   }
 
@@ -135,6 +144,55 @@ export function ExportModal({
           </div>
         </div>
 
+        {/* YOLO Task Selection */}
+        {format === 'yolo' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-3">
+              YOLO Task
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="yoloTask"
+                  value="segment"
+                  checked={yoloTask === 'segment'}
+                  onChange={() => setYoloTask('segment')}
+                  className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white"
+                />
+                <div>
+                  <div className="text-gray-900 font-medium">Segmentation</div>
+                  <div className="text-sm text-gray-700">
+                    Normalized polygon points. Rectangles export as their four corners; points are omitted.
+                  </div>
+                </div>
+              </label>
+
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="radio"
+                  name="yoloTask"
+                  value="detect"
+                  checked={yoloTask === 'detect'}
+                  onChange={() => setYoloTask('detect')}
+                  className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-white"
+                />
+                <div>
+                  <div className="text-gray-900 font-medium">Detection</div>
+                  <div className="text-sm text-gray-700">
+                    Bounding boxes only. Polygons are reduced to their bounding box.
+                  </div>
+                </div>
+              </label>
+            </div>
+            {hasPolygons && yoloTask === 'detect' && (
+              <p className="mt-2 text-xs text-amber-700">
+                This dataset contains polygons. Detection export will discard their mask geometry.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Path Prefix */}
         <div>
           <label htmlFor="pathPrefix" className="block text-sm font-medium text-gray-800 mb-2">
@@ -178,7 +236,7 @@ export function ExportModal({
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
           >
             <Download className="w-4 h-4 mr-2" />
-            Export {format.toUpperCase()}
+            Export {format === 'yolo' ? `YOLO ${yoloTask === 'segment' ? 'Seg' : 'Detect'}` : 'COCO'}
           </Button>
         </div>
       </div>

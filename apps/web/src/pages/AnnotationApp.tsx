@@ -1348,7 +1348,7 @@ function AnnotationApp() {
           />
 
           {/* Canvas */}
-          <div className="flex-1 bg-white flex flex-col border-x border-gray-200 overflow-visible">
+          <div className="flex-1 min-w-0 bg-white flex flex-col border-x border-gray-200 overflow-visible">
             {/* Image Viewer Header */}
             {currentImage && (
               <div className="glass border-b border-gray-200 px-4 py-2 flex items-center justify-between overflow-visible">
@@ -1502,7 +1502,7 @@ function AnnotationApp() {
                   {/* Thumbnails */}
                   <div
                     ref={thumbnailsContainerRef}
-                    className="flex-1 flex gap-3 overflow-x-auto py-3 px-2"
+                    className="flex-1 min-w-0 flex gap-3 overflow-x-auto py-3 px-2"
                     style={{ scrollPaddingInline: '50%' }}
                   >
                     {/* Left spacer for centering */}

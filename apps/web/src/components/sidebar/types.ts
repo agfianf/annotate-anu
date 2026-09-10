@@ -80,6 +80,7 @@ export interface AnnotationsSidebarProps {
   // Data
   annotations: Annotation[];
   labels: Label[];
+  allAnnotations?: Annotation[]; // every image, for dataset-wide duplicate cleanup
 
   // Selection state
   selectedAnnotations: string[];
