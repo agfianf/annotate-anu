@@ -1,0 +1,8 @@
+# Without this, `COPY . .` drags the host's node_modules into the image — after
+# npm ci has already installed a correct one — and bakes host-built artifacts in.
+node_modules
+dist
+.vite
+.git
+.env.local
+*.log

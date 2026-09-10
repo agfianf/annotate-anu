@@ -67,7 +67,6 @@ htmlcov/
 .cache/
 
 # Docker
-.dockerignore
 
 # Temporary files
 *.tmp
