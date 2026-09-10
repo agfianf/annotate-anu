@@ -9,10 +9,11 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, inspect, text
-from testcontainers.postgres import PostgresContainer
+from testcontainers.community.postgres import PostgresContainer
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 
 # Get absolute path to src directory
 SRC_DIR = Path(__file__).parent.parent.resolve()
@@ -61,11 +62,14 @@ class TestMigrations:
         # Run all migrations
         command.upgrade(alembic_config, "head")
 
-        # Verify alembic_version table exists and has correct version
+        # Compare against whatever alembic currently calls head rather than a
+        # hardcoded revision, so adding a migration does not break this test.
+        expected = ScriptDirectory.from_config(alembic_config).get_current_head()
+
         with db_engine.connect() as conn:
             result = conn.execute(text("SELECT version_num FROM alembic_version"))
             version = result.scalar()
-            assert version == "m9a0b1c2d3e4", f"Expected version m9a0b1c2d3e4, got {version}"
+            assert version == expected, f"Expected version {expected}, got {version}"
 
     def test_registered_models_table_exists(self, db_engine):
         """Verify registered_models table was created with correct structure."""

@@ -113,14 +113,22 @@ Diagram source: `docs/architecture/system-overview.mmd`.
 
 ## Services (Docker dev stack)
 
-| Service | Responsibility | Port |
-| --- | --- | --- |
-| Web app | Annotation UI, dashboards, explore, exports | 5173 |
-| API Core | Auth, projects, tasks, jobs, model registry, exports | 8001 |
-| SAM3 Inference API | Text, bbox, batch segmentation | 8000 |
-| API Core Worker | Export jobs and background tasks | - |
-| PostgreSQL | Core data store | 5432 |
-| Redis | Cache and task queue | - |
+| Service | Responsibility | Host port | Container port |
+| --- | --- | --- | --- |
+| Web app | Annotation UI, dashboards, explore, exports | 18712 | 5173 |
+| API Core | Auth, projects, tasks, jobs, model registry, exports | 18711 | 8001 |
+| SAM3 Inference API | Text, bbox, batch segmentation | 18710 | 8000 |
+| API Core Worker | Export jobs and background tasks | - | - |
+| PostgreSQL | Core data store | 5432 | 5432 |
+| Redis | Cache and task queue | - | 6379 |
+
+Host ports use the `18710-18712` block instead of the defaults (`8000`, `8001`, `5173`) to avoid clashing with other services on the same machine. Only the host side is remapped — inside the `anu-network` bridge the services still talk over their standard ports, so `SAM3_API_URL=http://backend:8000` and friends stay unchanged.
+
+To use a different block, edit the `ports:` entries in `docker/docker-compose.dev.yml` and keep these in sync:
+
+- `apps/web/.env` — `VITE_SAM3_API_URL`, `VITE_CORE_API_URL` (baked into the browser bundle, so they must be host-reachable URLs)
+- `apps/api-core/.env` and the `CORS_ORIGINS` override in `docker/docker-compose.dev.yml` — must list the web app's origin
+- `Makefile` — the URLs echoed by the `docker-up` / `docker-rebuild` targets
 
 ## Quick Start
 
@@ -150,9 +158,9 @@ make docker-up
 ```
 
 Services:
-- Web: http://localhost:5173
-- SAM3 API docs: http://localhost:8000/docs
-- API Core docs: http://localhost:8001/docs
+- Web: http://localhost:18712
+- SAM3 API docs: http://localhost:18710/docs
+- API Core docs: http://localhost:18711/docs
 
 ## Local Development (no Docker)
 
@@ -169,6 +177,8 @@ make core-run
 make frontend-install
 make frontend-dev
 ```
+
+These run on the application defaults — SAM3 on `8000`, API Core on `8001`, Vite on `5173` — not the remapped Docker host ports. `apps/web/.env.example` points at the Docker ports, so when running without Docker set `VITE_SAM3_API_URL=http://localhost:8000` and `VITE_CORE_API_URL=http://localhost:8001` in `apps/web/.env`.
 
 ## Configuration
 
@@ -188,5 +198,7 @@ make frontend-dev
 
 ## API Docs
 
-- SAM3 Inference API: http://localhost:8000/docs
-- API Core: http://localhost:8001/docs
+- SAM3 Inference API: http://localhost:18710/docs
+- API Core: http://localhost:18711/docs
+
+(Docker dev stack ports — see [Services](#services-docker-dev-stack). Running locally without Docker, these are `8000` and `8001`.)

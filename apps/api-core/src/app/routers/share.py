@@ -182,7 +182,7 @@ async def get_thumbnail(
     path: str,
     current_user: Annotated[UserBase, Depends(get_current_active_user)],
     thumb: ThumbnailService = Depends(get_thumbnail_service),
-    size: str = Query(default="2x", regex="^(1x|2x|4x)$", description="Thumbnail size (1x=256px, 2x=512px, 4x=1024px)"),
+    size: str = Query(default="2x", pattern="^(1x|2x|4x)$", description="Thumbnail size (1x=256px, 2x=512px, 4x=1024px)"),
 ):
     """Get thumbnail for an image with specified size. Generates on-demand if not cached."""
     try:

@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, type Variants } from 'framer-motion';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Scan } from 'lucide-react';
 
@@ -69,7 +69,7 @@ export function LoadingScreen({
   const prefersReducedMotion = useReducedMotion();
 
   // Animation variants
-  const backdropVariants = {
+  const backdropVariants: Variants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
@@ -81,7 +81,7 @@ export function LoadingScreen({
     }
   };
 
-  const containerVariants = {
+  const containerVariants: Variants = {
     hidden: { opacity: 0, scale: 0.95 },
     visible: {
       opacity: 1,
@@ -99,7 +99,7 @@ export function LoadingScreen({
   };
 
   // Scanning line animation
-  const scanLineVariants = prefersReducedMotion
+  const scanLineVariants: Variants = prefersReducedMotion
     ? {}
     : {
         initial: { y: '0%', opacity: 0 },
@@ -115,7 +115,7 @@ export function LoadingScreen({
       };
 
   // Corner pulse animation
-  const cornerPulseVariants = (delay: number) =>
+  const cornerPulseVariants = (delay: number): Variants =>
     prefersReducedMotion
       ? {}
       : {

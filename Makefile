@@ -1,8 +1,9 @@
-.PHONY: help dev install clean \
+.PHONY: help dev install clean check-node \
         backend-install backend-run backend-test backend-format backend-lint \
         core-install core-run core-test core-format core-lint \
-        frontend-install frontend-dev frontend-build \
+        frontend-install frontend-dev frontend-build frontend-clear-cache \
         docker-up docker-down docker-logs docker-build docker-rebuild docker-restart docker-shell \
+        docker-rebuild-service \
         docker-up-solo docker-down-solo docker-up-team docker-down-team \
         docker-up-prod docker-down-prod docker-rebuild-prod
 
@@ -29,10 +30,11 @@ help:
 	@echo "  core-format      - Format api-core code with ruff"
 	@echo "  core-lint        - Lint api-core code with ruff"
 	@echo ""
-	@echo "Frontend Commands:"
+	@echo "Frontend Commands (require Node >= 22.12.0):"
 	@echo "  frontend-install - Install frontend dependencies with npm"
 	@echo "  frontend-dev     - Run frontend dev server"
-	@echo "  frontend-build   - Build frontend for production"
+	@echo "  frontend-build   - Build frontend for production (also the only typecheck)"
+	@echo "  frontend-clear-cache - Clear Vite cache and restart the frontend container"
 	@echo ""
 	@echo "Docker Commands:"
 	@echo "  docker-up        - Start development environment (hot-reload)"
@@ -46,6 +48,7 @@ help:
 	@echo "  docker-logs      - View logs (usage: make docker-logs service=backend|api-core|frontend)"
 	@echo "  docker-build     - Rebuild all Docker images"
 	@echo "  docker-rebuild   - Rebuild images, stop, and restart services (build -> down -> up)"
+	@echo "  docker-rebuild-service - Rebuild one service (usage: make docker-rebuild-service service=frontend)"
 	@echo "  docker-rebuild-prod - Rebuild production images (build -> down -> up)"
 	@echo "  docker-restart   - Restart services (usage: make docker-restart service=backend|api-core|frontend)"
 	@echo "  docker-shell     - Open shell in container (usage: make docker-shell service=backend|api-core|frontend)"
@@ -56,7 +59,7 @@ dev:
 	@echo "This will start both backend and frontend services using Docker Compose"
 	docker-compose -f docker/docker-compose.dev.yml up
 
-install:
+install: check-node
 	@echo "Installing frontend dependencies..."
 	@cd apps/web && npm install
 	@echo "Installing backend dependencies..."
@@ -78,7 +81,6 @@ clean:
 backend-install:
 	@echo "Installing backend dependencies..."
 	@cd apps/api-inference && uv venv || true
-	@cd apps/api-inference && uv pip install git+https://github.com/huggingface/transformers.git
 	@cd apps/api-inference && uv sync
 	@echo "✓ Backend dependencies installed"
 
@@ -124,16 +126,33 @@ core-lint:
 	@cd apps/api-core && uv run ruff check src/
 
 # Frontend commands
-frontend-install:
+
+# apps/web requires Node >= 22.12.0 (vite 8, eslint 10, react-dropzone 20).
+# Enforced by "engines" in apps/web/package.json; checked here so host runs fail
+# with a clear message instead of a cryptic syntax or resolver error.
+NODE_MIN_MAJOR := 22
+
+check-node:
+	@command -v node >/dev/null 2>&1 || { \
+		echo "✗ node not found. apps/web requires Node >= 22.12.0"; exit 1; }
+	@major=$$(node -p "process.versions.node.split('.')[0]"); \
+	if [ "$$major" -lt $(NODE_MIN_MAJOR) ]; then \
+		echo "✗ Node $$(node -v) is too old — apps/web requires Node >= 22.12.0"; \
+		echo "  (vite 8 and eslint 10 need >= 20.19; react-dropzone 20 needs >= 22)"; \
+		echo "  Fix: nvm use 22"; \
+		exit 1; \
+	fi
+
+frontend-install: check-node
 	@echo "Installing frontend dependencies..."
 	@cd apps/web && npm install
 	@echo "✓ Frontend dependencies installed"
 
-frontend-dev:
+frontend-dev: check-node
 	@echo "Starting frontend dev server..."
 	@cd apps/web && npm run dev
 
-frontend-build:
+frontend-build: check-node
 	@echo "Building frontend for production..."
 	@cd apps/web && npm run build
 
@@ -144,11 +163,11 @@ docker-up:
 	docker-compose -f docker/docker-compose.dev.yml --profile dev up -d
 	@echo ""
 	@echo "✓ Services started:"
-	@echo "  Backend API (SAM3): http://localhost:8000"
-	@echo "  Backend Docs: http://localhost:8000/docs"
-	@echo "  API Core (BYOM): http://localhost:8001"
-	@echo "  API Core Docs: http://localhost:8001/docs"
-	@echo "  Frontend: http://localhost:5173"
+	@echo "  Backend API (SAM3): http://localhost:18710"
+	@echo "  Backend Docs: http://localhost:18710/docs"
+	@echo "  API Core (BYOM): http://localhost:18711"
+	@echo "  API Core Docs: http://localhost:18711/docs"
+	@echo "  Frontend: http://localhost:18712"
 	@echo "  Redis: localhost:6379 (internal)"
 
 docker-down:
@@ -160,10 +179,10 @@ docker-up-prod:
 	docker-compose -f docker/docker-compose.dev.yml --profile prod up -d
 	@echo ""
 	@echo "✓ Production services started:"
-	@echo "  Backend API (SAM3): http://localhost:8000"
-	@echo "  Backend Docs: http://localhost:8000/docs"
-	@echo "  API Core (BYOM): http://localhost:8001"
-	@echo "  API Core Docs: http://localhost:8001/docs"
+	@echo "  Backend API (SAM3): http://localhost:18710"
+	@echo "  Backend Docs: http://localhost:18710/docs"
+	@echo "  API Core (BYOM): http://localhost:18711"
+	@echo "  API Core Docs: http://localhost:18711/docs"
 	@echo "  Frontend (Production): http://localhost:3000"
 	@echo "  Redis: localhost:6379 (internal)"
 
@@ -213,6 +232,9 @@ docker-build:
 	@echo "Building Docker images..."
 	docker-compose -f docker/docker-compose.dev.yml build
 
+# --renew-anon-volumes matters for `frontend`: docker-compose.dev.yml mounts an
+# anonymous volume at /app/node_modules, which survives a plain recreate and would
+# otherwise shadow the freshly built node_modules with the previous dependency set.
 docker-rebuild:
 	@echo "Rebuilding Docker services (build -> down -> up)..."
 	@echo "Step 1/3: Building images..."
@@ -222,14 +244,14 @@ docker-rebuild:
 	@docker-compose -f docker/docker-compose.dev.yml --profile dev down
 	@echo ""
 	@echo "Step 3/3: Starting services..."
-	@docker-compose -f docker/docker-compose.dev.yml --profile dev up -d
+	@docker-compose -f docker/docker-compose.dev.yml --profile dev up -d --renew-anon-volumes
 	@echo ""
 	@echo "✓ Services rebuilt and restarted:"
-	@echo "  Backend API (SAM3): http://localhost:8000"
-	@echo "  Backend Docs: http://localhost:8000/docs"
-	@echo "  API Core (BYOM): http://localhost:8001"
-	@echo "  API Core Docs: http://localhost:8001/docs"
-	@echo "  Frontend: http://localhost:5173"
+	@echo "  Backend API (SAM3): http://localhost:18710"
+	@echo "  Backend Docs: http://localhost:18710/docs"
+	@echo "  API Core (BYOM): http://localhost:18711"
+	@echo "  API Core Docs: http://localhost:18711/docs"
+	@echo "  Frontend: http://localhost:18712"
 	@echo "  Redis: localhost:6379 (internal)"
 
 docker-rebuild-prod:
@@ -244,12 +266,24 @@ docker-rebuild-prod:
 	@docker-compose -f docker/docker-compose.dev.yml --profile prod up -d
 	@echo ""
 	@echo "✓ Production services rebuilt and restarted:"
-	@echo "  Backend API (SAM3): http://localhost:8000"
-	@echo "  Backend Docs: http://localhost:8000/docs"
-	@echo "  API Core (BYOM): http://localhost:8001"
-	@echo "  API Core Docs: http://localhost:8001/docs"
+	@echo "  Backend API (SAM3): http://localhost:18710"
+	@echo "  Backend Docs: http://localhost:18710/docs"
+	@echo "  API Core (BYOM): http://localhost:18711"
+	@echo "  API Core Docs: http://localhost:18711/docs"
 	@echo "  Frontend (Production): http://localhost:3000"
 	@echo "  Redis: localhost:6379 (internal)"
+
+# Rebuild a single service without cycling the whole stack.
+# Usage: make docker-rebuild-service service=frontend
+docker-rebuild-service:
+ifdef service
+	@echo "Rebuilding $(service)..."
+	docker-compose -f docker/docker-compose.dev.yml up -d --build --renew-anon-volumes $(service)
+	@echo "✓ $(service) rebuilt and restarted"
+else
+	@echo "Error: Please specify service (e.g., make docker-rebuild-service service=frontend)"
+	@exit 1
+endif
 
 docker-restart:
 ifdef service

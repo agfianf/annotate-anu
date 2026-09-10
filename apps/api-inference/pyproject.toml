@@ -6,27 +6,43 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     # FastAPI core
-    "fastapi>=0.115.4",
-    "pydantic>=2.12.4",
-    "pydantic-settings>=2.12.0",
-    "python-multipart>=0.0.20",
-    "uvicorn>=0.32.0",
+    "fastapi>=0.141.1",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
+    "uvicorn>=0.52.1",
 
     # SAM3 dependencies (minimal)
-    "huggingface-hub>=1.1.4",
-    "torch>=2.9.1",
-    "torchvision>=0.24.1",
+    # transformers provides Sam3Model / Sam3Processor (stable since transformers 5.0).
+    # Previously installed ad hoc from git in the Dockerfile, which made builds
+    # non-reproducible; it is a real dependency and belongs in the lockfile.
+    "transformers>=5.14.1",
+    "huggingface-hub>=1.27.0",
+    # torch is deliberately capped below 2.11.
+    # From torch 2.11 onward the default PyPI wheels link CUDA 13 (nvidia-*-cu13),
+    # which requires an NVIDIA driver >= 580.65. The GPU host this service runs on
+    # is on driver 550.144.03 (CUDA 12.4), so a cu13 build would fail to
+    # initialise CUDA and silently fall back to (very slow) CPU or hard-error.
+    # torch 2.10.0 is the newest release whose default wheels are still cu12 (12.8),
+    # which works on a 12.x driver via CUDA minor-version compatibility.
+    # To go past this, install torch from an explicit cu12 index
+    # (https://download.pytorch.org/whl/cu128) or upgrade the host driver to >= 580.
+    "torch>=2.10.0,<2.11.0",
+    # torchvision 0.25.0 pins torch==2.10.0; the pair must be bumped together.
+    "torchvision>=0.25.0,<0.26.0",
 
     # Image processing
-    "pillow>=12.0.0",
-    "matplotlib>=3.10.7",
-    "opencv-python-headless==4.12.0.88"
+    # numpy is imported directly by mask_utils.py and visualizer.py.
+    "numpy>=2.5.1",
+    "pillow>=12.3.0",
+    "matplotlib>=3.11.1",
+    "opencv-python-headless==5.0.0.93"
 ]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.9.4",
-    "ipython>=8.31.0",
+    "ruff>=0.16.2",
+    "ipython>=9.16.1",
 ]
 
 [tool.ruff]

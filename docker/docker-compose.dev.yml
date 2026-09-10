@@ -10,7 +10,7 @@ services:
     container_name: anu-backend-inference-dev
     command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
-      - "8000:8000"
+      - "18710:8000"
     volumes:
       - ../apps/api-inference/src:/code/src  # Hot-reload enabled
       - huggingface_cache:/root/.cache/huggingface
@@ -34,7 +34,7 @@ services:
       dockerfile: Dockerfile
     container_name: anu-api-core-dev
     ports:
-      - "8001:8001"
+      - "18711:8001"
     volumes:
       - ../apps/api-core/src:/app/src
       - api-core-data:/app/data
@@ -48,7 +48,7 @@ services:
       - SHARE_THUMBNAIL_CACHE_DIR=/data/cache/thumbnails
       - EXPORT_ROOT=/data/exports
       - API_CORE_DEBUG=true
-      - CORS_ORIGINS=["http://10.8.0.106:5173","http://10.8.0.106:8001","http://10.8.0.106:3000","http://localhost:5173","http://localhost:3000","http://10.8.0.106:80"]
+      - CORS_ORIGINS=["http://10.8.0.106:18712","http://10.8.0.106:18711","http://10.8.0.106:3000","http://localhost:18712","http://localhost:3000","http://10.8.0.106:80"]
     restart: unless-stopped
     networks:
       - anu-network
@@ -128,7 +128,7 @@ services:
       target: development
     container_name: anu-frontend-dev
     ports:
-      - "5173:5173"
+      - "18712:5173"
     volumes:
       - ../apps/web:/app
       - /app/node_modules
@@ -150,8 +150,8 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        - VITE_SAM3_API_URL=http://10.8.0.106:8000
-        - VITE_CORE_API_URL=http://10.8.0.106:8001
+        - VITE_SAM3_API_URL=http://10.8.0.106:18710
+        - VITE_CORE_API_URL=http://10.8.0.106:18711
         - VITE_ENV=production
     container_name: anu-frontend-prod
     ports:
