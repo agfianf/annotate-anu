@@ -2498,7 +2498,6 @@ const Canvas = React.memo(function Canvas({
 
                   annotations.forEach((ann) => {
                     // Skip hidden annotations
-                    if (ann.hidden) return
                     if (ann.isVisible === false) return
                     // Skip based on visibility filters
                     if (ann.type === 'polygon' && !showPolygons) return

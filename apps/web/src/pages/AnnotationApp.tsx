@@ -1,3 +1,5 @@
+import { fetchImageAsBlob } from '../lib/image-fetch'
+import { useAuthenticatedImage } from '../hooks/useAuthenticatedImage'
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Cloud, CloudOff, Copy, Download, Link as LinkIcon, Loader2, RotateCcw, Trash2, Upload } from '@/components/ui/icons'
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
@@ -81,11 +83,6 @@ function createDebouncedStorageWriter(key: string, delayMs: number) {
 
 const appearanceSettingsWriter = createDebouncedStorageWriter('annotationAppearanceSettings', 300)
 
-const fetchImageAsBlob = async (url: string): Promise<Blob> => {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`)
-  return await response.blob()
-}
 
 // Thumbnail component to prevent re-creating blob URLs on every render
 interface ImageThumbnailProps {
@@ -116,7 +113,7 @@ const ImageThumbnail = ({
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    // For job mode, use the public job image endpoint
+    // Job thumbnails are loaded with the current session token below.
     if (isJobMode && s3Key && image.jobId && image.jobImageId) {
       setThumbnailUrl(imagesApi.getImageUrl(s3Key, image.jobId.toString(), image.jobImageId))
       return
@@ -132,8 +129,11 @@ const ImageThumbnail = ({
     }
   }, [image.blob, isJobMode, s3Key, image.jobId, image.jobImageId])
 
+  const { blobUrl: authenticatedThumbnail } = useAuthenticatedImage(isJobMode ? thumbnailUrl : null)
+  const displayThumbnail = isJobMode ? authenticatedThumbnail : thumbnailUrl
+
   // Show loading placeholder while URL is being created
-  if (!thumbnailUrl) {
+  if (!displayThumbnail) {
     return (
       <div className="h-20 w-20 bg-gray-800 animate-pulse rounded border-2 border-gray-600" />
     )
@@ -151,7 +151,7 @@ const ImageThumbnail = ({
       }`}
     >
       <img
-        src={thumbnailUrl}
+        src={displayThumbnail}
         alt={image.displayName}
         className="h-20 w-20 object-cover bg-gray-900"
       />
@@ -523,8 +523,11 @@ function AnnotationApp() {
    * Handle save and leave action from unsaved changes dialog
    */
   const handleSaveAndLeave = async () => {
-    if (syncNow) {
-      await syncNow()
+    try {
+      if (syncNow) await syncNow()
+    } catch {
+      toast.error('Changes could not be saved. Please retry before leaving.')
+      return
     }
     setShowUnsavedChangesDialog(false)
     if (pendingNavigationRef.current) {
@@ -894,7 +897,7 @@ function AnnotationApp() {
     imageId?: string
     modelId?: string
   }) => {
-    const { currentImageId, selectedLabelId, annotations, addManyAnnotations, recordChange } = liveRef.current
+    const { currentImageId, selectedLabelId, annotations, addManyAnnotations } = liveRef.current
     // Use passed imageId for batch processing, otherwise use currentImageId
     const targetImageId = results.imageId || currentImageId
     if (!targetImageId) return
@@ -965,8 +968,8 @@ function AnnotationApp() {
     }
 
     // Record history after AI annotations are created
-    if (!isUndoingRef.current && currentImageId) {
-      recordChange(annotations.filter(a => a.imageId === (results.imageId || currentImageId)))
+    if (!isUndoingRef.current && liveRef.current.currentImageId === targetImageId) {
+      liveRef.current.recordChange([...annotations.filter(a => a.imageId === targetImageId), ...annotationsToAdd])
     }
   }, [])
 
@@ -1013,6 +1016,7 @@ function AnnotationApp() {
         masks: hasMask ? [result.masks[0]] : [],
         scores: [result.scores[0]],
         annotationType: hasMask ? 'polygon' : 'bbox',
+        imageId: currentImageId,
         labelId: selectedLabelId,
         modelId: selectedModel?.id,
       })
@@ -1027,6 +1031,7 @@ function AnnotationApp() {
 
   // Get current image as data URL for canvas
   const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null)
+  const { blobUrl: authenticatedCanvasImage } = useAuthenticatedImage(isJobMode ? currentImageUrl : null)
 
   useEffect(() => {
     if (currentImage) {
@@ -1443,7 +1448,7 @@ function AnnotationApp() {
               {/* Manual sync button */}
               {pendingCount > 0 && (
                 <button
-                  onClick={syncNow}
+                  onClick={() => { void syncNow().catch(() => {}) }}
                   disabled={syncStatus === 'syncing'}
                   className="text-xs px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded transition-colors"
                 >
@@ -1596,7 +1601,7 @@ function AnnotationApp() {
 
             <div className="flex-1 overflow-hidden relative">
               <Canvas
-                image={currentImageUrl}
+                image={isJobMode ? authenticatedCanvasImage : currentImageUrl}
                 preloadedImage={preloadedImage || undefined}
                 selectedTool={selectedTool}
                 annotations={currentAnnotations}

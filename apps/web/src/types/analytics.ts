@@ -417,6 +417,7 @@ export interface FlaggedImageEnhanced {
  * Combines: Dataset Stats + Dimension Insights + Class Balance + Image Quality
  */
 export interface EnhancedDatasetStatsResponse {
+  total_images: number;
   // Original Dataset Stats
   tag_distribution: TagDistribution[];
   dimension_histogram: DimensionBucket[];

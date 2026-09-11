@@ -342,14 +342,20 @@ export function useJobStorage(jobId: string | null, projectId?: string): JobStor
     }
   }, [jobContext.images, loadAnnotationsForImage])
 
-  // Auto-save hook with callback to reload annotations after sync
+  // Reconcile IDs directly without refetching or replacing edits made during a save.
   const autoSaveConfigWithCallback = useMemo(() => ({
     ...autoSaveConfig,
-    onSyncSuccess: async () => {
-      // Reload annotations to update syncedAnnotations map with backend IDs
-      await loadJobAnnotations()
+    onSyncSuccess: (createdIds: Record<string, string>) => {
+      const updated = new Map(syncedAnnotationsRef.current)
+      Object.entries(createdIds).forEach(([id, backendId]) => updated.set(id, backendId))
+      syncedAnnotationsRef.current = updated
+      setSyncedAnnotations(updated)
+      setJobAnnotations(prev => prev.map(annotation => {
+        const backendId = createdIds[annotation.originalFrontendId || annotation.id]
+        return backendId ? { ...annotation, backendId } : annotation
+      }))
     }
-  }), [autoSaveConfig, loadJobAnnotations])
+  }), [autoSaveConfig])
 
   const autoSave = useAutoSave(jobId, autoSaveConfigWithCallback)
 
@@ -622,24 +628,24 @@ export function useJobStorage(jobId: string | null, projectId?: string): JobStor
       // Use backendId field first (after reload), fall back to syncedAnnotations Map (via ref for latest value)
       const backendId = annotation?.backendId || syncedAnnotationsRef.current.get(id)
       console.log('[jobRemoveAnnotation] Resolved backendId:', backendId)
-      if (backendId && annotation) {
+      if (annotation) {
         // Find the job image ID for the annotation (map back from shared_image_id)
         const image = jobContext.images.find((img) =>
           (img.shared_image_id || img.id) === annotation.imageId
         )
         // Use jobImageId (backend ID) for sync, fallback to image.id then annotation.imageId
-        const jobImageId = image?.jobImageId || image?.id || annotation.imageId
+        const jobImageId = image?.id || annotation.imageId
         console.log('[jobRemoveAnnotation] Marking for DELETE', {
           annotationId: id,
           backendId,
           annotationImageId: annotation.imageId,
           annotationType: annotation.type,
-          foundImage: image ? { id: image.id, jobImageId: image.jobImageId, shared_image_id: image.shared_image_id } : null,
+          foundImage: image ? { id: image.id, shared_image_id: image.shared_image_id } : null,
           resolvedJobImageId: jobImageId
         })
         autoSave.markDelete(id, backendId, jobImageId, annotation.type)
       } else {
-        console.warn('[jobRemoveAnnotation] WARNING: No backendId, deletion will NOT be synced!')
+        console.warn('[jobRemoveAnnotation] Annotation not found:', id)
       }
     },
     [jobAnnotations, jobContext.images, autoSave]
@@ -660,15 +666,12 @@ export function useJobStorage(jobId: string | null, projectId?: string): JobStor
       for (const annotation of toRemove) {
         // Use backendId field first (after reload), fall back to syncedAnnotations Map (via ref for latest value)
         const backendId = annotation.backendId || syncedAnnotationsRef.current.get(annotation.id)
-        if (backendId) {
-          // Find the job image ID for the annotation (map back from shared_image_id)
-          const image = jobContext.images.find((img) =>
-            (img.shared_image_id || img.id) === annotation.imageId
-          )
-          // Use jobImageId (backend ID) for sync, fallback to image.id then annotation.imageId
-          const jobImageId = image?.jobImageId || image?.id || annotation.imageId
-          autoSave.markDelete(annotation.id, backendId, jobImageId, annotation.type)
-        }
+        // Find the job image ID for the annotation (map back from shared_image_id)
+        const image = jobContext.images.find((img) =>
+          (img.shared_image_id || img.id) === annotation.imageId
+        )
+        const jobImageId = image?.id || annotation.imageId
+        autoSave.markDelete(annotation.id, backendId, jobImageId, annotation.type)
       }
     },
     [jobAnnotations, jobContext.images, autoSave]

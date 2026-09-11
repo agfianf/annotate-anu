@@ -1,3 +1,4 @@
+import { fetchImageAsBlob } from '../lib/image-fetch'
 import { inferenceClient } from '@/lib/inference-client'
 import { imagesApi } from '@/lib/api-client'
 import type { ImageData, Label, PromptMode } from '@/types/annotations'
@@ -13,13 +14,6 @@ import { PromptModeSelector } from './ui/PromptModeSelector'
 /**
  * Fetch image as blob from URL (for job mode images)
  */
-async function fetchImageAsBlob(url: string): Promise<Blob> {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.statusText}`)
-  }
-  return await response.blob()
-}
 
 /**
  * Get image file from ImageData - handles both local and job mode
@@ -62,6 +56,7 @@ interface TextPromptPanelProps {
     annotationType: 'bbox' | 'polygon'
     labelId?: string
     imageId?: string
+    modelId?: string
   }) => void
   onClose: () => void
   currentAnnotations?: any[] // Add annotations to check if image already has AI annotations

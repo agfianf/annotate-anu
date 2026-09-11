@@ -380,6 +380,8 @@ class EnhancedDatasetStatsResponse(BaseModel):
 
     Combines: Original Dataset Stats + Dimension Insights + Class Balance + Image Quality
     """
+    total_images: int = Field(default=0, description="Number of images used for these statistics")
+
     # === Original Dataset Stats ===
     tag_distribution: List[TagDistribution] = Field(
         default_factory=list, description="Tag distribution with counts and colors"

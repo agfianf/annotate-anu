@@ -10,6 +10,7 @@
  */
 
 import { useCallback, useSyncExternalStore } from 'react';
+import { fetchImageAsBlob } from '../lib/image-fetch';
 import { getAccessToken } from '../lib/api-client';
 
 export interface AuthenticatedImageState {
@@ -56,20 +57,11 @@ function touch(url: string, entry: CacheEntry): void {
 }
 
 async function fetchBlobUrl(url: string): Promise<{ blobUrl: string; size: number }> {
-  const token = getAccessToken();
-  const response = await fetch(url, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to load image: ${response.status}`);
-  }
-
-  const blob = await response.blob();
+  const blob = await fetchImageAsBlob(url);
   return { blobUrl: URL.createObjectURL(blob), size: blob.size };
 }
 
-function startFetch(url: string, entry: CacheEntry): void {
+function startFetch(key: string, url: string, entry: CacheEntry): void {
   entry.error = undefined;
   entry.blobUrl = undefined;
   entry.snapshot = LOADING_STATE;
@@ -78,7 +70,7 @@ function startFetch(url: string, entry: CacheEntry): void {
     ({ blobUrl, size }) => {
       // The entry may have been evicted and replaced while the fetch was in
       // flight; only adopt the result if this entry is still the live one.
-      if (cache.get(url) !== entry) {
+      if (cache.get(key) !== entry) {
         URL.revokeObjectURL(blobUrl);
         return blobUrl;
       }
@@ -104,8 +96,8 @@ function startFetch(url: string, entry: CacheEntry): void {
   entry.promise = promise;
 }
 
-function acquire(url: string): CacheEntry {
-  let entry = cache.get(url);
+function acquire(key: string, url: string): CacheEntry {
+  let entry = cache.get(key);
   if (!entry) {
     entry = {
       promise: Promise.resolve(''),
@@ -115,15 +107,15 @@ function acquire(url: string): CacheEntry {
       snapshot: LOADING_STATE,
       listeners: new Set(),
     };
-    cache.set(url, entry);
-    startFetch(url, entry);
+    cache.set(key, entry);
+    startFetch(key, url, entry);
   } else if (entry.error && entry.refCount === 0) {
     // A previous attempt failed (expired token, transient network error):
     // retry on the next mount, matching the old refetch-on-mount behaviour.
-    startFetch(url, entry);
+    startFetch(key, url, entry);
   }
   entry.refCount += 1;
-  touch(url, entry);
+  touch(key, entry);
   return entry;
 }
 
@@ -156,27 +148,58 @@ function evictIfNeeded(): void {
   }
 }
 
+let cacheToken = getAccessToken()
+
+function clearImageCache(): void {
+  const nextToken = getAccessToken()
+  if (nextToken === cacheToken) return
+  cacheToken = nextToken
+  const entries = [...cache.values()]
+  cache.clear()
+  totalBytes = 0
+  for (const entry of entries) {
+    if (entry.blobUrl) URL.revokeObjectURL(entry.blobUrl)
+    notify(entry)
+  }
+}
+
+window.addEventListener('auth-token-changed', clearImageCache)
+window.addEventListener('storage', event => {
+  if (event.key === 'access_token' || event.key === null) clearImageCache()
+})
+
+function subscribeToken(listener: () => void): () => void {
+  window.addEventListener('auth-token-changed', listener)
+  window.addEventListener('storage', listener)
+  return () => {
+    window.removeEventListener('auth-token-changed', listener)
+    window.removeEventListener('storage', listener)
+  }
+}
+
 export function useAuthenticatedImage(imageUrl: string | null): AuthenticatedImageState {
+  const token = useSyncExternalStore(subscribeToken, getAccessToken, () => null)
+  const cacheKey = `${token ?? ''}:${imageUrl ?? ''}`
   const subscribe = useCallback(
     (onStoreChange: () => void) => {
       if (!imageUrl) return () => {};
-      const entry = acquire(imageUrl);
+      const entry = acquire(cacheKey, imageUrl);
       entry.listeners.add(onStoreChange);
       // The snapshot may have changed between render and subscribe (e.g. a
       // shared in-flight fetch resolved); let React re-check it.
       onStoreChange();
       return () => {
         entry.listeners.delete(onStoreChange);
-        release(imageUrl, entry);
+        release(cacheKey, entry);
       };
     },
-    [imageUrl]
+    [imageUrl, cacheKey]
   );
 
   const getSnapshot = useCallback((): AuthenticatedImageState => {
     if (!imageUrl) return EMPTY_STATE;
-    return cache.get(imageUrl)?.snapshot ?? LOADING_STATE;
-  }, [imageUrl]);
+    return cache.get(cacheKey)?.snapshot ?? LOADING_STATE;
+  }, [imageUrl, cacheKey]);
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

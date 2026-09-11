@@ -194,77 +194,83 @@ async def _batch_classify_async(
 
             for index, image_id in enumerate(image_ids, start=1):
                 try:
-                    # For mock classifiers, we don't need to fetch image bytes
-                    if is_mock:
-                        # Verify image exists in database
-                        image = await SharedImageRepository.get_by_id(connection, UUID(image_id))
-                        if not image:
-                            logger.warning(f"Image not found: {image_id}")
-                            failed += 1
-                            continue
+                    async with connection.begin_nested():
+                        # For mock classifiers, we don't need to fetch image bytes
+                        if is_mock:
+                            # Verify image exists in database
+                            image = await SharedImageRepository.get_by_id(
+                                connection, UUID(image_id)
+                            )
+                            if not image:
+                                logger.warning(f"Image not found: {image_id}")
+                                failed += 1
+                                continue
 
-                        # Classify using image ID (no bytes needed for mock)
-                        classification = await classifier.classify_by_id(image_id, top_k=1)
-                    else:
-                        # For real classifiers, get image bytes
-                        image = await SharedImageRepository.get_by_id(connection, UUID(image_id))
-                        if not image:
-                            logger.warning(f"Image not found: {image_id}")
-                            failed += 1
-                            continue
+                            # Classify using image ID (no bytes needed for mock)
+                            classification = await classifier.classify_by_id(image_id, top_k=1)
+                        else:
+                            # For real classifiers, get image bytes
+                            image = await SharedImageRepository.get_by_id(
+                                connection, UUID(image_id)
+                            )
+                            if not image:
+                                logger.warning(f"Image not found: {image_id}")
+                                failed += 1
+                                continue
 
-                        image_bytes = await _get_image_bytes(image)
-                        if not image_bytes:
-                            logger.warning(f"Could not get bytes for image: {image_id}")
-                            failed += 1
-                            continue
+                            image_bytes = await _get_image_bytes(image)
+                            if not image_bytes:
+                                logger.warning(f"Could not get bytes for image: {image_id}")
+                                failed += 1
+                                continue
 
-                        classification = await classifier.classify(image_bytes, top_k=1)
+                            classification = await classifier.classify(image_bytes, top_k=1)
 
-                    # Create/apply tag from prediction if enabled
-                    if create_tags and classification.predicted_class:
-                        predicted_class = classification.predicted_class
-                        tag_id = await _get_or_create_tag(
-                            connection,
-                            project_id,
-                            predicted_class,
-                            label_mapping_config,
-                            uncategorized_category_id,
-                            created_category_id,
-                            TagRepository,
-                        )
-
-                        # Add tag to image if we have a tag ID
-                        if tag_id:
-                            # Ensure tag_id is a UUID
-                            if isinstance(tag_id, str):
-                                tag_id = UUID(tag_id)
-                            await SharedImageTagRepository.add_tag(
+                        # Create/apply tag from prediction if enabled
+                        if create_tags and classification.predicted_class:
+                            predicted_class = classification.predicted_class
+                            tag_id = await _get_or_create_tag(
                                 connection,
                                 project_id,
-                                UUID(image_id),
-                                tag_id,
+                                predicted_class,
+                                label_mapping_config,
+                                uncategorized_category_id,
+                                created_category_id,
+                                TagRepository,
                             )
 
-                    results.append(
-                        {
-                            "image_id": image_id,
-                            "predicted_class": classification.predicted_class,
-                            "confidence": classification.confidence,
-                            "tag_created": create_tags
-                            and classification.predicted_class is not None,
-                        }
-                    )
-                    processed += 1
+                            # Add tag to image if we have a tag ID
+                            if tag_id:
+                                # Ensure tag_id is a UUID
+                                if isinstance(tag_id, str):
+                                    tag_id = UUID(tag_id)
+                                await SharedImageTagRepository.add_tag(
+                                    connection,
+                                    project_id,
+                                    UUID(image_id),
+                                    tag_id,
+                                )
+
+                        results.append(
+                            {
+                                "image_id": image_id,
+                                "predicted_class": classification.predicted_class,
+                                "confidence": classification.confidence,
+                                "tag_created": create_tags
+                                and classification.predicted_class is not None,
+                            }
+                        )
+                        processed += 1
 
                 except Exception as e:
                     logger.error(f"Failed to classify image {image_id}: {e}")
                     failed += 1
 
-                # Commit tags and publish progress in batches, not per image
-                if index % PROGRESS_BATCH_SIZE == 0:
-                    await connection.commit()
-                    write_progress()
+                finally:
+                    # Publish even when a missing image skips the rest of the loop.
+                    if index % PROGRESS_BATCH_SIZE == 0:
+                        await connection.commit()
+                        write_progress()
 
             # Flush whatever the last partial batch left behind
             await connection.commit()

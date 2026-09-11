@@ -934,6 +934,7 @@ async def get_enhanced_dataset_stats(
     )
 
     response_data = EnhancedDatasetStatsResponse(
+        total_images=len(images),
         # Original Dataset Stats
         tag_distribution=tag_distribution,
         dimension_histogram=dimension_histogram,

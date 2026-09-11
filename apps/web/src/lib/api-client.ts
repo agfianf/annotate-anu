@@ -264,6 +264,7 @@ export const setTokens = (accessToken: string, refreshToken: string, user: User,
     const expiryTime = Date.now() + expiresIn * 1000;
     localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString());
   }
+  window.dispatchEvent(new Event('auth-token-changed'));
 };
 
 export const clearTokens = (): void => {
@@ -271,6 +272,7 @@ export const clearTokens = (): void => {
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(TOKEN_EXPIRY_KEY);
+  window.dispatchEvent(new Event('auth-token-changed'));
 };
 
 /**
@@ -763,8 +765,8 @@ export const jobsApi = {
   /**
    * Sync annotations for a job
    */
-  async syncAnnotations(jobId: string, payload: { images: Record<string, any> }): Promise<{ synced_images: string[], total_operations: number }> {
-    const response = await apiClient.post<ApiResponse<{ synced_images: string[], total_operations: number }>>(
+  async syncAnnotations(jobId: string, payload: { images: Record<string, any> }): Promise<{ synced_images: string[], total_operations: number, created_ids: Record<string, string> }> {
+    const response = await apiClient.post<ApiResponse<{ synced_images: string[], total_operations: number, created_ids: Record<string, string> }>>(
       `/api/v1/jobs/${jobId}/annotations/sync`,
       payload
     );

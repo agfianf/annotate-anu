@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image
 
 from app.config import settings
+from app.services.image_file import resolve_image_path
 
 
 class ThumbnailService:
@@ -69,7 +70,7 @@ class ThumbnailService:
             )
 
         cache_path = self._get_cache_path(relative_path, size_key)
-        source_path = self.base_path / relative_path
+        source_path = resolve_image_path(relative_path, self.base_path)
 
         # Check if source exists
         if not source_path.exists():
@@ -146,7 +147,7 @@ class ThumbnailService:
         FileNotFoundError
             If image not found
         """
-        source_path = self.base_path / relative_path
+        source_path = resolve_image_path(relative_path, self.base_path)
 
         if not source_path.exists():
             raise FileNotFoundError(f"Image not found: {relative_path}")

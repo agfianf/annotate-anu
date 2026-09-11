@@ -1,3 +1,4 @@
+import { fetchImageAsBlob } from '../lib/image-fetch'
 import { useState, useEffect } from 'react'
 import { Loader2, X, Trash2, Square } from '@/components/ui/icons'
 import { Button } from './ui/button'
@@ -11,13 +12,6 @@ import toast from 'react-hot-toast'
 /**
  * Fetch image as blob from URL (for job mode images)
  */
-async function fetchImageAsBlob(url: string): Promise<Blob> {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.statusText}`)
-  }
-  return await response.blob()
-}
 
 interface BboxPromptPanelProps {
   labels: Label[]
@@ -33,6 +27,7 @@ interface BboxPromptPanelProps {
     annotationType: 'bbox' | 'polygon'
     labelId?: string
     imageId?: string
+    modelId?: string
   }) => void
   onClose: () => void
   promptBboxes?: Array<{ x: number; y: number; width: number; height: number; id: string; labelId: string }>

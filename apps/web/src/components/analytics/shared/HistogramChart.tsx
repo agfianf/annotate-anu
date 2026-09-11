@@ -29,7 +29,7 @@ type TooltipContent =
   | ((props: any) => ReactElement | null);
 
 export interface HistogramChartClickHandlers {
-  containerRef: RefObject<HTMLDivElement>;
+  containerRef: RefObject<HTMLDivElement | null>;
   handleContainerClick: (event: MouseEvent<HTMLDivElement>) => void;
 }
 

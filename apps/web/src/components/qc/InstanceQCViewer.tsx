@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ImageOff } from '@/components/ui/icons'
+import { useAuthenticatedImage } from '@/hooks/useAuthenticatedImage'
 import type { QCItem } from '@/lib/qc-client'
 
 interface InstanceQCViewerProps {
@@ -14,6 +15,7 @@ interface InstanceQCViewerProps {
  */
 export function InstanceQCViewer({ item, imageUrl, fillOpacity = 0.3 }: InstanceQCViewerProps) {
   const { width, height } = item
+  const { blobUrl, error } = useAuthenticatedImage(imageUrl)
   const [failed, setFailed] = useState(false)
 
   // Polygons arrive normalized (0-1); scale into the viewBox
@@ -48,7 +50,7 @@ export function InstanceQCViewer({ item, imageUrl, fillOpacity = 0.3 }: Instance
 
   return (
     <div className="relative w-full h-full bg-gray-950 rounded-lg overflow-hidden">
-      {failed ? (
+      {failed || error ? (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 gap-2">
           <ImageOff className="w-8 h-8" />
           <p className="text-sm">Image file could not be loaded</p>
@@ -57,7 +59,7 @@ export function InstanceQCViewer({ item, imageUrl, fillOpacity = 0.3 }: Instance
       ) : (
         <>
           <img
-            src={imageUrl}
+            src={blobUrl ?? undefined}
             alt={item.filename}
             onError={() => setFailed(true)}
             className="absolute inset-0 w-full h-full object-contain"

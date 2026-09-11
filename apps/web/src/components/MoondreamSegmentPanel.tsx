@@ -1,3 +1,4 @@
+import { fetchImageAsBlob } from '../lib/image-fetch'
 /**
  * MoondreamSegmentPanel - Object segmentation using Moondream
  * Returns SVG path masks for objects
@@ -32,13 +33,6 @@ interface MoondreamSegmentPanelProps {
 /**
  * Fetch image as blob from URL (for job mode images)
  */
-async function fetchImageAsBlob(url: string): Promise<Blob> {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.statusText}`)
-  }
-  return await response.blob()
-}
 
 /**
  * Get image file from ImageData - handles both local and job mode
