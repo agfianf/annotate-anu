@@ -1,3 +1,4 @@
+import { fetchImageAsBlob } from '../lib/image-fetch'
 /**
  * MoondreamDetectPanel - Zero-shot object detection using Moondream
  * Allows users to describe objects in natural language and get bounding boxes
@@ -38,13 +39,6 @@ interface MoondreamDetectPanelProps {
 /**
  * Fetch image as blob from URL (for job mode images)
  */
-async function fetchImageAsBlob(url: string): Promise<Blob> {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.statusText}`)
-  }
-  return await response.blob()
-}
 
 /**
  * Get image file from ImageData - handles both local and job mode

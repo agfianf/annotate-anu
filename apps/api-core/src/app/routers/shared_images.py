@@ -10,19 +10,13 @@ from app.dependencies.auth import get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
 from app.helpers.response_api import JsonResponse
 from app.repositories.shared_image import SharedImageRepository
-from app.repositories.shared_image_tag import SharedImageTagRepository
 from app.schemas.auth import UserBase
 from app.schemas.data_management import (
-    AddTagsRequest,
-    BulkTagRequest,
-    BulkTagResponse,
     JobAssociationInfo,
-    RemoveTagsRequest,
     SharedImageBulkRegister,
     SharedImageBulkRegisterResponse,
     SharedImageCreate,
     SharedImageResponse,
-    SharedImageUpdate,
     TagResponse,
 )
 from app.services.filesystem import FileSystemService
@@ -43,9 +37,17 @@ def _build_thumbnail_url(file_path: str) -> str:
 async def _enrich_with_tags_and_thumbnail(
     connection: AsyncConnection,
     image: dict,
+    tags: list[dict] | None = None,
 ) -> SharedImageResponse:
-    """Enrich shared image with tags and thumbnail URL."""
-    tags = await SharedImageRepository.get_tags(connection, image["id"])
+    """Enrich shared image with tags (across all projects) and thumbnail URL.
+
+    Pass ``tags`` (from ``SharedImageRepository.get_tags_bulk``) when enriching
+    many images so the tags are fetched in one query instead of one per image.
+    """
+    if tags is None:
+        tags = (await SharedImageRepository.get_tags_bulk(connection, [image["id"]], None)).get(
+            image["id"], []
+        )
     return SharedImageResponse(
         **image,
         thumbnail_url=_build_thumbnail_url(image["file_path"]),
@@ -74,9 +76,16 @@ async def list_shared_images(
         tag_ids=tag_ids,
     )
 
+    tags_by_image = await SharedImageRepository.get_tags_bulk(
+        connection, [img["id"] for img in images], None
+    )
     enriched = []
     for img in images:
-        enriched.append(await _enrich_with_tags_and_thumbnail(connection, img))
+        enriched.append(
+            await _enrich_with_tags_and_thumbnail(
+                connection, img, tags=tags_by_image.get(img["id"], [])
+            )
+        )
 
     return JsonResponse(
         data=enriched,

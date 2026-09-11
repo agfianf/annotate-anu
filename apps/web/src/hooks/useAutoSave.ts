@@ -3,27 +3,21 @@
  * Handles periodic sync of annotations to backend with configurable interval
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { separateAnnotationsByType } from '../lib/annotation-converter'
 import { jobsApi } from '../lib/api-client'
+import { AnnotationSyncQueue } from '../lib/annotation-sync-queue'
+export type { PendingChange } from '../lib/annotation-sync-queue'
 import type { Annotation } from '../types/annotations'
 
 export interface AutoSaveConfig {
   enabled: boolean
   intervalMs: number // Default: 5000 (5 seconds)
-  onSyncSuccess?: () => void | Promise<void> // Callback after successful sync
+  onSyncSuccess?: (createdIds: Record<string, string>) => void | Promise<void> // Callback after successful sync
 }
 
 export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error'
-
-export interface PendingChange {
-  annotation: Annotation
-  operation: 'create' | 'update' | 'delete'
-  imageWidth: number
-  imageHeight: number
-  backendId?: string // For updates and deletes
-}
 
 export interface DirtyImageInfo {
   count: number
@@ -50,7 +44,7 @@ export interface AutoSaveState {
 export interface AutoSaveActions {
   markCreate: (annotation: Annotation, imageWidth: number, imageHeight: number) => void
   markUpdate: (annotation: Annotation, backendId: string, imageWidth: number, imageHeight: number) => void
-  markDelete: (annotationId: string, backendId: string, imageId: string, annotationType: 'rectangle' | 'polygon' | 'point') => void
+  markDelete: (annotationId: string, backendId: string | undefined, imageId: string, annotationType: 'rectangle' | 'polygon' | 'point') => void
   syncNow: () => Promise<void>
   clearPending: () => void
   // Legacy compatibility - will be deprecated
@@ -78,7 +72,11 @@ export function useAutoSave(
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
   // Use ref for pending changes to avoid re-renders on every change
-  const pendingChangesRef = useRef<Map<string, PendingChange>>(new Map())
+  const queue = useMemo(() => new AnnotationSyncQueue(jobId), [jobId])
+  const pendingChanges = queue.pending
+  const inFlightRef = useRef<Promise<void> | null>(null)
+  const onSyncSuccessRef = useRef(config.onSyncSuccess)
+  useEffect(() => { onSyncSuccessRef.current = config.onSyncSuccess }, [config.onSyncSuccess])
   const [pendingCount, setPendingCount] = useState(0)
 
   // Enhanced dirty tracking with counts and error states
@@ -93,12 +91,12 @@ export function useAutoSave(
   const imageErrorsRef = useRef<Map<string, string>>(new Map())
 
   // Helper to update dirty images with detailed info
-  const updateDirtyImages = () => {
+  const updateDirtyImages = useCallback(() => {
     const info = new Map<string, DirtyImageInfo>()
     const ids = new Set<string>()
 
     // Count changes per image
-    for (const change of pendingChangesRef.current.values()) {
+    for (const change of pendingChanges.values()) {
       const imageId = change.annotation.imageId
       ids.add(imageId)
 
@@ -111,8 +109,8 @@ export function useAutoSave(
 
     setDirtyImageInfo(info)
     setDirtyImageIds(ids) // Keep legacy support
-    setPendingCount(pendingChangesRef.current.size)
-  }
+    setPendingCount(pendingChanges.size)
+  }, [pendingChanges])
 
   // Track sync interval
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -145,7 +143,7 @@ export function useAutoSave(
    */
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (pendingChangesRef.current.size > 0) {
+      if (pendingChanges.size > 0) {
         e.preventDefault()
         e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
         return e.returnValue
@@ -154,20 +152,20 @@ export function useAutoSave(
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [])
+  }, [pendingChanges])
 
   /**
    * Mark an annotation for creation
    */
   const markCreate = useCallback(
     (annotation: Annotation, imageWidth: number, imageHeight: number) => {
-      const existingPending = pendingChangesRef.current.get(annotation.id)
+      const existingPending = pendingChanges.get(annotation.id)
       console.log('[markCreate] Adding to pending:', {
         id: annotation.id,
         operation: 'create',
         existingPending: existingPending ? { operation: existingPending.operation, backendId: existingPending.backendId } : null
       })
-      pendingChangesRef.current.set(annotation.id, {
+      queue.put({
         annotation,
         operation: 'create',
         imageWidth,
@@ -175,7 +173,7 @@ export function useAutoSave(
       })
       updateDirtyImages()
     },
-    []
+    [queue, pendingChanges, updateDirtyImages]
   )
 
   /**
@@ -183,14 +181,14 @@ export function useAutoSave(
    */
   const markUpdate = useCallback(
     (annotation: Annotation, backendId: string, imageWidth: number, imageHeight: number) => {
-      const existingPending = pendingChangesRef.current.get(annotation.id)
+      const existingPending = pendingChanges.get(annotation.id)
       console.log('[markUpdate] Adding to pending:', {
         id: annotation.id,
         backendId,
         operation: 'update',
         existingPending: existingPending ? { operation: existingPending.operation, backendId: existingPending.backendId } : null
       })
-      pendingChangesRef.current.set(annotation.id, {
+      queue.put({
         annotation,
         operation: 'update',
         backendId,
@@ -199,21 +197,21 @@ export function useAutoSave(
       })
       updateDirtyImages()
     },
-    []
+    [queue, pendingChanges, updateDirtyImages]
   )
 
   /**
    * Mark an annotation for deletion
    */
   const markDelete = useCallback(
-    (annotationId: string, backendId: string, imageId: string, annotationType: 'rectangle' | 'polygon' | 'point') => {
+    (annotationId: string, backendId: string | undefined, imageId: string, annotationType: 'rectangle' | 'polygon' | 'point') => {
       console.log('[markDelete] Adding to pending:', {
         id: annotationId,
         backendId,
         operation: 'delete',
         type: annotationType
       })
-      pendingChangesRef.current.set(annotationId, {
+      queue.put({
         annotation: {
           id: annotationId,
           imageId,
@@ -233,17 +231,17 @@ export function useAutoSave(
       })
       updateDirtyImages()
     },
-    []
+    [queue, updateDirtyImages]
   )
 
   /**
    * Clear all pending changes
    */
   const clearPending = useCallback(() => {
-    pendingChangesRef.current.clear()
+    queue.clear()
     setPendingCount(0)
     updateDirtyImages()
-  }, [])
+  }, [queue, updateDirtyImages])
 
   /**
    * Sync pending changes to backend
@@ -251,15 +249,14 @@ export function useAutoSave(
   /**
    * Sync pending changes to backend
    */
-  const syncToBackend = useCallback(async () => {
-    if (!jobId || pendingChangesRef.current.size === 0) return
+  const performSync = useCallback(async () => {
+    if (!jobId || pendingChanges.size === 0) return
     if (!isOnline) {
-      console.log('Offline - skipping sync')
-      return
+      throw new Error('You are offline. Reconnect before saving.')
     }
 
-    console.log('[syncToBackend] Starting sync with', pendingChangesRef.current.size, 'pending changes')
-    console.log('[syncToBackend] Pending changes:', Array.from(pendingChangesRef.current.entries()).map(([id, change]) => ({
+    console.log('[syncToBackend] Starting sync with', pendingChanges.size, 'pending changes')
+    console.log('[syncToBackend] Pending changes:', Array.from(pendingChanges.entries()).map(([id, change]) => ({
       id,
       operation: change.operation,
       backendId: change.backendId,
@@ -269,11 +266,11 @@ export function useAutoSave(
     setSyncStatus('syncing')
 
     try {
-      const changes = Array.from(pendingChangesRef.current.values())
+      const changes = queue.begin()
       const syncedImageIds: string[] = []
 
       // Group changes by image
-      const imagesPayload: Record<string, any> = {}
+      const imagesPayload: Record<string, Record<string, { created: unknown[]; updated: unknown[]; deleted: string[] }>> = {}
 
       for (const change of changes) {
         const imageId = change.annotation.imageId
@@ -318,8 +315,8 @@ export function useAutoSave(
             // This depends on the backend keypoint schema
             payload.keypoints.created.push({
               label_id: ann.labelId,
-              x: ann.x / change.imageWidth,
-              y: ann.y / change.imageHeight,
+              points: [{ name: 'point', x: ann.x / change.imageWidth, y: ann.y / change.imageHeight, visibility: 2 }],
+              attributes: { ...ann.attributes, frontendId: ann.originalFrontendId || ann.id },
             })
           }
         } else if (change.operation === 'update') {
@@ -337,8 +334,8 @@ export function useAutoSave(
               payload.keypoints.updated.push({
                 id: change.backendId,
                 label_id: ann.labelId,
-                x: ann.x / change.imageWidth,
-                y: ann.y / change.imageHeight,
+                points: [{ name: 'point', x: ann.x / change.imageWidth, y: ann.y / change.imageHeight, visibility: 2 }],
+                attributes: { ...ann.attributes, frontendId: ann.originalFrontendId || ann.id },
               })
             }
           }
@@ -368,11 +365,17 @@ export function useAutoSave(
           if (!hasKeys) delete imagesPayload[imgId]
       }
 
+      let createdIds: Record<string, string> = {}
       // Call Bulk Sync API
       if (Object.keys(imagesPayload).length > 0) {
-        console.log('[syncToBackend] Payload being sent:', JSON.stringify(imagesPayload, null, 2))
-        syncedImageIds.push(...Object.keys(imagesPayload))
         const syncResponse = await jobsApi.syncAnnotations(jobId, { images: imagesPayload })
+        syncedImageIds.push(...syncResponse.synced_images)
+        createdIds = syncResponse.created_ids ?? {}
+        const acknowledged = new Set(syncResponse.synced_images)
+        if (changes.some(change => !acknowledged.has(change.annotation.imageId) || (change.operation === 'create' && !createdIds[change.annotation.originalFrontendId || change.annotation.id]))) {
+          throw new Error('The server did not acknowledge every annotation. Changes remain pending.')
+        }
+        queue.acknowledge(syncedImageIds, createdIds)
         console.log('[syncToBackend] Backend response:', syncResponse)
         console.log('[syncToBackend] Sync completed successfully for images:', syncedImageIds)
 
@@ -388,8 +391,7 @@ export function useAutoSave(
       }
 
       // Clear synced changes
-      const operationCount = pendingChangesRef.current.size
-      pendingChangesRef.current.clear()
+      const operationCount = changes.length
       updateDirtyImages()
 
       const now = new Date()
@@ -409,9 +411,9 @@ export function useAutoSave(
       })
 
       // Call success callback (e.g., to reload annotations and update syncedAnnotations map)
-      if (config.onSyncSuccess) {
+      if (onSyncSuccessRef.current) {
         console.log('[syncToBackend] Calling onSyncSuccess callback')
-        await config.onSyncSuccess()
+        await onSyncSuccessRef.current(createdIds)
         console.log('[syncToBackend] onSyncSuccess callback completed')
       }
 
@@ -420,11 +422,12 @@ export function useAutoSave(
         setSyncStatus('idle')
       }, 1000)
     } catch (err) {
+      queue.failed()
       console.error('Auto-save failed:', err)
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
 
       // Mark all pending images as having errors
-      for (const change of pendingChangesRef.current.values()) {
+      for (const change of pendingChanges.values()) {
         imageErrorsRef.current.set(change.annotation.imageId, errorMessage)
       }
       updateDirtyImages()
@@ -436,7 +439,7 @@ export function useAutoSave(
       setSyncHistory((prev) => {
         const affectedImageIds = Array.from(
           new Set(
-            Array.from(pendingChangesRef.current.values()).map(
+            Array.from(pendingChanges.values()).map(
               (c) => c.annotation.imageId
             )
           )
@@ -444,7 +447,7 @@ export function useAutoSave(
         const newEntry: SyncHistoryEntry = {
           timestamp: new Date(),
           imageIds: affectedImageIds,
-          operations: pendingChangesRef.current.size,
+          operations: pendingChanges.size,
           success: false,
           error: errorMessage,
         }
@@ -456,15 +459,25 @@ export function useAutoSave(
       setTimeout(() => {
         setSyncStatus('idle')
       }, 3000)
+      throw err
     }
-  }, [jobId, isOnline])
+  }, [jobId, isOnline, queue, pendingChanges, updateDirtyImages])
+
+  const syncToBackend = useCallback((): Promise<void> => {
+    if (inFlightRef.current) return inFlightRef.current
+    const request = performSync().finally(() => {
+      if (inFlightRef.current === request) inFlightRef.current = null
+    })
+    inFlightRef.current = request
+    return request
+  }, [performSync])
 
   /**
    * Manual sync trigger
    */
   const syncNow = useCallback(async () => {
-    await syncToBackend()
-  }, [syncToBackend])
+    while (pendingChanges.size > 0) await syncToBackend()
+  }, [pendingChanges, syncToBackend])
 
   /**
    * Set up auto-save interval
@@ -481,9 +494,7 @@ export function useAutoSave(
 
     // Set up new interval
     syncIntervalRef.current = setInterval(() => {
-      if (pendingChangesRef.current.size > 0 && isOnline) {
-        syncToBackend()
-      }
+      if (isOnline) void syncToBackend().catch(() => {})
     }, config.intervalMs)
 
     return () => {
@@ -498,9 +509,7 @@ export function useAutoSave(
    * Sync when coming back online
    */
   useEffect(() => {
-    if (isOnline && pendingChangesRef.current.size > 0) {
-      syncToBackend()
-    }
+    if (isOnline) void syncToBackend().catch(() => {})
   }, [isOnline, syncToBackend])
 
   return {

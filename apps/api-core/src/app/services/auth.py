@@ -1,5 +1,6 @@
 """Authentication service with business logic."""
 
+import asyncio
 import hashlib
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -66,7 +67,7 @@ class AuthService:
         # Convert Pydantic model to dict if needed
         if hasattr(user_data, "model_dump"):
             user_data = user_data.model_dump()
-        
+
         return UserResponse(
             id=user_data["id"],
             email=user_data["email"],
@@ -141,7 +142,7 @@ class AuthService:
         user_data = {
             "email": payload.email,
             "username": payload.username,
-            "hashed_password": hash_password(payload.password),
+            "hashed_password": await asyncio.to_thread(hash_password, payload.password),
             "full_name": payload.full_name,
             "role": role,
             "is_active": is_active,
@@ -183,7 +184,9 @@ class AuthService:
             raise ValueError("Invalid email or password")
 
         # Verify password
-        if not verify_password(payload.password, user_data["hashed_password"]):
+        if not await asyncio.to_thread(
+            verify_password, payload.password, user_data["hashed_password"]
+        ):
             raise ValueError("Invalid email or password")
 
         # Check if active
@@ -389,10 +392,14 @@ class AuthService:
             if not user:
                 raise ValueError("User not found")
 
-            if not verify_password(payload.current_password, user.hashed_password):
+            if not await asyncio.to_thread(
+                verify_password, payload.current_password, user.hashed_password
+            ):
                 raise ValueError("Current password is incorrect")
 
-            update_data["hashed_password"] = hash_password(payload.new_password)
+            update_data["hashed_password"] = await asyncio.to_thread(
+                hash_password, payload.new_password
+            )
 
         if not update_data:
             # Nothing to update, return current user
@@ -447,7 +454,7 @@ class AuthService:
             user_dict = user_data.model_dump()
         else:
             user_dict = user_data
-            
+
         user_id = str(user_dict["id"])
 
         # Create tokens

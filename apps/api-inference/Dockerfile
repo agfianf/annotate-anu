@@ -48,5 +48,7 @@ EXPOSE 8000
 ENV PYTHONPATH=/code/src
 
 # 7. Run application
-# We use 'uv run' which ensures the correct python environment is used
-CMD ["uv", "run", "app/main.py"]
+# Run uvicorn directly: `app/main.py` honours DEBUG=true from .env by starting a
+# reloader, which in a container means watching a bind mount and reloading the
+# multi-GB model on every file touch. Compose files override this command anyway.
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

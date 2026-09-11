@@ -394,7 +394,7 @@ export default function ModelConfigPage() {
     const selectedPreset = presets[preset]
     setFormData(prev => ({
       ...prev,
-      capabilities: selectedPreset.capabilities,
+      capabilities: { supports_classification: false, ...selectedPreset.capabilities },
       endpoint_config: selectedPreset.endpoint_config,
     }))
 

@@ -1,9 +1,8 @@
 """Celery task for generating exports."""
 
 import asyncio
-import json
 import logging
-from pathlib import Path
+from collections import Counter
 from uuid import UUID
 
 from sqlalchemy import select
@@ -25,7 +24,6 @@ from app.services.export import (
     create_export_zip,
 )
 from app.tasks.main import celery_app
-
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +54,14 @@ def generate_export_task(self, export_id: str) -> dict:
 async def _generate_export_async(export_id: str) -> dict:
     """Async implementation of export generation."""
     engine = get_async_engine()
+    try:
+        return await _generate_export_with_engine(engine, export_id)
+    finally:
+        # Each Celery task gets its own event loop and engine; without this the pool leaks per task
+        await engine.dispose()
 
+
+async def _generate_export_with_engine(engine, export_id: str) -> dict:
     async with engine.connect() as connection:
         # Load export configuration
         export_data = await ExportRepository.get_by_id(connection, UUID(export_id))
@@ -78,9 +83,7 @@ async def _generate_export_async(export_id: str) -> dict:
 
         try:
             # Query filtered images
-            images_data = await _query_images_for_export(
-                connection, project_id, filter_snapshot
-            )
+            images_data = await _query_images_for_export(connection, project_id, filter_snapshot)
 
             if not images_data:
                 raise ValueError("No images match the filter criteria")
@@ -100,9 +103,7 @@ async def _generate_export_async(export_id: str) -> dict:
                 content = build_classification_manifest(
                     images_data, class_assignments, split_assignments
                 )
-                class_counts = {}
-                for class_name in class_assignments.values():
-                    class_counts[class_name] = class_counts.get(class_name, 0) + 1
+                class_counts = dict(Counter(class_assignments.values()))
 
             elif export_mode == "detection":
                 # Build COCO JSON for detections
@@ -128,13 +129,7 @@ async def _generate_export_async(export_id: str) -> dict:
                     "detection",
                     export_metadata=export_metadata,
                 )
-                class_counts = {}
-                for ann in annotations:
-                    label_name = next(
-                        (l["name"] for l in labels_data if str(l["id"]) == str(ann["label_id"])),
-                        "unknown",
-                    )
-                    class_counts[label_name] = class_counts.get(label_name, 0) + 1
+                class_counts = _count_by_label(annotations, labels_data)
 
             elif export_mode == "segmentation":
                 # Build COCO JSON for segmentations
@@ -163,13 +158,7 @@ async def _generate_export_async(export_id: str) -> dict:
                     ),
                     export_metadata=export_metadata,
                 )
-                class_counts = {}
-                for ann in annotations:
-                    label_name = next(
-                        (l["name"] for l in labels_data if str(l["id"]) == str(ann["label_id"])),
-                        "unknown",
-                    )
-                    class_counts[label_name] = class_counts.get(label_name, 0) + 1
+                class_counts = _count_by_label(annotations, labels_data)
 
             else:
                 raise ValueError(f"Unknown export mode: {export_mode}")
@@ -179,6 +168,7 @@ async def _generate_export_async(export_id: str) -> dict:
             export_dir.mkdir(parents=True, exist_ok=True)
 
             # Create ZIP file
+            split_assignments = await _get_split_assignments(connection, image_ids)
             zip_path, zip_size = create_export_zip(
                 export_dir,
                 export_id,
@@ -186,19 +176,19 @@ async def _generate_export_async(export_id: str) -> dict:
                 output_format,
                 include_images=include_images,
                 images_data=images_data if include_images else None,
-                split_assignments=await _get_split_assignments(connection, image_ids),
+                split_assignments=split_assignments,
             )
 
             # Get split counts
-            split_assignments = await _get_split_assignments(connection, image_ids)
             split_counts = {"train": 0, "val": 0, "test": 0, "none": 0}
-            for split in split_assignments.values():
-                split_counts[split] = split_counts.get(split, 0) + 1
+            split_counts.update(Counter(split_assignments.values()))
 
             # Build summary
             summary = {
                 "image_count": len(images_data),
-                "annotation_count": len(annotations) if export_mode != "classification" else len(class_assignments),
+                "annotation_count": len(annotations)
+                if export_mode != "classification"
+                else len(class_assignments),
                 "class_counts": class_counts,
                 "split_counts": split_counts,
             }
@@ -280,11 +270,20 @@ async def _update_export_status(
 ) -> None:
     """Update export status."""
     engine = get_async_engine()
-    async with engine.connect() as connection:
-        await ExportRepository.update_status(
-            connection, UUID(export_id), status, error_message=error_message
-        )
-        await connection.commit()
+    try:
+        async with engine.connect() as connection:
+            await ExportRepository.update_status(
+                connection, UUID(export_id), status, error_message=error_message
+            )
+            await connection.commit()
+    finally:
+        await engine.dispose()
+
+
+def _count_by_label(annotations: list[dict], labels_data: list[dict]) -> dict[str, int]:
+    """Annotation count per label name, with one dict lookup per annotation."""
+    label_names = {str(label["id"]): label["name"] for label in labels_data}
+    return dict(Counter(label_names.get(str(ann["label_id"]), "unknown") for ann in annotations))
 
 
 async def _query_images_for_export(
@@ -294,6 +293,7 @@ async def _query_images_for_export(
 ) -> list[dict]:
     """Query images for export based on filter snapshot."""
     from sqlalchemy import func, or_
+
     from app.models.data_management import shared_image_tags
 
     # Base query
@@ -375,9 +375,7 @@ async def _query_images_for_export(
 
     # Filepath filters
     if filepath_paths:
-        path_conditions = [
-            shared_images.c.file_path.like(f"{path}%") for path in filepath_paths
-        ]
+        path_conditions = [shared_images.c.file_path.like(f"{path}%") for path in filepath_paths]
         query = query.where(or_(*path_conditions))
 
     # Image UID filter
@@ -434,11 +432,6 @@ async def _get_classification_assignments(
     classification_config: dict | None,
 ) -> dict[str, str]:
     """Get class assignments for images."""
-    # Map shared_image_ids to images table
-    subquery = select(images.c.id, images.c.shared_image_id).where(
-        images.c.shared_image_id.in_(image_ids)
-    )
-
     # Query image_tags with labels
     query = (
         select(
@@ -495,11 +488,6 @@ async def _get_detections_for_export(
     include_from_segmentation: bool = False,
 ) -> list[dict]:
     """Get detections for export."""
-    # Map shared_image_ids to image_ids
-    subquery = select(images.c.id, images.c.shared_image_id).where(
-        images.c.shared_image_id.in_(image_ids)
-    )
-
     # Query detections
     query = (
         select(
@@ -516,7 +504,7 @@ async def _get_detections_for_export(
     )
 
     if label_filter:
-        label_uuids = [UUID(l) if isinstance(l, str) else l for l in label_filter]
+        label_uuids = [UUID(lid) if isinstance(lid, str) else lid for lid in label_filter]
         query = query.where(detections.c.label_id.in_(label_uuids))
 
     result = await connection.execute(query)
@@ -557,11 +545,6 @@ async def _get_segmentations_for_export(
     include_from_detection: bool = False,
 ) -> list[dict]:
     """Get segmentations for export."""
-    # Map shared_image_ids to image_ids
-    subquery = select(images.c.id, images.c.shared_image_id).where(
-        images.c.shared_image_id.in_(image_ids)
-    )
-
     # Query segmentations
     query = (
         select(
@@ -580,7 +563,7 @@ async def _get_segmentations_for_export(
     )
 
     if label_filter:
-        label_uuids = [UUID(l) if isinstance(l, str) else l for l in label_filter]
+        label_uuids = [UUID(lid) if isinstance(lid, str) else lid for lid in label_filter]
         query = query.where(segmentations.c.label_id.in_(label_uuids))
 
     result = await connection.execute(query)

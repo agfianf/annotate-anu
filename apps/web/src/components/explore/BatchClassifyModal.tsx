@@ -564,7 +564,7 @@ export function BatchClassifyModal({
                           >
                             <option value="">Select category...</option>
                             {selectableCategories.map((cat) => (
-                              <option key={cat.id} value={cat.id}>
+                              <option key={cat.id} value={cat.id ?? ''}>
                                 {cat.display_name || cat.name}
                               </option>
                             ))}

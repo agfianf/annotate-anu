@@ -4,6 +4,7 @@ Crops come from two places: annotations already in the database, or a directory
 of pre-extracted crops laid out as <class>/<crop>.jpg.
 """
 
+import asyncio
 import hashlib
 from pathlib import Path
 
@@ -18,20 +19,31 @@ PAD_FRAC = 0.08
 
 
 class ROICropService:
-    """Crops annotation regions out of source images, cached on disk."""
+    """Crops annotation regions out of source images, cached on disk.
+
+    Use the module-level ``roi_crop_service`` instance rather than constructing one per request: the cache directory is created once, on the first crop, and never re-checked.
+    """
 
     def __init__(self) -> None:
         self.cache_dir = CACHE_DIR
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self._cache_dir_ready = False
+
+    def _ensure_cache_dir(self) -> None:
+        # Lazy so importing the module does not touch the filesystem
+        if not self._cache_dir_ready:
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            self._cache_dir_ready = True
 
     def _cache_path(self, annotation_id: str) -> Path:
         digest = hashlib.sha256(annotation_id.encode()).hexdigest()[:24]
         return self.cache_dir / f"{digest}.jpg"
 
-    def get_or_create(
+    async def get_or_create(
         self, annotation_id: str, s3_key: str, bbox: tuple[float, float, float, float]
     ) -> Path:
         """Crop one normalized bbox out of an image, reusing the cached file.
+
+        The PIL decode/crop/encode runs on a worker thread so the event loop is not blocked while a crop is rendered.
 
         Parameters
         ----------
@@ -47,6 +59,7 @@ class ROICropService:
         Path
             Path to the cached crop
         """
+        self._ensure_cache_dir()
         target = self._cache_path(annotation_id)
         if target.exists():
             return target
@@ -55,6 +68,15 @@ class ROICropService:
         if not source.exists():
             raise FileNotFoundError(f"Source image not found: {s3_key}")
 
+        await asyncio.to_thread(self._render_crop, annotation_id, source, target, bbox)
+        logger.debug(f"Cached ROI crop for {annotation_id}")
+        return target
+
+    @staticmethod
+    def _render_crop(
+        annotation_id: str, source: Path, target: Path, bbox: tuple[float, float, float, float]
+    ) -> None:
+        """Blocking PIL work; run via ``asyncio.to_thread``."""
         with Image.open(source) as img:
             img = img.convert("RGB")
             width, height = img.size
@@ -78,9 +100,6 @@ class ROICropService:
             crop.thumbnail((MAX_EDGE, MAX_EDGE), Image.Resampling.LANCZOS)
             crop.save(target, "JPEG", quality=85)
 
-        logger.debug(f"Cached ROI crop for {annotation_id}")
-        return target
-
     def imported_crops(self, root: Path) -> list[dict]:
         """List a pre-extracted crop dump laid out as <class>/<crop>.jpg."""
         if not root.is_dir():
@@ -97,3 +116,7 @@ class ROICropService:
                     }
                 )
         return items
+
+
+# One instance for the process, so the cache-dir check happens once rather than per request
+roi_crop_service = ROICropService()

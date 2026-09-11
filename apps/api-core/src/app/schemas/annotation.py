@@ -24,11 +24,11 @@ class ImageTagResponse(BaseModel):
     id: UUID
     image_id: UUID
     label_id: UUID
-    confidence: float
+    confidence: float | None
     source: str
-    attributes: dict | None
+    attributes: dict | None = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: datetime | None = None
 
 
 # ============================================================================

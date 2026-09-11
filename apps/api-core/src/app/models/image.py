@@ -140,6 +140,7 @@ images = Table(
     Index("ix_images_job_id", "job_id"),
     Index("ix_images_s3_key", "s3_key"),
     Index("ix_images_annotated", "job_id", "is_annotated"),
+    Index("ix_images_is_annotated", "is_annotated"),
     Index("ix_images_unique", "job_id", "sequence_number", unique=True),
     Index("ix_images_shared_image_id", "shared_image_id"),
 )

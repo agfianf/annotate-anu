@@ -29,8 +29,10 @@ def get_async_engine() -> AsyncEngine:
         settings.DATABASE_URL,
         echo=settings.API_CORE_DEBUG,
         pool_pre_ping=True,
-        pool_size=10,
-        max_overflow=20,
+        pool_size=20,
+        max_overflow=30,
+        pool_timeout=10,
+        pool_recycle=1800,
     )
 
 

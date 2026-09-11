@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.formparsers import MultiPartParser
+from starlette.middleware.gzip import GZipMiddleware
 
 from app.config import settings
 from app.helpers.database import get_async_engine, metadata
@@ -14,8 +15,6 @@ from app.helpers.logger import logger
 from app.integrations.redis import RedisClient
 from app.routers import admin as admin_router
 from app.routers import analytics as analytics_router
-from app.routers import qc as qc_router
-from app.routers import storage as storage_router
 from app.routers import annotations as annotations_router
 from app.routers import attributes as attributes_router
 from app.routers import auth as auth_router
@@ -28,8 +27,10 @@ from app.routers import models as models_router
 from app.routers import moondream as moondream_router
 from app.routers import project_images as project_images_router
 from app.routers import projects as projects_router
+from app.routers import qc as qc_router
 from app.routers import share as share_router
 from app.routers import shared_images as shared_images_router
+from app.routers import storage as storage_router
 from app.routers import tag_categories as tag_categories_router
 from app.routers import tags as tags_router
 from app.routers import tasks as tasks_router
@@ -94,6 +95,10 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down API Core service...")
+    await inference_proxy.aclose()
+    await health_checker.aclose()
+    await model_server_router.model_server_service.aclose()
+    await moondream_router.moondream_service.aclose()
     await engine.dispose()
 
 
@@ -115,6 +120,10 @@ else:
     cors_origins = settings.CORS_ORIGINS
     allow_credentials = True
 
+# Registered before CORS so that CORS wraps GZip (Starlette applies middleware in
+# reverse registration order) and the CORS headers are added to compressed responses.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -122,17 +131,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-# Middleware to inject services into request state
-@app.middleware("http")
-async def inject_services_middleware(request: Request, call_next):
-    """Inject services from app.state into request.state for route access."""
-    if hasattr(app.state, "model_service"):
-        request.state.model_service = app.state.model_service
-    if hasattr(app.state, "inference_proxy"):
-        request.state.inference_proxy = app.state.inference_proxy
-    return await call_next(request)
 
 
 # Exception handlers with standardized response format: { data, message, success, status_code, meta }

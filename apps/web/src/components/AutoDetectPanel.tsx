@@ -1,3 +1,4 @@
+import { fetchImageAsBlob } from '../lib/image-fetch'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Loader2, Scan, X, Images } from '@/components/ui/icons'
 import { Button } from './ui/button'
@@ -19,13 +20,6 @@ import toast from 'react-hot-toast'
 /**
  * Fetch image as blob from URL (for job mode images)
  */
-async function fetchImageAsBlob(url: string): Promise<Blob> {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image: ${response.statusText}`)
-  }
-  return await response.blob()
-}
 
 /**
  * Get image file from ImageData - handles both local and job mode

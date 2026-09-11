@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { fetchImageAsBlob } from '../lib/image-fetch'
+import { useCallback, useEffect, useState } from 'react'
 import { imagesApi } from '../lib/api-client'
 import type { ImageData } from '../types/annotations'
 
@@ -78,68 +79,75 @@ export function useImagePreloader(
   const { windowSize = 2, priorityLoad = true } = options
 
   const [loading, setLoading] = useState(false)
-  const cacheRef = useRef<Map<string, HTMLImageElement>>(new Map())
-  const loadingRef = useRef<Set<string>>(new Set()) // Prevent duplicate loads
+  // Stable Map instances created once per hook instance. Held in state rather
+  // than refs so `cache` can be returned from the hook without reading a ref
+  // during render; mutating them never triggers a re-render.
+  const [cache] = useState(() => new Map<string, HTMLImageElement>())
+  const [lifetime] = useState(() => ({ generation: 0 }))
+  const [inFlight] = useState(() => new Map<string, Promise<HTMLImageElement>>())
 
   /**
    * Preload a single image and cache it
    */
   const preloadImage = useCallback(
-    async (imageData: ImageData): Promise<HTMLImageElement> => {
+    (imageData: ImageData): Promise<HTMLImageElement> => {
       // Check cache first
-      if (cacheRef.current.has(imageData.id)) {
-        return cacheRef.current.get(imageData.id)!
+      const cached = cache.get(imageData.id)
+      if (cached) {
+        cache.delete(imageData.id)
+        cache.set(imageData.id, cached)
+        return Promise.resolve(cached)
       }
 
-      // Prevent duplicate loads
-      if (loadingRef.current.has(imageData.id)) {
-        // Wait for existing load
-        return new Promise((resolve) => {
-          const interval = setInterval(() => {
-            const cached = cacheRef.current.get(imageData.id)
-            if (cached) {
-              clearInterval(interval)
-              resolve(cached)
-            }
-          }, 50)
-        })
+      // Share the in-flight load instead of polling for it
+      const existing = inFlight.get(imageData.id)
+      if (existing) {
+        return existing
       }
 
-      loadingRef.current.add(imageData.id)
-
-      return new Promise((resolve, reject) => {
-        const img = new window.Image()
-
-        // For job mode, use API URL
+      const generation = lifetime.generation
+      const load = (async () => {
+        let blob: Blob
         if (imageData.s3Key && imageData.jobId && imageData.jobImageId) {
-          img.src = imagesApi.getFullImageUrl(
-            imageData.s3Key,
-            imageData.jobId.toString(),
-            imageData.jobImageId
-          )
-        } else if (imageData.blob && imageData.blob.size > 0) {
-          // For local mode, use blob URL
-          img.src = URL.createObjectURL(imageData.blob)
+          blob = await fetchImageAsBlob(imagesApi.getFullImageUrl(
+            imageData.s3Key, imageData.jobId.toString(), imageData.jobImageId
+          ))
+        } else if (imageData.blob?.size) {
+          blob = imageData.blob
         } else {
-          loadingRef.current.delete(imageData.id)
-          reject(new Error('No image source available'))
-          return
+          throw new Error('No image source available')
         }
-
-        img.onload = () => {
-          cacheRef.current.set(imageData.id, img)
-          loadingRef.current.delete(imageData.id)
-          resolve(img)
+        const objectUrl = URL.createObjectURL(blob)
+        const img = new window.Image()
+        try {
+          await new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve()
+            img.onerror = () => reject(new Error('Failed to decode image'))
+            img.src = objectUrl
+          })
+          if (generation === lifetime.generation) {
+            cache.set(imageData.id, img)
+            // Decoded full-size images are expensive; retain a small navigation window.
+            while (cache.size > Math.max(5, windowSize * 2 + 1)) {
+              const oldest = cache.keys().next().value
+              if (oldest === undefined) break
+              cache.delete(oldest)
+            }
+          }
+          return img
+        } finally {
+          img.onload = null
+          img.onerror = null
+          URL.revokeObjectURL(objectUrl)
         }
-
-        img.onerror = (err) => {
-          loadingRef.current.delete(imageData.id)
-          console.error('[useImagePreloader] Failed to load image:', imageData.id, err)
-          reject(err)
-        }
+      })().finally(() => {
+        if (inFlight.get(imageData.id) === load) inFlight.delete(imageData.id)
       })
+
+      inFlight.set(imageData.id, load)
+      return load
     },
-    []
+    [cache, inFlight, lifetime, windowSize]
   )
 
   /**
@@ -184,24 +192,21 @@ export function useImagePreloader(
    * Get cached image element
    */
   const getCachedImage = useCallback((imageId: string): HTMLImageElement | null => {
-    return cacheRef.current.get(imageId) || null
-  }, [])
+    return cache.get(imageId) || null
+  }, [cache])
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
     return () => {
-      cacheRef.current.forEach((img) => {
-        if (img.src.startsWith('blob:')) {
-          URL.revokeObjectURL(img.src)
-        }
-      })
-      cacheRef.current.clear()
+      lifetime.generation += 1
+      cache.clear()
+      inFlight.clear()
     }
-  }, [])
+  }, [cache, inFlight, lifetime])
 
   return {
     loading,
-    cache: cacheRef.current,
+    cache,
     preloadImage,
     preloadWindow,
     getCachedImage,

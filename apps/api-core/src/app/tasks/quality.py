@@ -14,7 +14,6 @@ from app.repositories.quality_job import QualityJobRepository
 from app.services.image_quality_service import ImageQualityService
 from app.tasks.main import celery_app
 
-
 logger = logging.getLogger(__name__)
 
 # Redis progress tracking TTL (1 hour)
@@ -72,9 +71,7 @@ async def _process_quality_async(
         async with engine.connect() as connection:
             # Update job status to processing
             if job_id:
-                await QualityJobRepository.update_status(
-                    connection, UUID(job_id), "processing"
-                )
+                await QualityJobRepository.update_status(connection, UUID(job_id), "processing")
                 await connection.commit()
 
             # Get accurate total count for progress tracking
@@ -90,9 +87,7 @@ async def _process_quality_async(
                 # Nothing to process
                 logger.info(f"No images to process for project {project_id}")
                 if job_id:
-                    await QualityJobRepository.update_status(
-                        connection, UUID(job_id), "completed"
-                    )
+                    await QualityJobRepository.update_status(connection, UUID(job_id), "completed")
                     await connection.commit()
                 return {
                     "status": "completed",
@@ -118,13 +113,12 @@ async def _process_quality_async(
 
             # Update job with total
             if job_id:
-                await QualityJobRepository.update_progress(
-                    connection, UUID(job_id), 0, 0
-                )
+                await QualityJobRepository.update_progress(connection, UUID(job_id), 0, 0)
                 # Also update total_images if different
                 job = await QualityJobRepository.get_by_id(connection, UUID(job_id))
                 if job and job["total_images"] != total_to_process:
                     from sqlalchemy import update
+
                     from app.models.image_quality import quality_jobs
 
                     stmt = (
@@ -188,9 +182,7 @@ async def _process_quality_async(
             redis_client.expire(progress_key, REDIS_PROGRESS_TTL)
 
             if job_id:
-                await QualityJobRepository.update_status(
-                    connection, UUID(job_id), "completed"
-                )
+                await QualityJobRepository.update_status(connection, UUID(job_id), "completed")
                 await connection.commit()
 
             logger.info(
@@ -219,6 +211,8 @@ async def _process_quality_async(
 
     finally:
         redis_client.close()
+        # Each Celery task gets its own event loop and engine; without this the pool leaks per task
+        await engine.dispose()
 
 
 async def _update_job_failed(job_id: str, error_message: str, project_id: int) -> None:
@@ -249,3 +243,4 @@ async def _update_job_failed(job_id: str, error_message: str, project_id: int) -
 
     finally:
         redis_client.close()
+        await engine.dispose()

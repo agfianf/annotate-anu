@@ -226,8 +226,12 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
     enabled: !!projectId,
   });
 
+  const projectLabels = useMemo(() => projectDetails?.labels.map(label => ({
+    ...label, createdAt: 0,
+  })), [projectDetails?.labels]);
+
   // Annotation filters hook for per-label confidence threshold filtering
-  const annotationFilters = useAnnotationFilters(projectId, projectDetails?.labels);
+  const annotationFilters = useAnnotationFilters(projectId, projectLabels);
 
   // Model registry for classification (undefined = solo mode, all models available)
   const { allModels } = useModelRegistry();
@@ -1159,7 +1163,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
       setSelectedTaskIds(panelFilters.task_ids || []);
     }
     if (panelFilters.job_id !== undefined) {
-      setSelectedJobId(panelFilters.job_id || null);
+      setSelectedJobId(panelFilters.job_id ?? undefined);
     }
     if (panelFilters.width_min !== undefined || panelFilters.width_max !== undefined) {
       setSidebarWidthRange(
@@ -1464,7 +1468,7 @@ export default function ProjectExploreTab({ projectId }: ProjectExploreTabProps)
             isCollapsed={isSidebarCollapsed}
             onCollapseChange={setIsSidebarCollapsed}
             // Annotation filters
-            projectLabels={projectDetails?.labels}
+            projectLabels={projectLabels}
             annotationFilters={annotationFilters}
           />
         )}

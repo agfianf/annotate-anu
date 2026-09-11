@@ -12,19 +12,32 @@ import {
     Save,
     X
 } from '@/components/ui/icons';
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link, useParams, useNavigate, useSearch } from '@tanstack/react-router';
-import ProjectConfigurationTab from '../components/ProjectConfigurationTab';
-import ProjectExploreTab from '../components/ProjectExploreTab';
-import ProjectHistoryTab from '../components/ProjectHistoryTab';
-import ProjectReadmeEditor, { type ProjectReadmeEditorHandle } from '../components/ProjectReadmeEditor';
+import type { ProjectReadmeEditorHandle } from '../components/ProjectReadmeEditor';
 import ProjectTabs, { type ProjectTabId } from '../components/ProjectTabs';
-import ProjectTasksTab from '../components/ProjectTasksTab';
 import { useExploreView } from '../contexts/ExploreViewContext';
 import type { ProjectDetail } from '../lib/api-client';
 import { getApiErrorMessage } from '../lib/api-error';
 import { projectsApi } from '../lib/api-client';
+
+// Only one tab is mounted at a time, so each tab is its own chunk. The readme
+// editor (MDXEditor) and the explore tab (pixi.js, virtualised grid) are the
+// heavy ones; loading them on demand keeps the page shell small.
+const ProjectConfigurationTab = lazy(() => import('../components/ProjectConfigurationTab'));
+const ProjectExploreTab = lazy(() => import('../components/ProjectExploreTab'));
+const ProjectHistoryTab = lazy(() => import('../components/ProjectHistoryTab'));
+const ProjectReadmeEditor = lazy(() => import('../components/ProjectReadmeEditor'));
+const ProjectTasksTab = lazy(() => import('../components/ProjectTasksTab'));
+
+function TabFallback() {
+  return (
+    <div className="flex items-center justify-center py-16 text-gray-400">
+      <Loader2 className="w-6 h-6 animate-spin" />
+    </div>
+  );
+}
 
 const DEFAULT_README = `# Project Overview
 
@@ -314,7 +327,7 @@ export default function ProjectDetailPage() {
 
       {/* Tab Content */}
       <div className={needsFullHeight ? "flex-1 min-h-0 mt-3" : ""}>
-        {renderTabContent()}
+        <Suspense fallback={<TabFallback />}>{renderTabContent()}</Suspense>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
  * Image thumbnail component with selection, tags, and annotation overlay
  */
 
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { Check, ImageOff, Loader2, X, MousePointer2, Maximize2 } from '@/components/ui/icons';
 import type { SharedImage } from '../../lib/data-management-client';
 import { getAbsoluteThumbnailUrl } from '../../lib/data-management-client';
@@ -75,6 +75,13 @@ export const ImageThumbnail = memo(function ImageThumbnail({
 
   // Fetch image with authentication
   const { blobUrl, isLoading, error } = useAuthenticatedImage(thumbnailUrl);
+
+  // Hover is tracked in state so the full tag list (with remove buttons) is only
+  // mounted for the one thumbnail under the cursor, not for every thumbnail in
+  // the grid.
+  const [isHovered, setIsHovered] = useState(false);
+  const handleMouseEnter = useCallback(() => setIsHovered(true), []);
+  const handleMouseLeave = useCallback(() => setIsHovered(false), []);
 
   // Filter tags based on visibility state
   const visibleTags = useMemo(() => {
@@ -187,6 +194,8 @@ export const ImageThumbnail = memo(function ImageThumbnail({
       }`}
       style={style} // Apply dynamic width/height
       onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Authenticated image loading */}
       {isLoading ? (
@@ -202,6 +211,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
         <img
           src={blobUrl}
           alt={image.filename}
+          decoding="async"
           className="w-full h-full object-contain"
         />
       )}
@@ -252,8 +262,9 @@ export const ImageThumbnail = memo(function ImageThumbnail({
       {visibleTags.length > 0 && (
         <>
           {/* Default state: Show first 2 tags with text, rest as dots */}
+          {!isHovered && (
           <div
-            className="absolute bottom-1 left-1 right-1 z-20 flex flex-wrap items-center group-hover:hidden"
+            className="absolute bottom-1 left-1 right-1 z-20 flex flex-wrap items-center"
             style={{ gap: `${tagStyles.gap}px` }}
           >
             {/* First 2 tags with text */}
@@ -317,10 +328,12 @@ export const ImageThumbnail = memo(function ImageThumbnail({
               </div>
             )}
           </div>
+          )}
 
-          {/* Hover state: Show all tags with removal buttons */}
+          {/* Hover state: Show all tags with removal buttons (mounted only while hovered) */}
+          {isHovered && (
           <div
-            className="absolute bottom-1 left-1 right-1 z-20 hidden group-hover:flex flex-wrap"
+            className="absolute bottom-1 left-1 right-1 z-20 flex flex-wrap"
             style={{ gap: `${tagStyles.gap}px` }}
           >
             {visibleTags.map((tag) => {
@@ -371,6 +384,7 @@ export const ImageThumbnail = memo(function ImageThumbnail({
               );
             })}
           </div>
+          )}
         </>
       )}
 

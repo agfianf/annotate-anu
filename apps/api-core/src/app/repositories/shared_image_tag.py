@@ -3,9 +3,10 @@
 from uuid import UUID
 
 from sqlalchemy import delete, insert, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.models.data_management import shared_image_tags, shared_images, tags, tag_categories
+from app.models.data_management import shared_image_tags, shared_images, tag_categories, tags
 
 
 class SharedImageTagRepository:
@@ -30,9 +31,7 @@ class SharedImageTagRepository:
 
         # If category_id not provided, fetch it from the tag
         if category_id is None:
-            tag_info = await SharedImageTagRepository._get_tag_category_info(
-                connection, tag_id
-            )
+            tag_info = await SharedImageTagRepository._get_tag_category_info(connection, tag_id)
             if tag_info:
                 category_id = tag_info["category_id"]
             else:
@@ -129,8 +128,7 @@ class SharedImageTagRepository:
 
         # Get page
         stmt = (
-            base_query
-            .order_by(shared_images.c.created_at.desc())
+            base_query.order_by(shared_images.c.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -138,6 +136,10 @@ class SharedImageTagRepository:
         items = [dict(row._mapping) for row in result.fetchall()]
 
         return items, total
+
+    # Rows per INSERT; 6 bind params per row keeps each statement far below
+    # asyncpg's 32767-parameter limit.
+    _BULK_INSERT_CHUNK = 2000
 
     @staticmethod
     async def bulk_add_tags(
@@ -147,16 +149,49 @@ class SharedImageTagRepository:
         tag_ids: list[UUID],
         user_id: UUID | None = None,
     ) -> int:
-        """Bulk add tags to multiple images in a project. Returns count of new links created."""
-        count = 0
-        for image_id in shared_image_ids:
-            for tag_id in tag_ids:
-                result = await SharedImageTagRepository.add_tag(
-                    connection, project_id, image_id, tag_id, user_id
-                )
-                if result:
-                    count += 1
-        return count
+        """Bulk add tags to multiple images in a project. Returns count of new links created.
+
+        Set-based: one lookup for the tags' category ids, then one multi-row
+        ``INSERT ... ON CONFLICT DO NOTHING`` per chunk. Unknown tag ids are
+        skipped, and links that already exist are left untouched.
+        """
+        if not shared_image_ids or not tag_ids:
+            return 0
+
+        unique_tag_ids = list(dict.fromkeys(tag_ids))
+        unique_image_ids = list(dict.fromkeys(shared_image_ids))
+
+        category_stmt = select(tags.c.id, tags.c.category_id).where(tags.c.id.in_(unique_tag_ids))
+        category_by_tag = {
+            row.id: row.category_id for row in (await connection.execute(category_stmt)).fetchall()
+        }
+
+        rows = [
+            {
+                "project_id": project_id,
+                "shared_image_id": image_id,
+                "tag_id": tag_id,
+                "category_id": category_by_tag[tag_id],
+                "created_by": user_id,
+            }
+            for image_id in unique_image_ids
+            for tag_id in unique_tag_ids
+            if tag_id in category_by_tag
+        ]
+        if not rows:
+            return 0
+
+        created = 0
+        chunk = SharedImageTagRepository._BULK_INSERT_CHUNK
+        for start in range(0, len(rows), chunk):
+            stmt = (
+                pg_insert(shared_image_tags)
+                .values(rows[start : start + chunk])
+                .on_conflict_do_nothing(index_elements=["project_id", "shared_image_id", "tag_id"])
+            )
+            result = await connection.execute(stmt)
+            created += result.rowcount
+        return created
 
     @staticmethod
     async def bulk_remove_tags(
@@ -166,15 +201,16 @@ class SharedImageTagRepository:
         tag_ids: list[UUID],
     ) -> int:
         """Bulk remove tags from multiple images in a project. Returns count of links removed."""
-        count = 0
-        for image_id in shared_image_ids:
-            for tag_id in tag_ids:
-                removed = await SharedImageTagRepository.remove_tag(
-                    connection, project_id, image_id, tag_id
-                )
-                if removed:
-                    count += 1
-        return count
+        if not shared_image_ids or not tag_ids:
+            return 0
+
+        stmt = delete(shared_image_tags).where(
+            shared_image_tags.c.project_id == project_id,
+            shared_image_tags.c.shared_image_id.in_(shared_image_ids),
+            shared_image_tags.c.tag_id.in_(tag_ids),
+        )
+        result = await connection.execute(stmt)
+        return result.rowcount
 
     @staticmethod
     async def clear_image_tags(
@@ -238,9 +274,7 @@ class SharedImageTagRepository:
         Returns None if no conflict (tag can be added).
         """
         # Get the tag's category info
-        tag_info = await SharedImageTagRepository._get_tag_category_info(
-            connection, tag_id
-        )
+        tag_info = await SharedImageTagRepository._get_tag_category_info(connection, tag_id)
         if not tag_info:
             return None  # Tag not found
 
@@ -295,9 +329,7 @@ class SharedImageTagRepository:
         replaced_tag_info contains the replaced tag details if a replacement occurred.
         """
         # Get tag's category info
-        tag_info = await SharedImageTagRepository._get_tag_category_info(
-            connection, tag_id
-        )
+        tag_info = await SharedImageTagRepository._get_tag_category_info(connection, tag_id)
         if not tag_info:
             return None, None
 
@@ -377,9 +409,7 @@ class SharedImageTagRepository:
         # Pre-fetch tag info for all tags
         tag_info_cache: dict[UUID, dict] = {}
         for tag_id in tag_ids:
-            info = await SharedImageTagRepository._get_tag_category_info(
-                connection, tag_id
-            )
+            info = await SharedImageTagRepository._get_tag_category_info(connection, tag_id)
             if info:
                 tag_info_cache[tag_id] = info
 

@@ -1,15 +1,15 @@
 """Analytics service for dataset health check computations."""
 
-from typing import Dict, List, Tuple
-from collections import Counter
-import statistics
 import math
+import statistics
+from collections import Counter
+from typing import Dict, List, Tuple
+
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.repositories.project_image import ProjectImageRepository
-from app.repositories.tag import TagRepository
-from app.repositories.shared_image import SharedImageRepository
 from app.repositories.annotation import AnnotationSummaryRepository
+from app.repositories.shared_image import SharedImageRepository
+from app.repositories.tag import TagRepository
 
 
 class AnalyticsService:
@@ -59,16 +59,16 @@ class AnalyticsService:
         # Calculate annotation counts per image
         annotation_counts = []
         for img_id in shared_image_ids:
-            counts = annotation_counts_map.get(img_id, {"detection_count": 0, "segmentation_count": 0})
+            counts = annotation_counts_map.get(
+                img_id, {"detection_count": 0, "segmentation_count": 0}
+            )
             total_count = counts["detection_count"] + counts["segmentation_count"]
             annotation_counts.append(total_count)
 
         # Calculate summary statistics
         annotated_images = sum(1 for count in annotation_counts if count > 0)
         unannotated_images = total_images - annotated_images
-        coverage_percentage = (
-            (annotated_images / total_images * 100) if total_images > 0 else 0.0
-        )
+        coverage_percentage = (annotated_images / total_images * 100) if total_images > 0 else 0.0
         total_objects = sum(annotation_counts)
         avg_objects_per_image = total_objects / total_images if total_images > 0 else 0.0
         sorted_counts = sorted(annotation_counts)
@@ -87,16 +87,15 @@ class AnalyticsService:
 
         density_histogram = []
         for bucket_name, min_val, max_val in density_buckets:
-            count = sum(
-                1 for c in annotation_counts
-                if min_val <= c <= max_val
+            count = sum(1 for c in annotation_counts if min_val <= c <= max_val)
+            density_histogram.append(
+                {
+                    "bucket": bucket_name,
+                    "count": count,
+                    "min": min_val,
+                    "max": max_val,
+                }
             )
-            density_histogram.append({
-                "bucket": bucket_name,
-                "count": count,
-                "min": min_val,
-                "max": max_val,
-            })
 
         return {
             "total_images": total_images,
@@ -111,9 +110,7 @@ class AnalyticsService:
 
     @staticmethod
     def _create_dynamic_bins(
-        values: List[int],
-        min_bins: int = 8,
-        max_bins: int = 12
+        values: List[int], min_bins: int = 8, max_bins: int = 12
     ) -> List[Tuple[str, int, int]]:
         """
         Create dynamic bins using Sturges' rule.
@@ -204,7 +201,9 @@ class AnalyticsService:
         # Extract detection counts
         bbox_counts = []
         for img_id in shared_image_ids:
-            counts = annotation_counts_map.get(img_id, {"detection_count": 0, "segmentation_count": 0})
+            counts = annotation_counts_map.get(
+                img_id, {"detection_count": 0, "segmentation_count": 0}
+            )
             bbox_counts.append(counts["detection_count"])
 
         # Create dynamic bins
@@ -214,12 +213,14 @@ class AnalyticsService:
         histogram = []
         for label, min_val, max_val in bins:
             count = sum(1 for c in bbox_counts if min_val <= c <= max_val)
-            histogram.append({
-                "bucket": label,
-                "count": count,
-                "min": min_val,
-                "max": max_val,
-            })
+            histogram.append(
+                {
+                    "bucket": label,
+                    "count": count,
+                    "min": min_val,
+                    "max": max_val,
+                }
+            )
 
         return histogram
 
@@ -247,7 +248,9 @@ class AnalyticsService:
         # Extract segmentation counts
         polygon_counts = []
         for img_id in shared_image_ids:
-            counts = annotation_counts_map.get(img_id, {"detection_count": 0, "segmentation_count": 0})
+            counts = annotation_counts_map.get(
+                img_id, {"detection_count": 0, "segmentation_count": 0}
+            )
             polygon_counts.append(counts["segmentation_count"])
 
         # Create dynamic bins
@@ -257,12 +260,14 @@ class AnalyticsService:
         histogram = []
         for label, min_val, max_val in bins:
             count = sum(1 for c in polygon_counts if min_val <= c <= max_val)
-            histogram.append({
-                "bucket": label,
-                "count": count,
-                "min": min_val,
-                "max": max_val,
-            })
+            histogram.append(
+                {
+                    "bucket": label,
+                    "count": count,
+                    "min": min_val,
+                    "max": max_val,
+                }
+            )
 
         return histogram
 
@@ -271,7 +276,7 @@ class AnalyticsService:
         connection: AsyncConnection,
         project_id: int,
         images: List[Dict],
-        category_id = None,
+        category_id=None,
     ) -> Dict:
         """
         Compute class balance and imbalance metrics.
@@ -298,10 +303,10 @@ class AnalyticsService:
         tag_annotation_counts = Counter()
         tag_image_counts = Counter()
 
-        for img in images:
-            image_tags = await SharedImageRepository.get_tags(
-                connection, img["id"], project_id
-            )
+        tags_by_image = await SharedImageRepository.get_tags_bulk(
+            connection, [img["id"] for img in images], project_id
+        )
+        for image_tags in tags_by_image.values():
             seen_tags = set()
             for tag in image_tags:
                 tag_id = tag["id"]
@@ -325,8 +330,7 @@ class AnalyticsService:
                 continue
 
             percentage = (
-                (annotation_count / total_annotations * 100)
-                if total_annotations > 0 else 0.0
+                (annotation_count / total_annotations * 100) if total_annotations > 0 else 0.0
             )
             percentages.append(percentage)
 
@@ -338,19 +342,19 @@ class AnalyticsService:
             else:
                 status = "healthy"
 
-            class_distribution.append({
-                "tag_id": str(tag_id),
-                "tag_name": tag_info["name"],
-                "annotation_count": annotation_count,
-                "image_count": tag_image_counts[tag_id],
-                "percentage": round(percentage, 2),
-                "status": status,
-            })
+            class_distribution.append(
+                {
+                    "tag_id": str(tag_id),
+                    "tag_name": tag_info["name"],
+                    "annotation_count": annotation_count,
+                    "image_count": tag_image_counts[tag_id],
+                    "percentage": round(percentage, 2),
+                    "status": status,
+                }
+            )
 
         # Compute Gini coefficient for imbalance
-        imbalance_score = AnalyticsService._gini_coefficient(
-            list(tag_annotation_counts.values())
-        )
+        imbalance_score = AnalyticsService._gini_coefficient(list(tag_annotation_counts.values()))
 
         # Determine imbalance level
         if imbalance_score < 0.3:
@@ -392,8 +396,7 @@ class AnalyticsService:
 
     @staticmethod
     def _generate_balance_recommendations(
-        class_distribution: List[Dict],
-        imbalance_score: float
+        class_distribution: List[Dict], imbalance_score: float
     ) -> List[str]:
         """Generate actionable recommendations based on class balance."""
         recommendations = []
@@ -409,17 +412,14 @@ class AnalyticsService:
 
         # Find severely underrepresented classes
         severely_under = [
-            c["tag_name"] for c in class_distribution
-            if c["status"] == "severely_underrepresented"
+            c["tag_name"] for c in class_distribution if c["status"] == "severely_underrepresented"
         ]
 
         if severely_under:
             class_names = ", ".join(severely_under[:3])
             if len(severely_under) > 3:
                 class_names += f", and {len(severely_under) - 3} more"
-            recommendations.append(
-                f"📊 Classes with <5% representation: {class_names}"
-            )
+            recommendations.append(f"📊 Classes with <5% representation: {class_names}")
 
         # Check for dominant class
         if class_distribution and class_distribution[0]["percentage"] > 50:
@@ -428,9 +428,7 @@ class AnalyticsService:
             )
 
         if not recommendations:
-            recommendations.append(
-                "✅ Class balance looks healthy! No immediate action needed."
-            )
+            recommendations.append("✅ Class balance looks healthy! No immediate action needed.")
 
         return recommendations
 
@@ -527,7 +525,7 @@ class AnalyticsService:
         if len(non_zero_counts) > 1 and max_cell_count > 0:
             mean_count = sum(non_zero_counts) / len(non_zero_counts)
             variance = sum((c - mean_count) ** 2 for c in non_zero_counts) / len(non_zero_counts)
-            cv = (variance ** 0.5) / mean_count if mean_count > 0 else 0
+            cv = (variance**0.5) / mean_count if mean_count > 0 else 0
 
             # Normalize to 0-1 range (CV of 2+ is considered highly clustered)
             clustering_score = min(cv / 2.0, 1.0)
@@ -539,7 +537,9 @@ class AnalyticsService:
         annotation_points = centers[:1000]
 
         return {
-            "annotation_points": [{"x": p["x"], "y": p["y"], "weight": 1} for p in annotation_points],
+            "annotation_points": [
+                {"x": p["x"], "y": p["y"], "weight": 1} for p in annotation_points
+            ],
             "center_of_mass": {"x": round(center_x, 4), "y": round(center_y, 4)},
             "spread": {"x_std": round(x_std, 4), "y_std": round(y_std, 4)},
             "clustering_score": round(clustering_score, 3),
@@ -648,12 +648,14 @@ class AnalyticsService:
                     if min_ratio <= ratio < max_ratio:
                         count += 1
 
-            histogram.append({
-                "bucket": bucket_name,
-                "count": count,
-                "min": min_ratio,
-                "max": max_ratio,
-            })
+            histogram.append(
+                {
+                    "bucket": bucket_name,
+                    "count": count,
+                    "min": min_ratio,
+                    "max": max_ratio,
+                }
+            )
 
         return histogram
 
@@ -673,17 +675,19 @@ class AnalyticsService:
         histogram = []
         for bucket_name, (min_size, max_size) in buckets.items():
             count = sum(
-                1 for img in images
-                if img.get("file_size_bytes")
-                and min_size <= img["file_size_bytes"] < max_size
+                1
+                for img in images
+                if img.get("file_size_bytes") and min_size <= img["file_size_bytes"] < max_size
             )
 
-            histogram.append({
-                "bucket": bucket_name,
-                "count": count,
-                "min": min_size,
-                "max": max_size,
-            })
+            histogram.append(
+                {
+                    "bucket": bucket_name,
+                    "count": count,
+                    "min": min_size,
+                    "max": max_size,
+                }
+            )
 
         return histogram
 
@@ -731,12 +735,14 @@ class AnalyticsService:
                 widths.append(width)
                 heights.append(height)
                 aspect_ratios.append(width / height)
-                scatter_data.append({
-                    "image_id": str(img["id"]),
-                    "width": width,
-                    "height": height,
-                    "aspect_ratio": round(width / height, 3),
-                })
+                scatter_data.append(
+                    {
+                        "image_id": str(img["id"]),
+                        "width": width,
+                        "height": height,
+                        "aspect_ratio": round(width / height, 3),
+                    }
+                )
 
         if not widths:
             return {
@@ -802,10 +808,30 @@ class AnalyticsService:
 
         # Aspect ratio distribution
         aspect_ratio_distribution = [
-            {"bucket": "Portrait (<0.9)", "count": sum(1 for r in aspect_ratios if r < 0.9), "min": 0.0, "max": 0.9},
-            {"bucket": "Square (0.9-1.1)", "count": sum(1 for r in aspect_ratios if 0.9 <= r <= 1.1), "min": 0.9, "max": 1.1},
-            {"bucket": "Landscape (1.1-2.0)", "count": sum(1 for r in aspect_ratios if 1.1 < r <= 2.0), "min": 1.1, "max": 2.0},
-            {"bucket": "Ultra-wide (>2.0)", "count": sum(1 for r in aspect_ratios if r > 2.0), "min": 2.0, "max": 100.0},
+            {
+                "bucket": "Portrait (<0.9)",
+                "count": sum(1 for r in aspect_ratios if r < 0.9),
+                "min": 0.0,
+                "max": 0.9,
+            },
+            {
+                "bucket": "Square (0.9-1.1)",
+                "count": sum(1 for r in aspect_ratios if 0.9 <= r <= 1.1),
+                "min": 0.9,
+                "max": 1.1,
+            },
+            {
+                "bucket": "Landscape (1.1-2.0)",
+                "count": sum(1 for r in aspect_ratios if 1.1 < r <= 2.0),
+                "min": 1.1,
+                "max": 2.0,
+            },
+            {
+                "bucket": "Ultra-wide (>2.0)",
+                "count": sum(1 for r in aspect_ratios if r > 2.0),
+                "min": 2.0,
+                "max": 100.0,
+            },
         ]
 
         # Limit scatter data for performance

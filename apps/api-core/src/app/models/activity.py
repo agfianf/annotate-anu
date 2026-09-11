@@ -94,3 +94,10 @@ project_activity = Table(
     Index("ix_project_activity_created_at", "created_at"),
     Index("ix_project_activity_entity", "project_id", "entity_type", "entity_id"),
 )
+
+# Activity feed: newest first within a project. Declared outside the Table so the DESC expression can reference the column.
+Index(
+    "ix_project_activity_project_created",
+    project_activity.c.project_id,
+    project_activity.c.created_at.desc(),
+)

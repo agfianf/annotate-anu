@@ -28,6 +28,15 @@ export function useJustifiedRows({
   targetRowHeight,
   spacing,
 }: UseJustifiedRowsOptions) {
+  // Index images by id once per images array so row assembly is O(n), not O(n²)
+  const imagesById = useMemo(() => {
+    const map = new Map<string, SharedImage>();
+    for (const img of images) {
+      map.set(img.id, img);
+    }
+    return map;
+  }, [images]);
+
   const layout = useMemo(() => {
     if (containerWidth === 0 || images.length === 0) {
       return { rows: [], totalHeight: 0 };
@@ -55,7 +64,7 @@ export function useJustifiedRows({
 
     layout.rows.forEach((row, rowIndex) => {
       row.images.forEach((imageId, columnIndex) => {
-        const image = images.find((img) => img.id === imageId);
+        const image = imagesById.get(imageId);
         if (image) {
           result.push({
             ...image,
@@ -68,7 +77,7 @@ export function useJustifiedRows({
     });
 
     return result;
-  }, [layout, images]);
+  }, [layout, imagesById]);
 
   return {
     layout,

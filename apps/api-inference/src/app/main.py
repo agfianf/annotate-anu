@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
@@ -38,21 +39,21 @@ async def lifespan(app: FastAPI):
         sam3_inference.load_model()
         logger.info("SAM3 model loaded successfully")
 
-        yield {
-            "sam3_inference": sam3_inference,
-        }
-
-        logger.info("Application startup complete")
-
     except Exception as e:
         logger.error(f"Failed to initialize application: {e}")
         raise
 
-    yield
+    logger.info("Application startup complete")
+
+    # A second bare `yield` used to follow this block, which makes an
+    # asynccontextmanager raise "generator didn't stop" on shutdown and skipped cleanup.
+    yield {
+        "sam3_inference": sam3_inference,
+    }
 
     # Shutdown
     logger.info("Shutting down application")
-    # Cleanup if needed
+    sam3_inference.shutdown()
     logger.info("Application shutdown complete")
 
 
@@ -66,6 +67,10 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
+# Polygon JSON is highly repetitive and compresses 8-10x. Registered before CORS so
+# CORS wraps it (Starlette applies middleware in reverse registration order).
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Add CORS middleware
 app.add_middleware(

@@ -9,7 +9,6 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
-    Text,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -251,6 +250,13 @@ segmentations = Table(
     # Indexes
     Index("ix_segmentations_image_id", "image_id"),
     Index("ix_segmentations_label_id", "label_id"),
+    Index("ix_segmentations_confidence", "confidence"),
+    # Bbox-from-segmentation export and ROI QC only want rows with a cached bbox
+    Index(
+        "ix_segmentations_image_id_bbox",
+        "image_id",
+        postgresql_where=text("bbox_x_min IS NOT NULL"),
+    ),
 )
 
 # ============================================================================

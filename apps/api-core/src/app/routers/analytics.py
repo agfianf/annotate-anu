@@ -1,48 +1,60 @@
 """Analytics router for dataset statistics and insights."""
 
+import math
+from collections import Counter
 from typing import Annotated, Literal
 from uuid import UUID
-from collections import Counter
-import math
 
 from fastapi import APIRouter, Depends, Query, status
+from redis import asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.dependencies.rbac import ProjectPermission
+from app.config import settings
 from app.dependencies.database import get_async_transaction_conn
+from app.dependencies.rbac import ProjectPermission
 from app.helpers.response_api import JsonResponse
+from app.repositories.image_quality import ImageQualityRepository
 from app.repositories.project_image import ProjectImageRepository
+from app.repositories.shared_image import SharedImageRepository
 from app.repositories.tag import TagRepository
 from app.repositories.tag_category import TagCategoryRepository
-from app.repositories.shared_image import SharedImageRepository
-from app.schemas.data_management import (
-    DatasetStatsResponse,
-    TagDistribution,
-    DimensionBucket,
-    AspectRatioBucket,
-    FileSizeStats,
-)
 from app.schemas.analytics import (
+    AnnotationAnalysisResponse,
     AnnotationCoverageResponse,
     ClassBalanceResponse,
-    SpatialHeatmapResponse,
-    ImageQualityResponse,
     DimensionInsightsResponse,
     EnhancedDatasetStatsResponse,
-    AnnotationAnalysisResponse,
-    ComputeQualityResponse,
-    ProcessQualityResponse,
-    QualityStatusCounts,
-    QualityMetricsAverages,
-    QualityBucket,
-    IssueBreakdownEnhanced,
     FlaggedImageEnhanced,
+    ImageQualityResponse,
+    IssueBreakdownEnhanced,
+    ProcessQualityResponse,
+    QualityBucket,
+    QualityMetricsAverages,
+    QualityStatusCounts,
+    SpatialHeatmapResponse,
+)
+from app.schemas.data_management import (
+    AspectRatioBucket,
+    DatasetStatsResponse,
+    DimensionBucket,
+    FileSizeStats,
+    TagDistribution,
 )
 from app.services.analytics_service import AnalyticsService
 from app.services.image_quality_service import ImageQualityService
-from app.repositories.image_quality import ImageQualityRepository
 
 router = APIRouter(prefix="/api/v1/projects", tags=["Analytics"])
+
+# One async Redis client (with its own connection pool) shared across requests,
+# created on first use so importing this module never touches the network.
+_redis_client: aioredis.Redis | None = None
+
+
+def _get_redis() -> aioredis.Redis:
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    return _redis_client
 
 
 def compute_dynamic_bins(values: list[int], max_bins: int = 8) -> list[tuple[int, int]]:
@@ -111,7 +123,9 @@ def compute_dynamic_ratio_bins(values: list[float], max_bins: int = 8) -> list[t
     return bins
 
 
-@router.get("/{project_id}/analytics/dataset-stats", response_model=JsonResponse[DatasetStatsResponse, None])
+@router.get(
+    "/{project_id}/analytics/dataset-stats", response_model=JsonResponse[DatasetStatsResponse, None]
+)
 async def get_dataset_stats(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -174,11 +188,12 @@ async def get_dataset_stats(
     all_categories = await TagCategoryRepository.list_for_project(connection, project_id)
     category_map = {cat["id"]: cat for cat in all_categories}
 
-    # Compute tag distribution from filtered images
+    # Compute tag distribution from filtered images (one query for all images)
+    tags_by_image = await SharedImageRepository.get_tags_bulk(
+        connection, [img["id"] for img in images], project_id
+    )
     tag_counter = Counter()
-    for img in images:
-        # Get tags for this image
-        image_tags = await SharedImageRepository.get_tags(connection, img["id"], project_id)
+    for image_tags in tags_by_image.values():
         for tag in image_tags:
             tag_counter[tag["id"]] += 1
 
@@ -224,7 +239,11 @@ async def get_dataset_stats(
     if dimensions and dimension_bins:
         max_dim = max(dimensions)
         for bin_min, bin_max in dimension_bins:
-            count = sum(1 for d in dimensions if bin_min <= d < bin_max or (bin_max == max_dim and d == bin_max))
+            count = sum(
+                1
+                for d in dimensions
+                if bin_min <= d < bin_max or (bin_max == max_dim and d == bin_max)
+            )
             bucket_label = f"{bin_min}-{bin_max}px"
             dimension_histogram.append(
                 DimensionBucket(
@@ -243,7 +262,11 @@ async def get_dataset_stats(
     if aspect_ratios and ratio_bins:
         max_ratio = max(aspect_ratios)
         for bin_min, bin_max in ratio_bins:
-            count = sum(1 for r in aspect_ratios if bin_min <= r < bin_max or (bin_max == max_ratio and r == bin_max))
+            count = sum(
+                1
+                for r in aspect_ratios
+                if bin_min <= r < bin_max or (bin_max == max_ratio and r == bin_max)
+            )
             bucket_label = f"{bin_min:.2f}-{bin_max:.2f}"
             aspect_ratio_histogram.append(
                 AspectRatioBucket(
@@ -255,7 +278,9 @@ async def get_dataset_stats(
             )
 
     # Compute file size stats
-    file_sizes = [img["file_size_bytes"] for img in images if img.get("file_size_bytes") is not None]
+    file_sizes = [
+        img["file_size_bytes"] for img in images if img.get("file_size_bytes") is not None
+    ]
     if file_sizes:
         file_size_stats = FileSizeStats(
             min=min(file_sizes),
@@ -280,7 +305,10 @@ async def get_dataset_stats(
     )
 
 
-@router.get("/{project_id}/analytics/annotation-coverage", response_model=JsonResponse[AnnotationCoverageResponse, None])
+@router.get(
+    "/{project_id}/analytics/annotation-coverage",
+    response_model=JsonResponse[AnnotationCoverageResponse, None],
+)
 async def get_annotation_coverage(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -311,14 +339,26 @@ async def get_annotation_coverage(
 
     # Get filtered images
     images, total = await ProjectImageRepository.explore(
-        connection, project_id=project_id, page=1, page_size=10000,
-        tag_ids=tag_ids, excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode, exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids, job_id=job_id, is_annotated=is_annotated,
-        search=search, width_min=width_min, width_max=width_max,
-        height_min=height_min, height_max=height_max,
-        file_size_min=file_size_min, file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern, filepath_paths=filepath_paths,
+        connection,
+        project_id=project_id,
+        page=1,
+        page_size=10000,
+        tag_ids=tag_ids,
+        excluded_tag_ids=excluded_tag_ids,
+        include_match_mode=include_match_mode,
+        exclude_match_mode=exclude_match_mode,
+        task_ids=task_ids,
+        job_id=job_id,
+        is_annotated=is_annotated,
+        search=search,
+        width_min=width_min,
+        width_max=width_max,
+        height_min=height_min,
+        height_max=height_max,
+        file_size_min=file_size_min,
+        file_size_max=file_size_max,
+        filepath_pattern=filepath_pattern,
+        filepath_paths=filepath_paths,
         image_uids=image_uids,
     )
 
@@ -336,7 +376,9 @@ async def get_annotation_coverage(
     )
 
 
-@router.get("/{project_id}/analytics/class-balance", response_model=JsonResponse[ClassBalanceResponse, None])
+@router.get(
+    "/{project_id}/analytics/class-balance", response_model=JsonResponse[ClassBalanceResponse, None]
+)
 async def get_class_balance(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -370,14 +412,26 @@ async def get_class_balance(
 
     # Get filtered images
     images, total = await ProjectImageRepository.explore(
-        connection, project_id=project_id, page=1, page_size=10000,
-        tag_ids=tag_ids, excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode, exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids, job_id=job_id, is_annotated=is_annotated,
-        search=search, width_min=width_min, width_max=width_max,
-        height_min=height_min, height_max=height_max,
-        file_size_min=file_size_min, file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern, filepath_paths=filepath_paths,
+        connection,
+        project_id=project_id,
+        page=1,
+        page_size=10000,
+        tag_ids=tag_ids,
+        excluded_tag_ids=excluded_tag_ids,
+        include_match_mode=include_match_mode,
+        exclude_match_mode=exclude_match_mode,
+        task_ids=task_ids,
+        job_id=job_id,
+        is_annotated=is_annotated,
+        search=search,
+        width_min=width_min,
+        width_max=width_max,
+        height_min=height_min,
+        height_max=height_max,
+        file_size_min=file_size_min,
+        file_size_max=file_size_max,
+        filepath_pattern=filepath_pattern,
+        filepath_paths=filepath_paths,
         image_uids=image_uids,
     )
 
@@ -395,7 +449,10 @@ async def get_class_balance(
     )
 
 
-@router.get("/{project_id}/analytics/spatial-heatmap", response_model=JsonResponse[SpatialHeatmapResponse, None])
+@router.get(
+    "/{project_id}/analytics/spatial-heatmap",
+    response_model=JsonResponse[SpatialHeatmapResponse, None],
+)
 async def get_spatial_heatmap(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -426,21 +483,31 @@ async def get_spatial_heatmap(
 
     # Get filtered images
     images, total = await ProjectImageRepository.explore(
-        connection, project_id=project_id, page=1, page_size=10000,
-        tag_ids=tag_ids, excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode, exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids, job_id=job_id, is_annotated=is_annotated,
-        search=search, width_min=width_min, width_max=width_max,
-        height_min=height_min, height_max=height_max,
-        file_size_min=file_size_min, file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern, filepath_paths=filepath_paths,
+        connection,
+        project_id=project_id,
+        page=1,
+        page_size=10000,
+        tag_ids=tag_ids,
+        excluded_tag_ids=excluded_tag_ids,
+        include_match_mode=include_match_mode,
+        exclude_match_mode=exclude_match_mode,
+        task_ids=task_ids,
+        job_id=job_id,
+        is_annotated=is_annotated,
+        search=search,
+        width_min=width_min,
+        width_max=width_max,
+        height_min=height_min,
+        height_max=height_max,
+        file_size_min=file_size_min,
+        file_size_max=file_size_max,
+        filepath_pattern=filepath_pattern,
+        filepath_paths=filepath_paths,
         image_uids=image_uids,
     )
 
     # Compute spatial heatmap (stub for now - needs annotation bbox data)
-    heatmap_data = await AnalyticsService.compute_spatial_heatmap(
-        connection, project_id, images
-    )
+    heatmap_data = await AnalyticsService.compute_spatial_heatmap(connection, project_id, images)
 
     response_data = SpatialHeatmapResponse(**heatmap_data)
 
@@ -451,7 +518,9 @@ async def get_spatial_heatmap(
     )
 
 
-@router.get("/{project_id}/analytics/image-quality", response_model=JsonResponse[ImageQualityResponse, None])
+@router.get(
+    "/{project_id}/analytics/image-quality", response_model=JsonResponse[ImageQualityResponse, None]
+)
 async def get_image_quality(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -482,21 +551,31 @@ async def get_image_quality(
 
     # Get filtered images
     images, total = await ProjectImageRepository.explore(
-        connection, project_id=project_id, page=1, page_size=10000,
-        tag_ids=tag_ids, excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode, exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids, job_id=job_id, is_annotated=is_annotated,
-        search=search, width_min=width_min, width_max=width_max,
-        height_min=height_min, height_max=height_max,
-        file_size_min=file_size_min, file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern, filepath_paths=filepath_paths,
+        connection,
+        project_id=project_id,
+        page=1,
+        page_size=10000,
+        tag_ids=tag_ids,
+        excluded_tag_ids=excluded_tag_ids,
+        include_match_mode=include_match_mode,
+        exclude_match_mode=exclude_match_mode,
+        task_ids=task_ids,
+        job_id=job_id,
+        is_annotated=is_annotated,
+        search=search,
+        width_min=width_min,
+        width_max=width_max,
+        height_min=height_min,
+        height_max=height_max,
+        file_size_min=file_size_min,
+        file_size_max=file_size_max,
+        filepath_pattern=filepath_pattern,
+        filepath_paths=filepath_paths,
         image_uids=image_uids,
     )
 
     # Compute image quality (stub for now - needs async processing)
-    quality_data = await AnalyticsService.compute_image_quality(
-        connection, project_id, images
-    )
+    quality_data = await AnalyticsService.compute_image_quality(connection, project_id, images)
 
     response_data = ImageQualityResponse(**quality_data)
 
@@ -507,7 +586,10 @@ async def get_image_quality(
     )
 
 
-@router.get("/{project_id}/analytics/dimension-insights", response_model=JsonResponse[DimensionInsightsResponse, None])
+@router.get(
+    "/{project_id}/analytics/dimension-insights",
+    response_model=JsonResponse[DimensionInsightsResponse, None],
+)
 async def get_dimension_insights(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -538,14 +620,26 @@ async def get_dimension_insights(
 
     # Get filtered images
     images, total = await ProjectImageRepository.explore(
-        connection, project_id=project_id, page=1, page_size=10000,
-        tag_ids=tag_ids, excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode, exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids, job_id=job_id, is_annotated=is_annotated,
-        search=search, width_min=width_min, width_max=width_max,
-        height_min=height_min, height_max=height_max,
-        file_size_min=file_size_min, file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern, filepath_paths=filepath_paths,
+        connection,
+        project_id=project_id,
+        page=1,
+        page_size=10000,
+        tag_ids=tag_ids,
+        excluded_tag_ids=excluded_tag_ids,
+        include_match_mode=include_match_mode,
+        exclude_match_mode=exclude_match_mode,
+        task_ids=task_ids,
+        job_id=job_id,
+        is_annotated=is_annotated,
+        search=search,
+        width_min=width_min,
+        width_max=width_max,
+        height_min=height_min,
+        height_max=height_max,
+        file_size_min=file_size_min,
+        file_size_max=file_size_max,
+        filepath_pattern=filepath_pattern,
+        filepath_paths=filepath_paths,
         image_uids=image_uids,
     )
 
@@ -565,7 +659,11 @@ async def get_dimension_insights(
 # CONSOLIDATED ENDPOINTS
 # ============================================================================
 
-@router.get("/{project_id}/analytics/enhanced-dataset-stats", response_model=JsonResponse[EnhancedDatasetStatsResponse, None])
+
+@router.get(
+    "/{project_id}/analytics/enhanced-dataset-stats",
+    response_model=JsonResponse[EnhancedDatasetStatsResponse, None],
+)
 async def get_enhanced_dataset_stats(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -599,14 +697,26 @@ async def get_enhanced_dataset_stats(
 
     # Get filtered images
     images, total = await ProjectImageRepository.explore(
-        connection, project_id=project_id, page=1, page_size=10000,
-        tag_ids=tag_ids, excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode, exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids, job_id=job_id, is_annotated=is_annotated,
-        search=search, width_min=width_min, width_max=width_max,
-        height_min=height_min, height_max=height_max,
-        file_size_min=file_size_min, file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern, filepath_paths=filepath_paths,
+        connection,
+        project_id=project_id,
+        page=1,
+        page_size=10000,
+        tag_ids=tag_ids,
+        excluded_tag_ids=excluded_tag_ids,
+        include_match_mode=include_match_mode,
+        exclude_match_mode=exclude_match_mode,
+        task_ids=task_ids,
+        job_id=job_id,
+        is_annotated=is_annotated,
+        search=search,
+        width_min=width_min,
+        width_max=width_max,
+        height_min=height_min,
+        height_max=height_max,
+        file_size_min=file_size_min,
+        file_size_max=file_size_max,
+        filepath_pattern=filepath_pattern,
+        filepath_paths=filepath_paths,
         image_uids=image_uids,
     )
 
@@ -619,9 +729,11 @@ async def get_enhanced_dataset_stats(
     all_categories = await TagCategoryRepository.list_for_project(connection, project_id)
     category_map = {cat["id"]: cat for cat in all_categories}
 
+    tags_by_image = await SharedImageRepository.get_tags_bulk(
+        connection, shared_image_ids, project_id
+    )
     tag_counter = Counter()
-    for img in images:
-        image_tags = await SharedImageRepository.get_tags(connection, img["id"], project_id)
+    for image_tags in tags_by_image.values():
         for tag in image_tags:
             tag_counter[tag["id"]] += 1
 
@@ -657,28 +769,41 @@ async def get_enhanced_dataset_stats(
     if dimensions and dimension_bins:
         max_dim = max(dimensions)
         for bin_min, bin_max in dimension_bins:
-            count = sum(1 for d in dimensions if bin_min <= d < bin_max or (bin_max == max_dim and d == bin_max))
-            dimension_histogram.append(DimensionBucket(
-                bucket=f"{bin_min}-{bin_max}px", count=count, min=bin_min, max=bin_max
-            ))
+            count = sum(
+                1
+                for d in dimensions
+                if bin_min <= d < bin_max or (bin_max == max_dim and d == bin_max)
+            )
+            dimension_histogram.append(
+                DimensionBucket(
+                    bucket=f"{bin_min}-{bin_max}px", count=count, min=bin_min, max=bin_max
+                )
+            )
 
     ratio_bins = compute_dynamic_ratio_bins(aspect_ratios, max_bins=8)
     aspect_ratio_histogram = []
     if aspect_ratios and ratio_bins:
         max_ratio = max(aspect_ratios)
         for bin_min, bin_max in ratio_bins:
-            count = sum(1 for r in aspect_ratios if bin_min <= r < bin_max or (bin_max == max_ratio and r == bin_max))
-            aspect_ratio_histogram.append(AspectRatioBucket(
-                bucket=f"{bin_min:.2f}-{bin_max:.2f}", count=count, min=bin_min, max=bin_max
-            ))
+            count = sum(
+                1
+                for r in aspect_ratios
+                if bin_min <= r < bin_max or (bin_max == max_ratio and r == bin_max)
+            )
+            aspect_ratio_histogram.append(
+                AspectRatioBucket(
+                    bucket=f"{bin_min:.2f}-{bin_max:.2f}", count=count, min=bin_min, max=bin_max
+                )
+            )
 
     # File size stats
     file_sizes = [img["file_size_bytes"] for img in images if img.get("file_size_bytes")]
     if file_sizes:
         file_size_stats = FileSizeStats(
-            min=min(file_sizes), max=max(file_sizes),
+            min=min(file_sizes),
+            max=max(file_sizes),
             avg=sum(file_sizes) / len(file_sizes),
-            median=sorted(file_sizes)[len(file_sizes) // 2]
+            median=sorted(file_sizes)[len(file_sizes) // 2],
         )
     else:
         file_size_stats = FileSizeStats(min=0, max=0, avg=0, median=0)
@@ -697,7 +822,6 @@ async def get_enhanced_dataset_stats(
     )
 
     status_counts = quality_stats.get("status_counts", {})
-    total_with_metrics = status_counts.get("completed", 0) + status_counts.get("failed", 0) + status_counts.get("processing", 0) + status_counts.get("pending", 0)
 
     # Determine overall quality status
     if status_counts.get("completed", 0) == total and total > 0:
@@ -713,7 +837,11 @@ async def get_enhanced_dataset_stats(
     )
 
     # Build quality histogram buckets
-    quality_scores = [m.get("overall_quality", 0) for m in quality_distribution_data if m.get("overall_quality") is not None]
+    quality_scores = [
+        m.get("overall_quality", 0)
+        for m in quality_distribution_data
+        if m.get("overall_quality") is not None
+    ]
     quality_distribution = []
     if quality_scores:
         buckets = [
@@ -723,18 +851,26 @@ async def get_enhanced_dataset_stats(
             ("Excellent (0.7-1.0)", 0.7, 1.0),
         ]
         for label, min_val, max_val in buckets:
-            count = sum(1 for s in quality_scores if min_val <= s < max_val or (max_val == 1.0 and s == 1.0))
-            quality_distribution.append(QualityBucket(bucket=label, count=count, min=min_val, max=max_val))
+            count = sum(
+                1 for s in quality_scores if min_val <= s < max_val or (max_val == 1.0 and s == 1.0)
+            )
+            quality_distribution.append(
+                QualityBucket(bucket=label, count=count, min=min_val, max=max_val)
+            )
 
     # Build individual metric histograms for interactive filtering
     def build_metric_histogram(metric_name: str, buckets_config: list) -> list:
         """Build histogram for a specific metric."""
-        values = [m.get(metric_name) for m in quality_distribution_data if m.get(metric_name) is not None]
+        values = [
+            m.get(metric_name) for m in quality_distribution_data if m.get(metric_name) is not None
+        ]
         if not values:
             return []
         histogram = []
         for label, min_val, max_val in buckets_config:
-            count = sum(1 for v in values if min_val <= v < max_val or (max_val == 1.0 and v == 1.0))
+            count = sum(
+                1 for v in values if min_val <= v < max_val or (max_val == 1.0 and v == 1.0)
+            )
             histogram.append(QualityBucket(bucket=label, count=count, min=min_val, max=max_val))
         return histogram
 
@@ -758,7 +894,13 @@ async def get_enhanced_dataset_stats(
     blue_histogram = build_metric_histogram("blue_avg", score_buckets)
 
     # Count issues
-    issue_counts = {"blur": 0, "low_brightness": 0, "high_brightness": 0, "low_contrast": 0, "duplicate": 0}
+    issue_counts = {
+        "blur": 0,
+        "low_brightness": 0,
+        "high_brightness": 0,
+        "low_contrast": 0,
+        "duplicate": 0,
+    }
     for m in quality_distribution_data:
         issues = m.get("issues", [])
         if issues:
@@ -785,13 +927,14 @@ async def get_enhanced_dataset_stats(
 
     # Build response
     from app.schemas.analytics import (
-        DimensionInsightsRecommendedResize,
-        DimensionInsightsScatterPoint,
         AspectRatioDistributionBucket,
         ClassDistribution,
+        DimensionInsightsRecommendedResize,
+        DimensionInsightsScatterPoint,
     )
 
     response_data = EnhancedDatasetStatsResponse(
+        total_images=len(images),
         # Original Dataset Stats
         tag_distribution=tag_distribution,
         dimension_histogram=dimension_histogram,
@@ -806,18 +949,29 @@ async def get_enhanced_dataset_stats(
         min_height=dim_insights.get("min_height", 0),
         max_height=dim_insights.get("max_height", 0),
         dimension_variance=dim_insights.get("dimension_variance", 0.0),
-        recommended_resize=DimensionInsightsRecommendedResize(**dim_insights["recommended_resize"]) if dim_insights.get("recommended_resize") else None,
-        scatter_data=[DimensionInsightsScatterPoint(**p) for p in dim_insights.get("scatter_data", [])],
-        aspect_ratio_distribution=[AspectRatioDistributionBucket(**b) for b in dim_insights.get("aspect_ratio_distribution", [])],
+        recommended_resize=DimensionInsightsRecommendedResize(**dim_insights["recommended_resize"])
+        if dim_insights.get("recommended_resize")
+        else None,
+        scatter_data=[
+            DimensionInsightsScatterPoint(**p) for p in dim_insights.get("scatter_data", [])
+        ],
+        aspect_ratio_distribution=[
+            AspectRatioDistributionBucket(**b)
+            for b in dim_insights.get("aspect_ratio_distribution", [])
+        ],
         # Class Balance
-        class_distribution=[ClassDistribution(**c) for c in balance_data.get("class_distribution", [])],
+        class_distribution=[
+            ClassDistribution(**c) for c in balance_data.get("class_distribution", [])
+        ],
         imbalance_score=balance_data.get("imbalance_score", 0.0),
         imbalance_level=balance_data.get("imbalance_level", "balanced"),
         class_recommendations=balance_data.get("recommendations", []),
         # Image Quality
         quality_status=quality_status,
         quality_status_counts=QualityStatusCounts(**status_counts),
-        quality_averages=QualityMetricsAverages(**quality_stats.get("averages", {})) if quality_stats.get("averages") else None,
+        quality_averages=QualityMetricsAverages(**quality_stats.get("averages", {}))
+        if quality_stats.get("averages")
+        else None,
         quality_distribution=quality_distribution,
         sharpness_histogram=sharpness_histogram,
         brightness_histogram=brightness_histogram,
@@ -837,7 +991,10 @@ async def get_enhanced_dataset_stats(
     )
 
 
-@router.get("/{project_id}/analytics/annotation-analysis", response_model=JsonResponse[AnnotationAnalysisResponse, None])
+@router.get(
+    "/{project_id}/analytics/annotation-analysis",
+    response_model=JsonResponse[AnnotationAnalysisResponse, None],
+)
 async def get_annotation_analysis(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -871,14 +1028,26 @@ async def get_annotation_analysis(
 
     # Get filtered images
     images, total = await ProjectImageRepository.explore(
-        connection, project_id=project_id, page=1, page_size=10000,
-        tag_ids=tag_ids, excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode, exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids, job_id=job_id, is_annotated=is_annotated,
-        search=search, width_min=width_min, width_max=width_max,
-        height_min=height_min, height_max=height_max,
-        file_size_min=file_size_min, file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern, filepath_paths=filepath_paths,
+        connection,
+        project_id=project_id,
+        page=1,
+        page_size=10000,
+        tag_ids=tag_ids,
+        excluded_tag_ids=excluded_tag_ids,
+        include_match_mode=include_match_mode,
+        exclude_match_mode=exclude_match_mode,
+        task_ids=task_ids,
+        job_id=job_id,
+        is_annotated=is_annotated,
+        search=search,
+        width_min=width_min,
+        width_max=width_max,
+        height_min=height_min,
+        height_max=height_max,
+        file_size_min=file_size_min,
+        file_size_max=file_size_max,
+        filepath_pattern=filepath_pattern,
+        filepath_paths=filepath_paths,
         image_uids=image_uids,
     )
 
@@ -901,7 +1070,14 @@ async def get_annotation_analysis(
         connection, shared_image_ids
     )
 
-    from app.schemas.analytics import DensityBucket, BboxCountBucket, PolygonCountBucket, CenterOfMass, Spread, AnnotationPoint
+    from app.schemas.analytics import (
+        AnnotationPoint,
+        BboxCountBucket,
+        CenterOfMass,
+        DensityBucket,
+        PolygonCountBucket,
+        Spread,
+    )
 
     response_data = AnnotationAnalysisResponse(
         # Coverage
@@ -924,7 +1100,9 @@ async def get_annotation_analysis(
         spread=Spread(**heatmap_data.get("spread", {"x_std": 0.0, "y_std": 0.0})),
         clustering_score=heatmap_data.get("clustering_score", 0.0),
         total_annotations=heatmap_data.get("total_annotations", 0),
-        annotation_points=[AnnotationPoint(**p) for p in heatmap_data.get("annotation_points", [])[:500]],
+        annotation_points=[
+            AnnotationPoint(**p) for p in heatmap_data.get("annotation_points", [])[:500]
+        ],
     )
 
     return JsonResponse(
@@ -937,6 +1115,7 @@ async def get_annotation_analysis(
 # ============================================================================
 # QUALITY COMPUTATION ENDPOINTS
 # ============================================================================
+
 
 @router.post("/{project_id}/analytics/sync-quality", response_model=JsonResponse[dict, None])
 async def sync_quality_metrics(
@@ -977,7 +1156,10 @@ async def sync_quality_metrics(
     )
 
 
-@router.post("/{project_id}/analytics/compute-quality", response_model=JsonResponse[ProcessQualityResponse, None])
+@router.post(
+    "/{project_id}/analytics/compute-quality",
+    response_model=JsonResponse[ProcessQualityResponse, None],
+)
 async def process_quality_metrics(
     project: Annotated[dict, Depends(ProjectPermission("editor"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -1007,6 +1189,7 @@ async def process_quality_metrics(
 # ============================================================================
 # QUALITY JOB ENDPOINTS (Background Processing with Progress Tracking)
 # ============================================================================
+
 
 @router.post("/{project_id}/analytics/start-quality-job")
 async def start_quality_job(
@@ -1047,7 +1230,9 @@ async def start_quality_job(
         )
 
     # Count total images needing processing
-    total_without = await ImageQualityRepository.count_images_without_metrics(connection, project_id)
+    total_without = await ImageQualityRepository.count_images_without_metrics(
+        connection, project_id
+    )
     total_pending = await ImageQualityRepository.count_pending_for_project(connection, project_id)
     total_to_process = total_without + total_pending
 
@@ -1106,8 +1291,6 @@ async def get_quality_progress(
 
     Poll this endpoint every 2 seconds while processing is active.
     """
-    import redis
-    from app.config import settings
     from app.repositories.quality_job import QualityJobRepository
     from app.schemas.analytics import QualityProgressResponse
 
@@ -1115,10 +1298,8 @@ async def get_quality_progress(
 
     # Try Redis first for real-time progress
     try:
-        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
         progress_key = f"quality:progress:{project_id}"
-        redis_progress = redis_client.hgetall(progress_key)
-        redis_client.close()
+        redis_progress = await _get_redis().hgetall(progress_key)
 
         if redis_progress and redis_progress.get("status") in ("processing", "pending"):
             total = int(redis_progress.get("total", 0))
@@ -1185,7 +1366,9 @@ async def get_quality_progress(
                 remaining=0,
                 status=latest_job["status"],
                 progress_pct=100.0 if latest_job["status"] == "completed" else 0.0,
-                started_at=latest_job["started_at"].isoformat() if latest_job.get("started_at") else None,
+                started_at=latest_job["started_at"].isoformat()
+                if latest_job.get("started_at")
+                else None,
             ),
             message=f"Last job {latest_job['status']}",
             status_code=status.HTTP_200_OK,
@@ -1222,8 +1405,6 @@ async def cancel_quality_job(
     3. Updates job status to 'cancelled'
     4. Clears Redis progress key
     """
-    import redis
-    from app.config import settings
     from app.repositories.quality_job import QualityJobRepository
     from app.schemas.analytics import CancelQualityJobResponse
     from app.tasks.main import celery_app
@@ -1255,9 +1436,7 @@ async def cancel_quality_job(
 
     # Clear Redis progress
     try:
-        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
-        redis_client.delete(f"quality:progress:{project_id}")
-        redis_client.close()
+        await _get_redis().delete(f"quality:progress:{project_id}")
     except Exception:
         pass  # Best effort
 

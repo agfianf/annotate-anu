@@ -1,7 +1,6 @@
 """Job router with CRUD and workflow operations."""
 
 from typing import Annotated
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -13,7 +12,14 @@ from app.helpers.response_api import JsonResponse
 from app.repositories.job import JobRepository
 from app.repositories.project import ProjectMemberRepository
 from app.schemas.auth import UserBase
-from app.schemas.job import JobApprove, JobAssign, JobCreate, JobDetailResponse, JobResponse, JobUpdate
+from app.schemas.job import (
+    JobApprove,
+    JobAssign,
+    JobCreate,
+    JobDetailResponse,
+    JobResponse,
+    JobUpdate,
+)
 from app.schemas.job_sync import JobSyncRequest
 
 router = APIRouter(prefix="/api/v1", tags=["Jobs"])
@@ -27,7 +33,9 @@ async def list_jobs(
     include_archived: bool = False,
 ):
     """List all jobs for a task."""
-    jobs = await JobRepository.list_for_task(connection, task["id"], status=job_status, include_archived=include_archived)
+    jobs = await JobRepository.list_for_task(
+        connection, task["id"], status=job_status, include_archived=include_archived
+    )
     return JsonResponse(
         data=[JobResponse(**j) for j in jobs],
         message=f"Found {len(jobs)} job(s)",
@@ -62,7 +70,7 @@ async def create_jobs_bulk(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Count must be between 1 and 100",
         )
-    
+
     jobs = await JobRepository.create_bulk(connection, task["id"], count)
     return JsonResponse(
         data=[JobResponse(**j) for j in jobs],
@@ -80,7 +88,6 @@ async def get_job(
     from app.repositories.project import LabelRepository, ProjectRepository
     from app.repositories.task import TaskRepository
     from app.schemas.project import LabelResponse
-
 
     # Get image count
     image_count = await JobRepository.get_image_count(connection, job["id"])
@@ -108,13 +115,12 @@ async def get_job(
         labels=labels,
         allowed_model_ids=allowed_model_ids,
     )
-    
+
     return JsonResponse(
         data=response,
         message="Job retrieved successfully",
         status_code=status.HTTP_200_OK,
     )
-
 
 
 @router.patch("/jobs/{job_id}", response_model=JsonResponse[JobResponse, None])
@@ -131,7 +137,7 @@ async def update_job(
             message="No changes",
             status_code=status.HTTP_200_OK,
         )
-    
+
     updated = await JobRepository.update(connection, job["id"], update_data)
     return JsonResponse(
         data=JobResponse(**updated),
@@ -150,7 +156,7 @@ async def archive_job(
     job = await JobRepository.get_by_id(connection, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-        
+
     updated = await JobRepository.update(connection, job_id, {"is_archived": True})
     return JsonResponse(
         data=JobResponse(**updated),
@@ -169,7 +175,7 @@ async def unarchive_job(
     job = await JobRepository.get_by_id(connection, job_id)
     if not job:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
-        
+
     updated = await JobRepository.update(connection, job_id, {"is_archived": False})
     return JsonResponse(
         data=JobResponse(**updated),
@@ -191,10 +197,9 @@ async def delete_job(
 
     if not job["is_archived"]:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="Job must be archived before deletion"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Job must be archived before deletion"
         )
-    
+
     await JobRepository.delete(connection, job_id)
     return JsonResponse(
         data={"deleted": True},
@@ -217,7 +222,7 @@ async def start_job(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot start job with status '{job['status']}'",
         )
-    
+
     updated = await JobRepository.start_work(connection, job["id"])
     return JsonResponse(
         data=JobResponse(**updated),
@@ -237,7 +242,7 @@ async def complete_job(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot complete job with status '{job['status']}'",
         )
-    
+
     updated = await JobRepository.complete_work(connection, job["id"])
     return JsonResponse(
         data=JobResponse(**updated),
@@ -259,7 +264,7 @@ async def approve_job(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot approve/reject job with status '{job['status']}'",
         )
-    
+
     updated = await JobRepository.approve(
         connection,
         job["id"],
@@ -267,7 +272,7 @@ async def approve_job(
         is_approved=payload.is_approved,
         rejection_reason=payload.rejection_reason,
     )
-    
+
     action = "approved" if payload.is_approved else "rejected"
     return JsonResponse(
         data=JobResponse(**updated),
@@ -289,49 +294,49 @@ async def assign_job(
 ):
     """
     Assign a job to a user. Requires maintainer role.
-    
+
     Validates that the assignee is a member of the project.
     Updates status from 'pending' to 'assigned'.
     """
     # Get task to find project_id
     from app.repositories.task import TaskRepository
-    
+
     task = await TaskRepository.get_by_id(connection, job["task_id"])
     if not task:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parent task not found",
         )
-    
+
     # Validate assignee is a project member (or project owner)
     from app.repositories.project import ProjectRepository
-    
+
     project = await ProjectRepository.get_by_id(connection, task["project_id"])
     if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Parent project not found",
         )
-    
+
     # Check if assignee is project owner or a member
     is_owner = project["owner_id"] == payload.assignee_id
     membership = await ProjectMemberRepository.get_by_project_and_user(
         connection, task["project_id"], payload.assignee_id
     )
-    
+
     if not is_owner and not membership:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Assignee must be a project member",
         )
-    
+
     updated = await JobRepository.assign(connection, job["id"], payload.assignee_id)
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to assign job",
         )
-    
+
     return JsonResponse(
         data=JobResponse(**updated),
         message="Job assigned successfully",
@@ -346,7 +351,7 @@ async def unassign_job(
 ):
     """
     Remove assignment from a job. Requires maintainer role.
-    
+
     Reverts status from 'assigned' back to 'pending'.
     Cannot unassign if job is already in_progress or beyond.
     """
@@ -355,14 +360,14 @@ async def unassign_job(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot unassign job with status '{job['status']}'. Only 'pending' or 'assigned' jobs can be unassigned.",
         )
-    
+
     updated = await JobRepository.unassign(connection, job["id"])
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to unassign job",
         )
-    
+
     return JsonResponse(
         data=JobResponse(**updated),
         message="Job unassigned successfully",
@@ -374,6 +379,7 @@ async def unassign_job(
 # Job Annotation Sync
 # =============================================================================
 
+
 @router.post("/jobs/{job_id}/annotations/sync", response_model=JsonResponse[dict, None])
 async def sync_annotations(
     payload: JobSyncRequest,
@@ -382,112 +388,15 @@ async def sync_annotations(
 ):
     """
     Sync annotations for a job across multiple images.
-    
+
     Handlers creation, update, and deletion of tags, detections, segmentations, and keypoints.
     Updates image annotation status automatically.
     """
-    from app.repositories.annotation import (
-        DetectionRepository,
-        ImageTagRepository,
-        KeypointRepository,
-        SegmentationRepository,
-    )
-    from app.repositories.image import ImageRepository
-    from app.routers.annotations import _sync_image_annotation_status
-    
-    total_ops = 0
-    synced_images = []
-    
-    # Iterate over images provided in payload
-    for image_id, data in payload.images.items():
-        image_ops = 0
-        
-        # Verify image belongs to job (optional but good for security)
-        # We skip this query for performance optimization assuming frontend sends correct data
-        # But we DO need to fetch the image to pass it to _sync_image_annotation_status at the end
-        image = await ImageRepository.get_by_id(connection, image_id)
-        if not image or image["job_id"] != job["id"]:
-            # Skip invalid images
-            continue
-            
-        # 1. Tags
-        if data.tags:
-            # Create
-            if data.tags.created:
-                await ImageTagRepository.create_bulk(connection, image_id, data.tags.created)
-                image_ops += len(data.tags.created)
-            
-            # Delete
-            if data.tags.deleted:
-                await ImageTagRepository.delete_bulk(connection, data.tags.deleted)
-                image_ops += len(data.tags.deleted)
+    from app.services.annotation import AnnotationService
 
-        # 2. Detections
-        if data.detections:
-            # Create
-            if data.detections.created:
-                await DetectionRepository.create_bulk(connection, image_id, data.detections.created)
-                image_ops += len(data.detections.created)
-                
-            # Update
-            for update_item in data.detections.updated:
-                item_id = update_item.pop("id", None)
-                if item_id:
-                    await DetectionRepository.update(connection, item_id, update_item)
-                    image_ops += 1
-            
-            # Delete
-            if data.detections.deleted:
-                await DetectionRepository.delete_bulk(connection, data.detections.deleted)
-                image_ops += len(data.detections.deleted)
-
-        # 3. Segmentations
-        if data.segmentations:
-            # Create
-            if data.segmentations.created:
-                await SegmentationRepository.create_bulk(connection, image_id, data.segmentations.created)
-                image_ops += len(data.segmentations.created)
-                
-            # Update
-            for update_item in data.segmentations.updated:
-                item_id = update_item.pop("id", None)
-                if item_id:
-                    await SegmentationRepository.update(connection, item_id, update_item)
-                    image_ops += 1
-            
-            # Delete
-            if data.segmentations.deleted:
-                await SegmentationRepository.delete_bulk(connection, data.segmentations.deleted)
-                image_ops += len(data.segmentations.deleted)
-
-        # 4. Keypoints
-        if data.keypoints:
-            # Create
-            for kp_item in data.keypoints.created:
-                await KeypointRepository.create(connection, image_id, kp_item)
-                image_ops += 1
-                
-            # Update
-            for update_item in data.keypoints.updated:
-                item_id = update_item.pop("id", None)
-                if item_id:
-                    await KeypointRepository.update(connection, item_id, update_item)
-                    image_ops += 1
-            
-            # Delete
-            for delete_id in data.keypoints.deleted:
-                await KeypointRepository.delete(connection, delete_id)
-                image_ops += 1
-
-        # Sync Image Status if any ops happened
-        if image_ops > 0:
-            await _sync_image_annotation_status(connection, image)
-            total_ops += image_ops
-            synced_images.append(str(image_id))
-
+    result = await AnnotationService.sync(connection, job, payload)
     return JsonResponse(
-        data={"synced_images": synced_images, "total_operations": total_ops},
-        message=f"Synced {total_ops} changes across {len(synced_images)} image(s)",
+        data=result,
+        message=f"Synced {result['total_operations']} changes across {len(result['synced_images'])} image(s)",
         status_code=status.HTTP_200_OK,
     )
-

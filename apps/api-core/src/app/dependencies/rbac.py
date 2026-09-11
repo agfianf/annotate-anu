@@ -1,8 +1,9 @@
 """RBAC dependencies for project-level access control."""
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import Depends, HTTPException, Path, status
+from fastapi import Depends, HTTPException, Path, Request, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.dependencies.auth import get_current_active_user
@@ -65,7 +66,7 @@ async def resolve_project_role(
 
 class ProjectPermission:
     """Dependency for checking project permissions.
-    
+
     Usage:
         @router.get("/projects/{project_id}")
         async def get_project(
@@ -76,7 +77,7 @@ class ProjectPermission:
 
     def __init__(self, required_role: str = "viewer"):
         """Initialize permission checker.
-        
+
         Parameters
         ----------
         required_role : str
@@ -92,7 +93,7 @@ class ProjectPermission:
         connection: Annotated[AsyncConnection, Depends(get_async_conn)],
     ) -> dict:
         """Check if user has permission to access the project.
-        
+
         Parameters
         ----------
         project_id : int
@@ -101,12 +102,12 @@ class ProjectPermission:
             Current authenticated user
         connection : AsyncConnection
             Database connection
-            
+
         Returns
         -------
         dict
             Project data with permission info
-            
+
         Raises
         ------
         HTTPException
@@ -137,7 +138,7 @@ class ProjectPermission:
         membership = await ProjectMemberRepository.get_by_project_and_user(
             connection, project_id, current_user.id
         )
-        
+
         if not membership:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -208,7 +209,7 @@ class TaskPermission:
         membership = await ProjectMemberRepository.get_by_project_and_user(
             connection, task["project_id"], current_user.id
         )
-        
+
         if not membership:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -298,12 +299,15 @@ class JobPermission:
         membership = await ProjectMemberRepository.get_by_project_and_user(
             connection, task["project_id"], current_user.id
         )
-        
+
         if not membership:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have access to this job",
             )
+
+        if membership.get("allowed_task_ids") and task["id"] not in membership["allowed_task_ids"]:
+            raise HTTPException(403, "You don't have access to this task")
 
         # Check job-level restrictions
         if membership.get("allowed_job_ids"):
@@ -328,3 +332,34 @@ class JobPermission:
         job["_project"] = project
         job["_membership"] = membership
         return job
+
+
+class ImagePermission:
+    """Resolve image access through its actual parent job."""
+
+    def __init__(self, required_role: str = "viewer"):
+        self.required_role = required_role
+
+    async def __call__(
+        self,
+        image_id: UUID,
+        current_user: Annotated[UserBase, Depends(get_current_active_user)],
+        connection: Annotated[AsyncConnection, Depends(get_async_conn)],
+    ) -> dict:
+        from app.services.annotation import AnnotationService
+
+        image = await AnnotationService.get_image(connection, image_id)
+        job = await JobPermission(self.required_role)(image["job_id"], current_user, connection)
+        image["_project_id"] = job["_project"]["id"]
+        return image
+
+
+async def annotation_image_permission(
+    image_id: UUID,
+    request: Request,
+    current_user: Annotated[UserBase, Depends(get_current_active_user)],
+    connection: Annotated[AsyncConnection, Depends(get_async_conn)],
+) -> dict:
+    """Require job permissions before accessing any image annotation endpoint."""
+    required_role = "viewer" if request.method in {"GET", "HEAD"} else "annotator"
+    return await ImagePermission(required_role)(image_id, current_user, connection)

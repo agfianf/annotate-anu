@@ -403,7 +403,7 @@ function OverviewTab({
         <StatRow label="Average" value={formatFileSize(data.file_size_stats.avg)} />
         <StatRow label="Range" value={`${formatFileSize(data.file_size_stats.min)} - ${formatFileSize(data.file_size_stats.max)}`} />
         {data.file_size_stats.median && <StatRow label="Median" value={formatFileSize(data.file_size_stats.median)} />}
-        <StatRow label="Total" value={formatFileSize(data.file_size_stats.total || data.file_size_stats.avg * (data.total_images || 1))} />
+        <StatRow label="Total" value={formatFileSize(data.file_size_stats.avg * data.total_images)} />
       </SectionCard>
 
       {/* Dimensions Section */}
