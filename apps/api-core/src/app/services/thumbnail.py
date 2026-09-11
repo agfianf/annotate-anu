@@ -1,5 +1,6 @@
 """Thumbnail service for generating and caching image thumbnails."""
 
+import asyncio
 import hashlib
 from pathlib import Path
 
@@ -63,7 +64,9 @@ class ThumbnailService:
         """
         # Validate size_key
         if size_key not in self.sizes:
-            raise ValueError(f"Invalid size_key: {size_key}. Must be one of {list(self.sizes.keys())}")
+            raise ValueError(
+                f"Invalid size_key: {size_key}. Must be one of {list(self.sizes.keys())}"
+            )
 
         cache_path = self._get_cache_path(relative_path, size_key)
         source_path = self.base_path / relative_path
@@ -101,18 +104,29 @@ class ThumbnailService:
             If thumbnail generation fails
         """
         try:
-            with Image.open(source) as img:
-                # Convert to RGB if necessary (for PNG with transparency)
-                if img.mode in ("RGBA", "P"):
-                    img = img.convert("RGB")
-
-                # Create thumbnail (maintains aspect ratio)
-                img.thumbnail(size, Image.Resampling.LANCZOS)
-
-                # Save to cache
-                img.save(target, "JPEG", quality=self.quality, optimize=True)
+            # PIL decode/resize/encode is CPU-bound and would stall the event loop
+            await asyncio.to_thread(self._render_thumbnail, source, target, size)
         except Exception as e:
             raise RuntimeError(f"Failed to generate thumbnail: {e}")
+
+    def _render_thumbnail(self, source: Path, target: Path, size: tuple[int, int]) -> None:
+        """Blocking PIL work; run via ``asyncio.to_thread``."""
+        with Image.open(source) as img:
+            # Convert to RGB if necessary (for PNG with transparency)
+            if img.mode in ("RGBA", "P"):
+                img = img.convert("RGB")
+
+            # Create thumbnail (maintains aspect ratio)
+            img.thumbnail(size, Image.Resampling.LANCZOS)
+
+            # Save to cache
+            img.save(target, "JPEG", quality=self.quality, optimize=True)
+
+    @staticmethod
+    def _read_dimensions(source: Path) -> tuple[int, int]:
+        """Blocking PIL header read; run via ``asyncio.to_thread``."""
+        with Image.open(source) as img:
+            return img.size
 
     async def get_image_info(self, relative_path: str) -> dict:
         """Get image metadata.
@@ -137,8 +151,7 @@ class ThumbnailService:
         if not source_path.exists():
             raise FileNotFoundError(f"Image not found: {relative_path}")
 
-        with Image.open(source_path) as img:
-            width, height = img.size
+        width, height = await asyncio.to_thread(self._read_dimensions, source_path)
 
         stat = source_path.stat()
         suffix = source_path.suffix[1:].lower()

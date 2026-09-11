@@ -4,6 +4,7 @@ import asyncio
 import logging
 from uuid import UUID
 
+import aiofiles
 import redis
 
 from app.config import settings
@@ -12,11 +13,13 @@ from app.repositories.models import ModelAsyncRepositories
 from app.services.mock_classifier import MockClassifierService
 from app.tasks.main import celery_app
 
-
 logger = logging.getLogger(__name__)
 
 # Redis progress tracking TTL (1 hour)
 REDIS_PROGRESS_TTL = 3600
+
+# Commit tags and write progress every this many images instead of every image
+PROGRESS_BATCH_SIZE = 25
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
@@ -48,9 +51,7 @@ def batch_classify_images_task(
     Returns:
         dict with classification results
     """
-    logger.info(
-        f"Starting batch classification: {len(image_ids)} images, model={model_id}"
-    )
+    logger.info(f"Starting batch classification: {len(image_ids)} images, model={model_id}")
 
     try:
         result = asyncio.run(
@@ -148,7 +149,9 @@ async def _batch_classify_async(
             uncategorized_category = await TagRepository.get_uncategorized_category(
                 connection, project_id
             )
-            uncategorized_category_id = uncategorized_category["id"] if uncategorized_category else None
+            uncategorized_category_id = (
+                uncategorized_category["id"] if uncategorized_category else None
+            )
 
             # Pre-create category if mode is "categorized" + "create"
             config = label_mapping_config or {}
@@ -178,14 +181,23 @@ async def _batch_classify_async(
                     created_category_id = new_category["id"]
                 logger.info(f"Using category '{cat_name}' with ID {created_category_id}")
 
-            for image_id in image_ids:
+            def write_progress() -> None:
+                redis_client.hset(
+                    progress_key,
+                    mapping={
+                        "status": "running",
+                        "processed": processed,
+                        "failed": failed,
+                        "total": total,
+                    },
+                )
+
+            for index, image_id in enumerate(image_ids, start=1):
                 try:
                     # For mock classifiers, we don't need to fetch image bytes
                     if is_mock:
                         # Verify image exists in database
-                        image = await SharedImageRepository.get_by_id(
-                            connection, UUID(image_id)
-                        )
+                        image = await SharedImageRepository.get_by_id(connection, UUID(image_id))
                         if not image:
                             logger.warning(f"Image not found: {image_id}")
                             failed += 1
@@ -195,9 +207,7 @@ async def _batch_classify_async(
                         classification = await classifier.classify_by_id(image_id, top_k=1)
                     else:
                         # For real classifiers, get image bytes
-                        image = await SharedImageRepository.get_by_id(
-                            connection, UUID(image_id)
-                        )
+                        image = await SharedImageRepository.get_by_id(connection, UUID(image_id))
                         if not image:
                             logger.warning(f"Image not found: {image_id}")
                             failed += 1
@@ -235,30 +245,30 @@ async def _batch_classify_async(
                                 UUID(image_id),
                                 tag_id,
                             )
-                            await connection.commit()
 
-                    results.append({
-                        "image_id": image_id,
-                        "predicted_class": classification.predicted_class,
-                        "confidence": classification.confidence,
-                        "tag_created": create_tags and classification.predicted_class is not None,
-                    })
+                    results.append(
+                        {
+                            "image_id": image_id,
+                            "predicted_class": classification.predicted_class,
+                            "confidence": classification.confidence,
+                            "tag_created": create_tags
+                            and classification.predicted_class is not None,
+                        }
+                    )
                     processed += 1
 
                 except Exception as e:
                     logger.error(f"Failed to classify image {image_id}: {e}")
                     failed += 1
 
-                # Update progress
-                redis_client.hset(
-                    progress_key,
-                    mapping={
-                        "status": "running",
-                        "processed": processed,
-                        "failed": failed,
-                        "total": total,
-                    },
-                )
+                # Commit tags and publish progress in batches, not per image
+                if index % PROGRESS_BATCH_SIZE == 0:
+                    await connection.commit()
+                    write_progress()
+
+            # Flush whatever the last partial batch left behind
+            await connection.commit()
+            write_progress()
 
             # Mark complete
             redis_client.hset(
@@ -293,6 +303,11 @@ async def _batch_classify_async(
         )
         raise
 
+    finally:
+        redis_client.close()
+        # Each Celery task gets its own event loop and engine; without this the pool leaks per task
+        await engine.dispose()
+
 
 async def _get_or_create_tag(
     connection,
@@ -301,7 +316,7 @@ async def _get_or_create_tag(
     label_mapping_config: dict | None,
     uncategorized_category_id: str | None,
     created_category_id: str | None,
-    TagRepository,
+    tag_repository,
 ) -> str | None:
     """Get or create tag based on mapping configuration.
 
@@ -312,7 +327,7 @@ async def _get_or_create_tag(
         label_mapping_config: Label mapping configuration
         uncategorized_category_id: ID of uncategorized category
         created_category_id: ID of newly created category (if any)
-        TagRepository: Tag repository class
+        tag_repository: Tag repository class
 
     Returns:
         Tag ID or None
@@ -337,11 +352,11 @@ async def _get_or_create_tag(
                 return None
 
             # Find or create tag
-            tag = await TagRepository.get_by_name(
+            tag = await tag_repository.get_by_name(
                 connection, tag_name, project_id, uncategorized_category_id
             )
             if not tag:
-                tag = await TagRepository.create(
+                tag = await tag_repository.create(
                     connection,
                     project_id,
                     {
@@ -364,7 +379,9 @@ async def _get_or_create_tag(
             if tag_id:
                 return tag_id
             else:
-                logger.warning(f"No tag mapping for class '{predicted_class}' in existing category mode")
+                logger.warning(
+                    f"No tag mapping for class '{predicted_class}' in existing category mode"
+                )
                 return None
 
         else:  # create new category
@@ -378,11 +395,11 @@ async def _get_or_create_tag(
             tag_name = tag_names.get(predicted_class) or predicted_class
 
             # Find or create tag in the new category
-            tag = await TagRepository.get_by_name(
+            tag = await tag_repository.get_by_name(
                 connection, tag_name, project_id, created_category_id
             )
             if not tag:
-                tag = await TagRepository.create(
+                tag = await tag_repository.create(
                     connection,
                     project_id,
                     {
@@ -415,10 +432,10 @@ async def _get_image_bytes(image: dict) -> bytes | None:
         # Try to construct from file path - this depends on storage configuration
         file_path = image.get("file_path")
         if file_path:
-            # For local storage, try to read directly
+            # For local storage, read off the event loop
             try:
-                with open(file_path, "rb") as f:
-                    return f.read()
+                async with aiofiles.open(file_path, "rb") as f:
+                    return await f.read()
             except Exception:
                 pass
         return None

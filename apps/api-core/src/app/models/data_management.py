@@ -110,6 +110,8 @@ shared_images = Table(
     Index("ix_shared_images_checksum", "checksum_sha256"),
     Index("ix_shared_images_filename", "filename"),
     Index("ix_shared_images_aspect_ratio", "aspect_ratio"),
+    Index("ix_shared_images_dimensions", "width", "height"),
+    Index("ix_shared_images_file_size_bytes", "file_size_bytes"),
 )
 
 

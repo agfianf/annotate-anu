@@ -7,7 +7,6 @@ from sqlalchemy import (
     Index,
     String,
     Table,
-    Text,
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -136,4 +135,5 @@ refresh_tokens = Table(
     # Indexes
     Index("ix_refresh_tokens_user_id", "user_id"),
     Index("ix_refresh_tokens_token_hash", "token_hash"),
+    Index("ix_refresh_tokens_expires_at", "expires_at"),
 )

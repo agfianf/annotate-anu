@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from app.models.data_management import shared_images, shared_image_tags, tags
+from app.models.data_management import shared_image_tags, shared_images, tags
 
 
 class SharedImageRepository:
@@ -49,16 +49,13 @@ class SharedImageRepository:
         base_query = select(shared_images)
 
         if search:
-            base_query = base_query.where(
-                shared_images.c.filename.ilike(f"%{search}%")
-            )
+            base_query = base_query.where(shared_images.c.filename.ilike(f"%{search}%"))
 
         if tag_ids:
             # Filter by tags - image must have ALL specified tags
             for tag_id in tag_ids:
-                subquery = (
-                    select(shared_image_tags.c.shared_image_id)
-                    .where(shared_image_tags.c.tag_id == tag_id)
+                subquery = select(shared_image_tags.c.shared_image_id).where(
+                    shared_image_tags.c.tag_id == tag_id
                 )
                 base_query = base_query.where(shared_images.c.id.in_(subquery))
 
@@ -68,8 +65,7 @@ class SharedImageRepository:
 
         # Get page
         stmt = (
-            base_query
-            .order_by(shared_images.c.created_at.desc())
+            base_query.order_by(shared_images.c.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
@@ -138,6 +134,50 @@ class SharedImageRepository:
         result = await connection.execute(stmt)
         return [dict(row._mapping) for row in result.fetchall()]
 
+    # Keep the IN list well under asyncpg's bind-parameter ceiling.
+    _TAGS_BULK_CHUNK = 10000
+
+    @staticmethod
+    async def get_tags_bulk(
+        connection: AsyncConnection,
+        image_ids: list[UUID],
+        project_id: int | None,
+    ) -> dict[UUID, list[dict]]:
+        """Get tags for many shared images in one query, grouped by image id.
+
+        Each tag dict has the same shape as ``get_tags`` returns, and the tags
+        for one image are ordered by name. Images with no tags are absent from
+        the result, so callers should use ``.get(image_id, [])``.
+
+        ``project_id=None`` returns tags across all projects (global registry).
+        """
+        if not image_ids:
+            return {}
+
+        # Preserve order but drop duplicates so the IN list stays minimal.
+        unique_ids = list(dict.fromkeys(image_ids))
+        grouped: dict[UUID, list[dict]] = {}
+
+        chunk = SharedImageRepository._TAGS_BULK_CHUNK
+        for start in range(0, len(unique_ids), chunk):
+            id_chunk = unique_ids[start : start + chunk]
+            stmt = (
+                select(tags, shared_image_tags.c.shared_image_id)
+                .join(shared_image_tags, tags.c.id == shared_image_tags.c.tag_id)
+                .where(shared_image_tags.c.shared_image_id.in_(id_chunk))
+                .order_by(tags.c.name)
+            )
+            if project_id is not None:
+                stmt = stmt.where(shared_image_tags.c.project_id == project_id)
+
+            result = await connection.execute(stmt)
+            for row in result.fetchall():
+                tag = dict(row._mapping)
+                image_id = tag.pop("shared_image_id")
+                grouped.setdefault(image_id, []).append(tag)
+
+        return grouped
+
     @staticmethod
     async def exists_by_paths(
         connection: AsyncConnection,
@@ -147,9 +187,8 @@ class SharedImageRepository:
         if not file_paths:
             return {}
 
-        stmt = (
-            select(shared_images.c.file_path, shared_images.c.id)
-            .where(shared_images.c.file_path.in_(file_paths))
+        stmt = select(shared_images.c.file_path, shared_images.c.id).where(
+            shared_images.c.file_path.in_(file_paths)
         )
         result = await connection.execute(stmt)
         return {row.file_path: row.id for row in result.fetchall()}
@@ -167,16 +206,16 @@ class SharedImageRepository:
 
         stmt = (
             select(
-                jobs.c.id.label('job_id'),
-                jobs.c.status.label('job_status'),
-                jobs.c.sequence_number.label('job_sequence'),
-                jobs.c.is_archived.label('job_is_archived'),
-                tasks.c.id.label('task_id'),
-                tasks.c.name.label('task_name'),
-                tasks.c.status.label('task_status'),
-                tasks.c.is_archived.label('task_is_archived'),
+                jobs.c.id.label("job_id"),
+                jobs.c.status.label("job_status"),
+                jobs.c.sequence_number.label("job_sequence"),
+                jobs.c.is_archived.label("job_is_archived"),
+                tasks.c.id.label("task_id"),
+                tasks.c.name.label("task_name"),
+                tasks.c.status.label("task_status"),
+                tasks.c.is_archived.label("task_is_archived"),
                 jobs.c.assignee_id,
-                users.c.email.label('assignee_email'),
+                users.c.email.label("assignee_email"),
             )
             .join(jobs, images.c.job_id == jobs.c.id)
             .join(tasks, jobs.c.task_id == tasks.c.id)

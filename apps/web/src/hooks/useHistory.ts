@@ -8,6 +8,8 @@ interface HistoryState {
 
 interface UseHistoryOptions {
   maxHistorySize?: number
+  /** Number of per-image history stacks kept in memory (least recently touched are dropped). */
+  maxImages?: number
 }
 
 interface UseHistoryReturn {
@@ -27,10 +29,22 @@ export function useHistory(
   currentImageId: string | null,
   options: UseHistoryOptions = {}
 ): UseHistoryReturn {
-  const { maxHistorySize = 50 } = options
+  const { maxHistorySize = 50, maxImages = 20 } = options
 
-  // Store history per image ID in a Map
+  // Store history per image ID in a Map. Insertion order doubles as recency: `touchHistory` re-inserts
+  // the key on every write so the oldest entries can be evicted once the cap is exceeded.
   const historyMapRef = useRef<Map<string, HistoryState>>(new Map())
+
+  const touchHistory = useCallback((imageId: string, history: HistoryState) => {
+    const map = historyMapRef.current
+    map.delete(imageId)
+    map.set(imageId, history)
+    while (map.size > maxImages) {
+      const oldest = map.keys().next().value
+      if (oldest === undefined) break
+      map.delete(oldest)
+    }
+  }, [maxImages])
 
   // Track the current image's history state
   const [currentHistory, setCurrentHistory] = useState<HistoryState>({
@@ -43,15 +57,16 @@ export function useHistory(
     if (currentImageId) {
       const existingHistory = historyMapRef.current.get(currentImageId)
       if (existingHistory) {
+        touchHistory(currentImageId, existingHistory)
         setCurrentHistory(existingHistory)
       } else {
         // Initialize new history for this image
         const newHistory: HistoryState = { past: [], future: [] }
-        historyMapRef.current.set(currentImageId, newHistory)
+        touchHistory(currentImageId, newHistory)
         setCurrentHistory(newHistory)
       }
     }
-  }, [currentImageId])
+  }, [currentImageId, touchHistory])
 
   // Record a new change in history
   const recordChange = useCallback(
@@ -59,8 +74,9 @@ export function useHistory(
       if (!currentImageId) return
 
       setCurrentHistory(prev => {
-        // Create a deep copy of annotations to avoid reference issues
-        const annotationsCopy = JSON.parse(JSON.stringify(annotations))
+        // Annotations are replaced immutably by every caller, so a shallow copy of the array is enough
+        // to freeze this snapshot; the individual annotation objects are never mutated in place.
+        const annotationsCopy = [...annotations]
 
         // Add current state to past, clear future
         const newPast = [...prev.past, annotationsCopy]
@@ -76,12 +92,12 @@ export function useHistory(
         }
 
         // Update the map
-        historyMapRef.current.set(currentImageId, newHistory)
+        touchHistory(currentImageId, newHistory)
 
         return newHistory
       })
     },
-    [currentImageId, maxHistorySize]
+    [currentImageId, maxHistorySize, touchHistory]
   )
 
   // Undo the last change
@@ -98,13 +114,13 @@ export function useHistory(
         past: newPast,
         future: [previousState, ...prev.future],
       }
-      historyMapRef.current.set(currentImageId, newHistory)
+      touchHistory(currentImageId, newHistory)
       return newHistory
     })
 
     // Return the state to restore (one before the popped state)
     return newPast.length > 0 ? newPast[newPast.length - 1] : []
-  }, [currentImageId, currentHistory.past])
+  }, [currentImageId, currentHistory.past, touchHistory])
 
   // Redo the last undone change
   const redo = useCallback((): Annotation[] | null => {
@@ -120,21 +136,21 @@ export function useHistory(
         past: [...prev.past, nextState],
         future: newFuture,
       }
-      historyMapRef.current.set(currentImageId, newHistory)
+      touchHistory(currentImageId, newHistory)
       return newHistory
     })
 
     return nextState
-  }, [currentImageId, currentHistory.future])
+  }, [currentImageId, currentHistory.future, touchHistory])
 
   // Clear history for current image
   const clearHistory = useCallback(() => {
     if (!currentImageId) return
 
     const newHistory: HistoryState = { past: [], future: [] }
-    historyMapRef.current.set(currentImageId, newHistory)
+    touchHistory(currentImageId, newHistory)
     setCurrentHistory(newHistory)
-  }, [currentImageId])
+  }, [currentImageId, touchHistory])
 
   return {
     recordChange,

@@ -160,6 +160,7 @@ image_quality_metrics = Table(
     # Indexes
     Index("ix_image_quality_metrics_shared_image_id", "shared_image_id", unique=True),
     Index("ix_image_quality_metrics_status", "status"),
+    Index("ix_image_quality_metrics_status_image", "status", "shared_image_id"),
     Index("ix_image_quality_metrics_overall_quality", "overall_quality"),
     Index("ix_image_quality_metrics_sharpness", "sharpness"),
     Index("ix_image_quality_metrics_uniqueness", "uniqueness"),

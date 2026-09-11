@@ -46,6 +46,26 @@ class ModelServerService:
         """
         self.base_url = (base_url or settings.MODEL_SERVER_URL).rstrip("/")
         self.timeout = timeout
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return the shared HTTP client, creating it on first use.
+
+        One long-lived client keeps a connection pool across requests instead of paying
+        a TCP (and TLS) handshake on every call.
+        """
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout, connect=5.0),
+                limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+            )
+        return self._client
+
+    async def aclose(self) -> None:
+        """Close the shared HTTP client and its pooled connections."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     @staticmethod
     def validate_name(name: str) -> str:
@@ -155,8 +175,10 @@ class ModelServerService:
         """
         url = f"{self.base_url}{path}"
         try:
-            async with httpx.AsyncClient(timeout=timeout or self.timeout) as client:
-                response = await client.request(method, url, **kwargs)
+            client = self._get_client()
+            response = await client.request(
+                method, url, timeout=httpx.Timeout(timeout or self.timeout, connect=5.0), **kwargs
+            )
         except httpx.HTTPError as exc:
             logger.error(f"Model server request failed ({method} {url}): {exc}")
             raise HTTPException(status_code=502, detail="Model server is not reachable") from exc

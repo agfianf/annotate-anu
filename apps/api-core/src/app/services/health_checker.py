@@ -1,7 +1,6 @@
 """Health check service for external models."""
 
 import time
-from datetime import datetime, timezone
 
 import httpx
 
@@ -16,6 +15,26 @@ class HealthChecker:
     def __init__(self):
         """Initialize health checker."""
         self.timeout = settings.HEALTH_CHECK_TIMEOUT
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return the shared HTTP client, creating it on first use.
+
+        One long-lived client keeps a connection pool across requests instead of paying
+        a TCP (and TLS) handshake on every call.
+        """
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout, connect=5.0),
+                limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+            )
+        return self._client
+
+    async def aclose(self) -> None:
+        """Close the shared HTTP client and its pooled connections."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def check_health(
         self,
@@ -51,28 +70,28 @@ class HealthChecker:
         start_time = time.time()
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(health_url, headers=headers)
-                response_time_ms = (time.time() - start_time) * 1000
+            client = self._get_client()
+            response = await client.get(health_url, headers=headers)
+            response_time_ms = (time.time() - start_time) * 1000
 
-                if response.status_code == 200:
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    # Try standard format first: {"status": "healthy", ...}
+                    health_response = ExternalHealthResponse(**data)
+                    status_msg = f"Healthy: {health_response.status}"
+                    return True, status_msg, response_time_ms
+                except Exception:
+                    # Accept alternative formats like {"success": true}
                     try:
                         data = response.json()
-                        # Try standard format first: {"status": "healthy", ...}
-                        health_response = ExternalHealthResponse(**data)
-                        status_msg = f"Healthy: {health_response.status}"
-                        return True, status_msg, response_time_ms
+                        if isinstance(data, dict) and data.get("success"):
+                            return True, "Healthy (success=true)", response_time_ms
                     except Exception:
-                        # Accept alternative formats like {"success": true}
-                        try:
-                            data = response.json()
-                            if isinstance(data, dict) and data.get("success"):
-                                return True, "Healthy (success=true)", response_time_ms
-                        except Exception:
-                            pass
-                        return True, "Healthy (non-standard response)", response_time_ms
-                else:
-                    return False, f"HTTP {response.status_code}", response_time_ms
+                        pass
+                    return True, "Healthy (non-standard response)", response_time_ms
+            else:
+                return False, f"HTTP {response.status_code}", response_time_ms
 
         except httpx.TimeoutException:
             return False, f"Timeout after {self.timeout}s", None
@@ -82,9 +101,7 @@ class HealthChecker:
             return False, f"Error: {str(e)}", None
 
     async def fetch_capabilities(
-        self,
-        endpoint_url: str,
-        auth_token: str | None = None
+        self, endpoint_url: str, auth_token: str | None = None
     ) -> dict | None:
         """Fetch capabilities from external model.
 
@@ -106,18 +123,18 @@ class HealthChecker:
             headers["Authorization"] = f"Bearer {auth_token}"
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(capabilities_url, headers=headers)
+            client = self._get_client()
+            response = await client.get(capabilities_url, headers=headers)
 
-                if response.status_code == 200:
-                    data = response.json()
-                    # Extract capabilities from response
-                    if "capabilities" in data:
-                        return data["capabilities"]
-                    return data
-                else:
-                    logger.warning(f"Failed to fetch capabilities: HTTP {response.status_code}")
-                    return None
+            if response.status_code == 200:
+                data = response.json()
+                # Extract capabilities from response
+                if "capabilities" in data:
+                    return data["capabilities"]
+                return data
+            else:
+                logger.warning(f"Failed to fetch capabilities: HTTP {response.status_code}")
+                return None
 
         except Exception as e:
             logger.warning(f"Error fetching capabilities: {e}")

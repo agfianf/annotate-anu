@@ -35,6 +35,26 @@ class InferenceProxyService:
         """
         self.sam3_url = sam3_url.rstrip("/")
         self.timeout = 120.0  # 2 minutes for model inference
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return the shared HTTP client, creating it on first use.
+
+        One long-lived client keeps a connection pool across requests instead of paying
+        a TCP (and TLS) handshake on every call.
+        """
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout, connect=5.0),
+                limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+            )
+        return self._client
+
+    async def aclose(self) -> None:
+        """Close the shared HTTP client and its pooled connections."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def text_prompt(
         self,
@@ -76,19 +96,26 @@ class InferenceProxyService:
         """
         if model.id == "sam3":
             return await self._sam3_text_prompt(
-                image_bytes, image_filename, image_content_type,
-                text_prompt, threshold, mask_threshold, simplify_tolerance, return_visualization
+                image_bytes,
+                image_filename,
+                image_content_type,
+                text_prompt,
+                threshold,
+                mask_threshold,
+                simplify_tolerance,
+                return_visualization,
             )
 
         # Check if this is a mock segmenter
         is_mock_segmenter = (
-            model.id == "mock-segmenter"
-            or model.endpoint_url == "internal://mock-segmenter"
+            model.id == "mock-segmenter" or model.endpoint_url == "internal://mock-segmenter"
         )
 
         if is_mock_segmenter:
             return await self._mock_segment(
-                model, image_bytes, "text",
+                model,
+                image_bytes,
+                "text",
                 text_prompt=text_prompt,
                 threshold=threshold,
             )
@@ -146,19 +173,26 @@ class InferenceProxyService:
         """
         if model.id == "sam3":
             return await self._sam3_bbox_prompt(
-                image_bytes, image_filename, image_content_type,
-                bounding_boxes, threshold, mask_threshold, simplify_tolerance, return_visualization
+                image_bytes,
+                image_filename,
+                image_content_type,
+                bounding_boxes,
+                threshold,
+                mask_threshold,
+                simplify_tolerance,
+                return_visualization,
             )
 
         # Check if this is a mock segmenter
         is_mock_segmenter = (
-            model.id == "mock-segmenter"
-            or model.endpoint_url == "internal://mock-segmenter"
+            model.id == "mock-segmenter" or model.endpoint_url == "internal://mock-segmenter"
         )
 
         if is_mock_segmenter:
             return await self._mock_segment(
-                model, image_bytes, "bbox",
+                model,
+                image_bytes,
+                "bbox",
                 bounding_boxes=bounding_boxes,
                 threshold=threshold,
             )
@@ -220,24 +254,25 @@ class InferenceProxyService:
 
         # Check if this is a mock detector or mock segmenter
         is_mock_detector = (
-            model.id == "mock-detector"
-            or model.endpoint_url == "internal://mock-detector"
+            model.id == "mock-detector" or model.endpoint_url == "internal://mock-detector"
         )
         is_mock_segmenter = (
-            model.id == "mock-segmenter"
-            or model.endpoint_url == "internal://mock-segmenter"
+            model.id == "mock-segmenter" or model.endpoint_url == "internal://mock-segmenter"
         )
 
         if is_mock_detector:
             return await self._mock_detect(
-                model, image_bytes,
+                model,
+                image_bytes,
                 threshold=threshold,
                 class_filter=class_filter,
             )
 
         if is_mock_segmenter:
             return await self._mock_segment(
-                model, image_bytes, "auto",
+                model,
+                image_bytes,
+                "auto",
                 threshold=threshold,
                 class_filter=class_filter,
             )
@@ -465,7 +500,9 @@ class InferenceProxyService:
 
         url = f"{model.endpoint_url.rstrip('/')}{classification_path}"
 
-        logger.info(f"Proxying classify: image size={len(image_bytes)} bytes, filename={image_filename}")
+        logger.info(
+            f"Proxying classify: image size={len(image_bytes)} bytes, filename={image_filename}"
+        )
 
         headers = {}
         if model.auth_token:
@@ -477,9 +514,9 @@ class InferenceProxyService:
         logger.info(f"Proxying classification to BYOM: {url}")
         start_time = time.time()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(url, files=files, data=data, headers=headers)
-            response.raise_for_status()
+        client = self._get_client()
+        response = await client.post(url, files=files, data=data, headers=headers)
+        response.raise_for_status()
 
         elapsed_ms = (time.time() - start_time) * 1000
         logger.info(f"BYOM classification completed in {elapsed_ms:.0f}ms")
@@ -489,7 +526,9 @@ class InferenceProxyService:
         if "data" in result:
             result = result["data"]
 
-        return self._normalize_classification_response(result, response_mapping, model.id, elapsed_ms)
+        return self._normalize_classification_response(
+            result, response_mapping, model.id, elapsed_ms
+        )
 
     def _normalize_classification_response(
         self,
@@ -519,26 +558,29 @@ class InferenceProxyService:
         mapping = response_mapping or {}
 
         # Extract predicted class
-        predicted_class = self._get_nested_value(
-            data, mapping.get("predicted_class_field", "predicted_class")
-        ) or ""
+        predicted_class = (
+            self._get_nested_value(data, mapping.get("predicted_class_field", "predicted_class"))
+            or ""
+        )
 
         # Extract confidence
-        confidence = self._get_nested_value(
-            data, mapping.get("confidence_field", "confidence")
-        ) or 0.0
+        confidence = (
+            self._get_nested_value(data, mapping.get("confidence_field", "confidence")) or 0.0
+        )
 
         # Extract top-k predictions
-        raw_predictions = self._get_nested_value(
-            data, mapping.get("top_k_field", "top_k_predictions")
-        ) or []
+        raw_predictions = (
+            self._get_nested_value(data, mapping.get("top_k_field", "top_k_predictions")) or []
+        )
 
         top_k_predictions = []
         for p in raw_predictions:
             if isinstance(p, dict):
                 class_name = p.get("class_name") or p.get("label") or p.get("class") or ""
                 probability = p.get("probability") or p.get("score") or p.get("confidence") or 0.0
-                top_k_predictions.append(ClassPrediction(class_name=class_name, probability=probability))
+                top_k_predictions.append(
+                    ClassPrediction(class_name=class_name, probability=probability)
+                )
 
         # Extract full probability distribution if available
         class_probabilities = data.get("class_probabilities", {})
@@ -589,7 +631,9 @@ class InferenceProxyService:
         """
         url = f"{self.sam3_url}/api/v1/sam3/inference/text"
 
-        logger.info(f"Proxying text: image size={len(image_bytes)} bytes, filename={image_filename}")
+        logger.info(
+            f"Proxying text: image size={len(image_bytes)} bytes, filename={image_filename}"
+        )
 
         files = {"image": (image_filename, image_bytes, image_content_type)}
         data = {
@@ -603,9 +647,9 @@ class InferenceProxyService:
         logger.info(f"Proxying text prompt to SAM3: {url}")
         start_time = time.time()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(url, files=files, data=data)
-            response.raise_for_status()
+        client = self._get_client()
+        response = await client.post(url, files=files, data=data)
+        response.raise_for_status()
 
         elapsed_ms = (time.time() - start_time) * 1000
         logger.info(f"SAM3 text prompt completed in {elapsed_ms:.0f}ms")
@@ -650,7 +694,9 @@ class InferenceProxyService:
         """
         url = f"{self.sam3_url}/api/v1/sam3/inference/bbox"
 
-        logger.info(f"Proxying bbox: image size={len(image_bytes)} bytes, filename={image_filename}")
+        logger.info(
+            f"Proxying bbox: image size={len(image_bytes)} bytes, filename={image_filename}"
+        )
 
         files = {"image": (image_filename, image_bytes, image_content_type)}
         data = {
@@ -664,9 +710,9 @@ class InferenceProxyService:
         logger.info(f"Proxying bbox prompt to SAM3: {url}")
         start_time = time.time()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(url, files=files, data=data)
-            response.raise_for_status()
+        client = self._get_client()
+        response = await client.post(url, files=files, data=data)
+        response.raise_for_status()
 
         elapsed_ms = (time.time() - start_time) * 1000
         logger.info(f"SAM3 bbox prompt completed in {elapsed_ms:.0f}ms")
@@ -721,7 +767,9 @@ class InferenceProxyService:
 
         url = f"{model.endpoint_url.rstrip('/')}{inference_path}"
 
-        logger.info(f"Proxying BYOM: image size={len(image_bytes)} bytes, filename={image_filename}")
+        logger.info(
+            f"Proxying BYOM: image size={len(image_bytes)} bytes, filename={image_filename}"
+        )
 
         headers = {}
         if model.auth_token:
@@ -745,9 +793,9 @@ class InferenceProxyService:
         logger.info(f"Proxying {mode} inference to BYOM: {url}")
         start_time = time.time()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(url, files=files, data=data, headers=headers)
-            response.raise_for_status()
+        client = self._get_client()
+        response = await client.post(url, files=files, data=data, headers=headers)
+        response.raise_for_status()
 
         elapsed_ms = (time.time() - start_time) * 1000
         logger.info(f"BYOM {mode} inference completed in {elapsed_ms:.0f}ms")
@@ -776,9 +824,7 @@ class InferenceProxyService:
             num_objects=data["num_objects"],
             boxes=data["boxes"],
             scores=data["scores"],
-            masks=[
-                MaskPolygon(polygons=m["polygons"], area=m["area"]) for m in data["masks"]
-            ],
+            masks=[MaskPolygon(polygons=m["polygons"], area=m["area"]) for m in data["masks"]],
             labels=None,  # SAM3 doesn't return class labels
             processing_time_ms=data["processing_time_ms"],
             visualization_base64=data.get("visualization_base64"),
@@ -848,9 +894,7 @@ class InferenceProxyService:
         raw_masks = self._get_nested_value(data, masks_field) if masks_field else None
         labels = self._get_nested_value(data, labels_field) if labels_field else None
         num_objects = (
-            self._get_nested_value(data, num_objects_field)
-            if num_objects_field
-            else len(boxes)
+            self._get_nested_value(data, num_objects_field) if num_objects_field else len(boxes)
         )
 
         # Process masks
@@ -858,11 +902,7 @@ class InferenceProxyService:
         if raw_masks:
             for m in raw_masks:
                 if isinstance(m, dict):
-                    masks.append(
-                        MaskPolygon(
-                            polygons=m.get("polygons", []), area=m.get("area", 0)
-                        )
-                    )
+                    masks.append(MaskPolygon(polygons=m.get("polygons", []), area=m.get("area", 0)))
                 else:
                     # Handle bare polygon arrays
                     masks.append(MaskPolygon(polygons=[m], area=0))

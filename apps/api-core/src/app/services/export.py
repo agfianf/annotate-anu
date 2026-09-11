@@ -4,11 +4,9 @@ import csv
 import io
 import json
 import logging
-import os
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -34,11 +32,9 @@ from app.schemas.export import (
     ClassificationMappingConfig,
     ExportCreate,
     ExportPreview,
-    ExportSummary,
     FilterSnapshot,
     ModeOptions,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -86,14 +82,16 @@ async def resolve_export_metadata(
         )
         result = await connection.execute(tag_query)
         for row in result.mappings():
-            resolved["tags"].append({
-                "id": str(row["id"]),
-                "name": row["name"],
-                "color": row["color"],
-                "category_id": str(row["category_id"]),
-                "category_name": row["category_name"],
-                "category_color": row["category_color"],
-            })
+            resolved["tags"].append(
+                {
+                    "id": str(row["id"]),
+                    "name": row["name"],
+                    "color": row["color"],
+                    "category_id": str(row["category_id"]),
+                    "category_name": row["category_name"],
+                    "category_color": row["category_color"],
+                }
+            )
         resolved["filter_summary"]["tag_count"] = len(resolved["tags"])
 
     # 2. Resolve excluded tags (with category info)
@@ -113,14 +111,16 @@ async def resolve_export_metadata(
         )
         result = await connection.execute(tag_query)
         for row in result.mappings():
-            resolved["excluded_tags"].append({
-                "id": str(row["id"]),
-                "name": row["name"],
-                "color": row["color"],
-                "category_id": str(row["category_id"]),
-                "category_name": row["category_name"],
-                "category_color": row["category_color"],
-            })
+            resolved["excluded_tags"].append(
+                {
+                    "id": str(row["id"]),
+                    "name": row["name"],
+                    "color": row["color"],
+                    "category_id": str(row["category_id"]),
+                    "category_name": row["category_name"],
+                    "category_color": row["category_color"],
+                }
+            )
         resolved["filter_summary"]["excluded_tag_count"] = len(resolved["excluded_tags"])
 
     # 3. Resolve labels from mode_options.label_filter
@@ -128,23 +128,25 @@ async def resolve_export_metadata(
     if mode_options and mode_options.get("label_filter"):
         label_ids = mode_options["label_filter"]
     if label_ids:
-        label_query = select(
-            labels.c.id, labels.c.name, labels.c.color
-        ).where(labels.c.id.in_(label_ids))
+        label_query = select(labels.c.id, labels.c.name, labels.c.color).where(
+            labels.c.id.in_(label_ids)
+        )
         result = await connection.execute(label_query)
         for row in result.mappings():
-            resolved["labels"].append({
-                "id": str(row["id"]),
-                "name": row["name"],
-                "color": row["color"],
-            })
+            resolved["labels"].append(
+                {
+                    "id": str(row["id"]),
+                    "name": row["name"],
+                    "color": row["color"],
+                }
+            )
         resolved["filter_summary"]["label_count"] = len(resolved["labels"])
 
     # 4. Resolve user info
     if user_id:
-        user_query = select(
-            users.c.id, users.c.email, users.c.full_name
-        ).where(users.c.id == user_id)
+        user_query = select(users.c.id, users.c.email, users.c.full_name).where(
+            users.c.id == user_id
+        )
         result = await connection.execute(user_query)
         user_row = result.mappings().first()
         if user_row:
@@ -155,9 +157,7 @@ async def resolve_export_metadata(
             }
 
     # 5. Resolve project info
-    project_query = select(
-        projects.c.id, projects.c.name
-    ).where(projects.c.id == project_id)
+    project_query = select(projects.c.id, projects.c.name).where(projects.c.id == project_id)
     result = await connection.execute(project_query)
     project_row = result.mappings().first()
     if project_row:
@@ -287,9 +287,9 @@ class ExportService:
             name = f"{mode_label} Export v{version_number}"
 
         # Resolve metadata (human-readable names for versioning)
-        filter_snapshot_dict = export_config.filter_snapshot.model_dump(mode='json')
+        filter_snapshot_dict = export_config.filter_snapshot.model_dump(mode="json")
         mode_options_dict = (
-            export_config.mode_options.model_dump(mode='json')
+            export_config.mode_options.model_dump(mode="json")
             if export_config.mode_options
             else None
         )
@@ -314,7 +314,7 @@ class ExportService:
             include_images=export_config.include_images,
             saved_filter_id=export_config.saved_filter_id,
             classification_config=(
-                export_config.classification_config.model_dump(mode='json')
+                export_config.classification_config.model_dump(mode="json")
                 if export_config.classification_config
                 else None
             ),
@@ -415,10 +415,7 @@ class ExportService:
                     select(shared_image_tags.c.shared_image_id)
                     .where(shared_image_tags.c.tag_id.in_(filters.excluded_tag_ids))
                     .group_by(shared_image_tags.c.shared_image_id)
-                    .having(
-                        func.count(shared_image_tags.c.tag_id)
-                        == len(filters.excluded_tag_ids)
-                    )
+                    .having(func.count(shared_image_tags.c.tag_id) == len(filters.excluded_tag_ids))
                 )
                 query = query.where(shared_images.c.id.notin_(subquery))
 
@@ -442,8 +439,7 @@ class ExportService:
             from sqlalchemy import or_
 
             path_conditions = [
-                shared_images.c.file_path.like(f"{path}%")
-                for path in filters.filepath_paths
+                shared_images.c.file_path.like(f"{path}%") for path in filters.filepath_paths
             ]
             query = query.where(or_(*path_conditions))
 
@@ -494,14 +490,9 @@ class ExportService:
             return 0
 
         # Need to map shared_image_ids to image_ids in images table
-        subquery = (
-            select(images.c.id)
-            .where(images.c.shared_image_id.in_(image_ids))
-        )
+        subquery = select(images.c.id).where(images.c.shared_image_id.in_(image_ids))
         stmt = (
-            select(func.count())
-            .select_from(image_tags)
-            .where(image_tags.c.image_id.in_(subquery))
+            select(func.count()).select_from(image_tags).where(image_tags.c.image_id.in_(subquery))
         )
         result = await connection.execute(stmt)
         return result.scalar() or 0
@@ -521,13 +512,13 @@ class ExportService:
         subquery = select(images.c.id).where(images.c.shared_image_id.in_(image_ids))
 
         # Base query
-        query = select(
-            labels.c.name,
-            func.count().label("count"),
-        ).select_from(
-            detections.join(labels, detections.c.label_id == labels.c.id)
-        ).where(
-            detections.c.image_id.in_(subquery)
+        query = (
+            select(
+                labels.c.name,
+                func.count().label("count"),
+            )
+            .select_from(detections.join(labels, detections.c.label_id == labels.c.id))
+            .where(detections.c.image_id.in_(subquery))
         )
 
         # Apply label filter if specified
@@ -557,13 +548,13 @@ class ExportService:
         subquery = select(images.c.id).where(images.c.shared_image_id.in_(image_ids))
 
         # Base query
-        query = select(
-            labels.c.name,
-            func.count().label("count"),
-        ).select_from(
-            segmentations.join(labels, segmentations.c.label_id == labels.c.id)
-        ).where(
-            segmentations.c.image_id.in_(subquery)
+        query = (
+            select(
+                labels.c.name,
+                func.count().label("count"),
+            )
+            .select_from(segmentations.join(labels, segmentations.c.label_id == labels.c.id))
+            .where(segmentations.c.image_id.in_(subquery))
         )
 
         # Apply label filter if specified
@@ -615,9 +606,7 @@ class ExportService:
 
         subquery = select(images.c.id).where(images.c.shared_image_id.in_(image_ids))
         query = (
-            select(func.count())
-            .select_from(detections)
-            .where(detections.c.image_id.in_(subquery))
+            select(func.count()).select_from(detections).where(detections.c.image_id.in_(subquery))
         )
 
         if mode_options and mode_options.label_filter:
@@ -695,9 +684,8 @@ class ExportService:
             return 0
 
         # Map shared_image_ids to image_ids
-        subquery = (
-            select(images.c.id, images.c.shared_image_id)
-            .where(images.c.shared_image_id.in_(image_ids))
+        subquery = select(images.c.id, images.c.shared_image_id).where(
+            images.c.shared_image_id.in_(image_ids)
         )
 
         if export_mode == "detection":
@@ -739,29 +727,37 @@ def build_coco_json(
     label_id_to_idx = {}
     for idx, label in enumerate(labels_data, start=1):
         label_id_to_idx[str(label["id"])] = idx
-        categories.append({
-            "id": idx,
-            "name": label["name"],
-            "supercategory": "",
-        })
+        categories.append(
+            {
+                "id": idx,
+                "name": label["name"],
+                "supercategory": "",
+            }
+        )
 
     # Build images
     coco_images = []
     image_id_map = {}  # shared_image_id -> coco_id
     for idx, img in enumerate(images_data, start=1):
         image_id_map[str(img["id"])] = idx
-        coco_images.append({
-            "id": idx,
-            "file_name": img["file_path"],
-            "width": img.get("width", 0),
-            "height": img.get("height", 0),
-        })
+        coco_images.append(
+            {
+                "id": idx,
+                "file_name": img["file_path"],
+                "width": img.get("width", 0),
+                "height": img.get("height", 0),
+            }
+        )
+
+    # One dict lookup per annotation instead of a scan over images_data
+    images_by_id = {str(img["id"]): img for img in images_data}
 
     # Build annotations
     coco_annotations = []
     ann_idx = 1
     for ann in annotations_data:
-        img_id = image_id_map.get(str(ann.get("shared_image_id")))
+        shared_image_id = str(ann.get("shared_image_id"))
+        img_id = image_id_map.get(shared_image_id)
         if not img_id:
             continue
 
@@ -770,10 +766,7 @@ def build_coco_json(
             continue
 
         # Get image dimensions for denormalization
-        img_data = next(
-            (i for i in images_data if str(i["id"]) == str(ann.get("shared_image_id"))),
-            None,
-        )
+        img_data = images_by_id.get(shared_image_id)
         if not img_data:
             continue
 
@@ -789,14 +782,16 @@ def build_coco_json(
             bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
             area = (x_max - x_min) * (y_max - y_min)
 
-            coco_annotations.append({
-                "id": ann_idx,
-                "image_id": img_id,
-                "category_id": cat_id,
-                "bbox": bbox,
-                "area": area,
-                "iscrowd": 0,
-            })
+            coco_annotations.append(
+                {
+                    "id": ann_idx,
+                    "image_id": img_id,
+                    "category_id": cat_id,
+                    "bbox": bbox,
+                    "area": area,
+                    "iscrowd": 0,
+                }
+            )
             ann_idx += 1
 
         elif export_mode == "segmentation" or ann.get("type") == "segmentation":
@@ -816,14 +811,18 @@ def build_coco_json(
                 bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
 
                 # Calculate area using shoelace formula
-                area = abs(
-                    sum(
-                        polygon[i][0] * polygon[(i + 1) % len(polygon)][1]
-                        - polygon[(i + 1) % len(polygon)][0] * polygon[i][1]
-                        for i in range(len(polygon))
+                area = (
+                    abs(
+                        sum(
+                            polygon[i][0] * polygon[(i + 1) % len(polygon)][1]
+                            - polygon[(i + 1) % len(polygon)][0] * polygon[i][1]
+                            for i in range(len(polygon))
+                        )
+                        / 2
                     )
-                    / 2
-                ) * width * height
+                    * width
+                    * height
+                )
 
                 coco_ann = {
                     "id": ann_idx,

@@ -370,7 +370,6 @@ export function useAutoSave(
 
       // Call Bulk Sync API
       if (Object.keys(imagesPayload).length > 0) {
-        console.log('[syncToBackend] Payload being sent:', JSON.stringify(imagesPayload, null, 2))
         syncedImageIds.push(...Object.keys(imagesPayload))
         const syncResponse = await jobsApi.syncAnnotations(jobId, { images: imagesPayload })
         console.log('[syncToBackend] Backend response:', syncResponse)

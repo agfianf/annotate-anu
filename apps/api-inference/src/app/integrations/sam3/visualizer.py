@@ -3,13 +3,13 @@
 import io
 
 import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from PIL import Image, ImageDraw
 
 from app.config import settings
 from app.helpers.logger import logger
+from app.integrations.sam3.mask_utils import masks_to_numpy
 
 
 class Sam3Visualizer:
@@ -18,9 +18,9 @@ class Sam3Visualizer:
     @staticmethod
     def draw_masks_and_boxes(
         image: Image.Image,
-        masks: torch.Tensor,
-        boxes: torch.Tensor,
-        scores: torch.Tensor | None = None,
+        masks: torch.Tensor | np.ndarray,
+        boxes: torch.Tensor | np.ndarray,
+        scores: torch.Tensor | np.ndarray | None = None,
         alpha: float = 0.5,
         colormap: str = "rainbow",
         draw_boxes: bool = True,
@@ -32,11 +32,11 @@ class Sam3Visualizer:
         ----------
         image : Image.Image
             Original PIL Image
-        masks : torch.Tensor
-            Binary masks tensor [N, H, W]
-        boxes : torch.Tensor
+        masks : torch.Tensor | np.ndarray
+            Binary masks [N, H, W]; a uint8 array from ``masks_to_numpy`` avoids a second GPU copy
+        boxes : torch.Tensor | np.ndarray
             Bounding boxes tensor [N, 4] in xyxy format
-        scores : torch.Tensor | None
+        scores : torch.Tensor | np.ndarray | None
             Confidence scores for each detection
         alpha : float
             Transparency for mask overlay (0.0 to 1.0)
@@ -52,18 +52,13 @@ class Sam3Visualizer:
         Image.Image
             Image with visualizations drawn
         """
-        # Convert image to RGBA for overlay
-        image_rgba = image.convert("RGBA")
-        width, height = image.size
-
-        # Ensure masks are on CPU and convert to numpy
-        masks = masks.cpu().numpy() if isinstance(masks, torch.Tensor) else masks
-        boxes = boxes.cpu().numpy() if isinstance(boxes, torch.Tensor) else boxes
+        masks_u8 = masks_to_numpy(masks)
+        boxes = boxes.float().cpu().numpy() if isinstance(boxes, torch.Tensor) else np.asarray(boxes)
 
         if scores is not None:
-            scores = scores.cpu().numpy() if isinstance(scores, torch.Tensor) else scores
+            scores = scores.float().cpu().numpy() if isinstance(scores, torch.Tensor) else np.asarray(scores)
 
-        n_objects = masks.shape[0]
+        n_objects = masks_u8.shape[0]
 
         if n_objects == 0:
             logger.warning("No objects to visualize")
@@ -73,38 +68,31 @@ class Sam3Visualizer:
         cmap = matplotlib.colormaps.get_cmap(colormap).resampled(n_objects)
         colors = [tuple(int(c * 255) for c in cmap(i)[:3]) for i in range(n_objects)]
 
-        # Draw masks
+        # Blend every mask into one RGB buffer, touching only the masked pixels. The
+        # previous version allocated a full-size RGBA overlay and alpha-composited the
+        # whole image once per object.
+        canvas = np.array(image.convert("RGB"), dtype=np.uint8)
         if draw_masks:
-            for idx, (mask, color) in enumerate(zip(masks, colors)):
-                # Convert mask to uint8
-                mask_uint8 = (mask * 255).astype(np.uint8)
-                mask_image = Image.fromarray(mask_uint8)
+            for mask, color in zip(masks_u8, colors):
+                region = mask.astype(bool)
+                if not region.any():
+                    continue
+                blended = canvas[region].astype(np.float32) * (1.0 - alpha) + np.array(color, dtype=np.float32) * alpha
+                canvas[region] = blended.astype(np.uint8)
 
-                # Create colored overlay
-                overlay = Image.new("RGBA", image_rgba.size, color + (0,))
-                alpha_channel = mask_image.point(lambda v: int(v * alpha))
-                overlay.putalpha(alpha_channel)
-
-                # Composite onto image
-                image_rgba = Image.alpha_composite(image_rgba, overlay)
+        result_image = Image.fromarray(canvas)
 
         # Draw bounding boxes
         if draw_boxes:
-            draw = ImageDraw.Draw(image_rgba)
+            draw = ImageDraw.Draw(result_image)
 
             for idx, (box, color) in enumerate(zip(boxes, colors)):
-                x1, y1, x2, y2 = box.tolist()
+                x1, y1, x2, y2 = (float(v) for v in box)
 
-                # Draw rectangle
-                draw.rectangle([x1, y1, x2, y2], outline=color + (255,), width=3)
+                draw.rectangle([x1, y1, x2, y2], outline=color, width=3)
 
-                # Draw score if available
                 if scores is not None:
-                    score_text = f"{scores[idx]:.2f}"
-                    draw.text((x1, y1 - 15), score_text, fill=color + (255,))
-
-        # Convert back to RGB
-        result_image = image_rgba.convert("RGB")
+                    draw.text((x1, y1 - 15), f"{float(scores[idx]):.2f}", fill=color)
 
         logger.info(f"Visualization completed - Objects: {n_objects}")
         return result_image
@@ -134,15 +122,14 @@ class Sam3Visualizer:
         else:
             image.save(buffer, format="PNG")
 
-        buffer.seek(0)
-        return buffer.read()
+        return buffer.getvalue()
 
     @staticmethod
     def create_visualization(
         image: Image.Image,
-        masks: torch.Tensor,
-        boxes: torch.Tensor,
-        scores: torch.Tensor | None = None,
+        masks: torch.Tensor | np.ndarray,
+        boxes: torch.Tensor | np.ndarray,
+        scores: torch.Tensor | np.ndarray | None = None,
         alpha: float = 0.5,
         draw_boxes: bool = True,
         draw_masks: bool = True,
@@ -153,11 +140,11 @@ class Sam3Visualizer:
         ----------
         image : Image.Image
             Original PIL Image
-        masks : torch.Tensor
-            Binary masks tensor [N, H, W]
-        boxes : torch.Tensor
-            Bounding boxes tensor [N, 4]
-        scores : torch.Tensor | None
+        masks : torch.Tensor | np.ndarray
+            Binary masks [N, H, W]
+        boxes : torch.Tensor | np.ndarray
+            Bounding boxes [N, 4]
+        scores : torch.Tensor | np.ndarray | None
             Confidence scores
         alpha : float
             Mask transparency
@@ -171,7 +158,6 @@ class Sam3Visualizer:
         bytes
             Encoded visualization image
         """
-        # Draw visualizations
         viz_image = Sam3Visualizer.draw_masks_and_boxes(
             image=image,
             masks=masks,
@@ -182,9 +168,6 @@ class Sam3Visualizer:
             draw_masks=draw_masks,
         )
 
-        # Encode to bytes
-        image_bytes = Sam3Visualizer.encode_image_to_bytes(
+        return Sam3Visualizer.encode_image_to_bytes(
             viz_image, format=settings.VISUALIZATION_FORMAT, quality=settings.VISUALIZATION_QUALITY
         )
-
-        return image_bytes

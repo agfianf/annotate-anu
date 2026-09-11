@@ -83,6 +83,26 @@ class MoondreamProxyService:
             Request timeout in seconds
         """
         self.timeout = timeout
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        """Return the shared HTTP client, creating it on first use.
+
+        One long-lived client keeps a connection pool across requests instead of paying
+        a TCP (and TLS) handshake on every call.
+        """
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout, connect=5.0),
+                limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+            )
+        return self._client
+
+    async def aclose(self) -> None:
+        """Close the shared HTTP client and its pooled connections."""
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     async def _request(
         self,
@@ -118,18 +138,16 @@ class MoondreamProxyService:
         logger.info(f"Proxying request to Moondream: {url}")
         start_time = time.time()
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(url, json=body, headers=headers)
-            response.raise_for_status()
+        client = self._get_client()
+        response = await client.post(url, json=body, headers=headers)
+        response.raise_for_status()
 
         elapsed_ms = (time.time() - start_time) * 1000
         logger.info(f"Moondream request completed in {elapsed_ms:.0f}ms")
 
         return response.json()
 
-    def _image_to_data_uri(
-        self, image_bytes: bytes, content_type: str = "image/jpeg"
-    ) -> str:
+    def _image_to_data_uri(self, image_bytes: bytes, content_type: str = "image/jpeg") -> str:
         """Convert image bytes to base64 data URI.
 
         Parameters
@@ -388,7 +406,9 @@ class MoondreamProxyService:
             return result.answer.split(",")
         except json.JSONDecodeError:
             # Fallback: split by common delimiters
-            cleaned = result.answer.replace("[", "").replace("]", "").replace('"', "").replace("'", "")
+            cleaned = (
+                result.answer.replace("[", "").replace("]", "").replace('"', "").replace("'", "")
+            )
             return [s.strip() for s in cleaned.split(",") if s.strip()]
 
     async def ocr(
@@ -468,12 +488,13 @@ class MoondreamProxyService:
             if api_key:
                 headers["X-Moondream-Auth"] = api_key
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(
-                    url,
-                    json={"image_url": test_image_base64, "question": "What do you see?"},
-                    headers=headers,
-                )
+            client = self._get_client()
+            response = await client.post(
+                url,
+                json={"image_url": test_image_base64, "question": "What do you see?"},
+                headers=headers,
+                timeout=httpx.Timeout(30.0, connect=5.0),
+            )
 
             latency_ms = (time.time() - start_time) * 1000
 

@@ -3,13 +3,24 @@
 import json
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
-from fastapi.responses import Response as FastAPIResponse
+from pydantic import BaseModel
 
 from app.helpers.logger import logger
 from app.helpers.response_api import JsonResponse
 from app.schemas.sam3 import BatchInferenceResult, InferenceResult
 
 router = APIRouter(prefix="/api/v1/sam3", tags=["SAM3 Inference"])
+
+
+def _json_response(payload: BaseModel, status_code: int = status.HTTP_200_OK) -> Response:
+    """Serialise a response model exactly once.
+
+    Returning a pydantic object from a route makes FastAPI dump it, re-validate it
+    against ``response_model`` and then run ``jsonable_encoder`` over it - three full
+    passes over every polygon vertex. Returning a ``Response`` skips all of that while
+    ``response_model`` still documents the schema in OpenAPI.
+    """
+    return Response(content=payload.model_dump_json(), media_type="application/json", status_code=status_code)
 
 
 @router.post(
@@ -20,7 +31,6 @@ router = APIRouter(prefix="/api/v1/sam3", tags=["SAM3 Inference"])
 )
 async def inference_text(
     request: Request,
-    response: Response,
     image: UploadFile = File(..., description="Image file to process"),
     text_prompt: str = Form(..., description="Text description of objects to segment"),
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
@@ -71,12 +81,12 @@ async def inference_text(
         # Build response
         inference_result = InferenceResult(**result)
 
-        status_code = status.HTTP_200_OK
-        response.status_code = status_code
-        return JsonResponse(
-            data=inference_result,
-            message=f"Successfully processed image with text prompt. Found {result['num_objects']} objects.",
-            status_code=status_code,
+        return _json_response(
+            JsonResponse(
+                data=inference_result,
+                message=f"Successfully processed image with text prompt. Found {result['num_objects']} objects.",
+                status_code=status.HTTP_200_OK,
+            )
         )
 
     except ValueError as e:
@@ -95,7 +105,6 @@ async def inference_text(
 )
 async def inference_bbox(
     request: Request,
-    response: Response,
     image: UploadFile = File(..., description="Image file to process"),
     bounding_boxes: str = Form(..., description="JSON array of bounding boxes: [[x1,y1,x2,y2,label], ...]"),
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
@@ -157,12 +166,12 @@ async def inference_bbox(
         # Build response
         inference_result = InferenceResult(**result)
 
-        status_code = status.HTTP_200_OK
-        response.status_code = status_code
-        return JsonResponse(
-            data=inference_result,
-            message=f"Successfully processed image with bbox prompts. Found {result['num_objects']} objects.",
-            status_code=status_code,
+        return _json_response(
+            JsonResponse(
+                data=inference_result,
+                message=f"Successfully processed image with bbox prompts. Found {result['num_objects']} objects.",
+                status_code=status.HTTP_200_OK,
+            )
         )
 
     except ValueError as e:
@@ -181,7 +190,6 @@ async def inference_bbox(
 )
 async def inference_batch(
     request: Request,
-    response: Response,
     images: list[UploadFile] = File(..., description="List of image files to process"),
     text_prompts: str = Form(..., description="JSON array of text prompts (one per image, null for none)"),
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
@@ -242,12 +250,12 @@ async def inference_batch(
         # Build response
         batch_result = BatchInferenceResult(**result)
 
-        status_code = status.HTTP_200_OK
-        response.status_code = status_code
-        return JsonResponse(
-            data=batch_result,
-            message=f"Successfully processed {result['total_images']} images in batch.",
-            status_code=status_code,
+        return _json_response(
+            JsonResponse(
+                data=batch_result,
+                message=f"Successfully processed {result['total_images']} images in batch.",
+                status_code=status.HTTP_200_OK,
+            )
         )
 
     except ValueError as e:
@@ -266,7 +274,6 @@ async def inference_batch(
 )
 async def inference_point(
     request: Request,
-    response: Response,
     image: UploadFile = File(..., description="Image file to process"),
     points: str = Form(..., description="JSON array of [x, y] click points"),
     point_labels: str | None = Form(None, description="JSON array of 1 (foreground) / 0 (background)"),
@@ -307,12 +314,12 @@ async def inference_point(
             simplify_tolerance=simplify_tolerance,
         )
 
-        status_code = status.HTTP_200_OK
-        response.status_code = status_code
-        return JsonResponse(
-            data=InferenceResult(**result),
-            message=f"Segmented {result['num_objects']} object(s) from point prompt.",
-            status_code=status_code,
+        return _json_response(
+            JsonResponse(
+                data=InferenceResult(**result),
+                message=f"Segmented {result['num_objects']} object(s) from point prompt.",
+                status_code=status.HTTP_200_OK,
+            )
         )
 
     except json.JSONDecodeError as e:
@@ -337,6 +344,14 @@ async def health_check(request: Request):
     Returns
     -------
     dict
-        Health status
+        Health status, including whether the models are loaded and where
     """
-    return {"status": "healthy", "service": "SAM3 API"}
+    sam3_inference = getattr(request.state, "sam3_inference", None)
+    model_loaded = sam3_inference is not None and sam3_inference.model is not None
+    return {
+        "status": "healthy" if model_loaded else "starting",
+        "service": "SAM3 API",
+        "model_loaded": model_loaded,
+        "tracker_loaded": bool(sam3_inference is not None and sam3_inference.tracker_model is not None),
+        "device": sam3_inference.device if sam3_inference is not None else None,
+    }

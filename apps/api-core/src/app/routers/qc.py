@@ -1,13 +1,12 @@
 """QC review router: sessions, review queue, verdicts and manifest export."""
 
 from datetime import datetime, timezone
-
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select, union
+from sqlalchemy import String, cast, delete, func, select, union
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.core.security import (
@@ -26,7 +25,7 @@ from app.models.qc import qc_consolidated, qc_sessions, qc_verdicts
 from app.schemas.auth import UserBase
 from app.services.job_status import JobStatusService
 from app.services.qc import DEFAULT_CONFIG, QCService
-from app.services.roi_crop import ROICropService
+from app.services.roi_crop import roi_crop_service
 from app.services.storage_connection import StorageConnectionService
 from app.services.storage_s3 import S3Service
 
@@ -90,12 +89,38 @@ def _bbox_from_row(row) -> tuple[float, float, float, float] | None:
 async def _reviewable_count(connection: AsyncConnection, session: dict) -> int:
     """How many annotated images this session can actually serve."""
     annotated = union(select(segmentations.c.image_id), select(detections.c.image_id)).subquery()
-    query = select(func.count()).select_from(images).where(
-        images.c.id.in_(select(annotated.c.image_id))
+    query = (
+        select(func.count())
+        .select_from(images)
+        .where(images.c.id.in_(select(annotated.c.image_id)))
     )
     if session["job_id"] is not None:
         query = query.where(images.c.job_id == session["job_id"])
     result = await connection.execute(query)
+    return int(result.scalar() or 0)
+
+
+def _reviewed_by(session_id: UUID, reviewer_id: UUID, item_key):
+    """EXISTS clause: this reviewer already has a verdict for ``item_key`` in this session.
+
+    Mirrors ``QCService.reviewed_keys`` but stays in SQL, so the queue endpoints can filter and LIMIT in one statement instead of materialising every row.
+    """
+    return (
+        select(qc_verdicts.c.id)
+        .where(
+            qc_verdicts.c.session_id == session_id,
+            qc_verdicts.c.reviewer_id == reviewer_id,
+            qc_verdicts.c.item_key == item_key,
+        )
+        .exists()
+    )
+
+
+async def _count_rows(connection: AsyncConnection, query) -> int:
+    """COUNT(*) over a select, ignoring its ORDER BY."""
+    result = await connection.execute(
+        select(func.count()).select_from(query.order_by(None).subquery())
+    )
     return int(result.scalar() or 0)
 
 
@@ -232,14 +257,13 @@ async def get_queue(
         ).subquery()
         query = query.where(images.c.id.in_(select(annotated.c.image_id)))
 
-    result = await connection.execute(query)
-    all_images = [dict(r) for r in result.mappings().all()]
-
+    # Filter this reviewer's verdicts out in SQL rather than loading every image and sieving in Python
     if not include_reviewed:
-        reviewed = await QCService.reviewed_keys(connection, session_id, current_user.id)
-        all_images = [img for img in all_images if str(img["id"]) not in reviewed]
+        query = query.where(~_reviewed_by(session_id, current_user.id, cast(images.c.id, String)))
 
-    page = all_images[:limit]
+    remaining = await _count_rows(connection, query)
+    result = await connection.execute(query.limit(limit))
+    page = [dict(r) for r in result.mappings().all()]
     image_ids = [img["id"] for img in page]
 
     shapes: dict[str, list[dict]] = {str(i): [] for i in image_ids}
@@ -314,7 +338,7 @@ async def get_queue(
     ]
 
     return JsonResponse(
-        data={"items": items, "remaining": len(all_images), "mode": session["mode"]},
+        data={"items": items, "remaining": remaining, "mode": session["mode"]},
         message=f"{len(items)} item(s) to review",
         status_code=200,
     )
@@ -359,15 +383,17 @@ async def get_roi_tiles(
     if label_id is not None:
         query = query.where(segmentations.c.label_id == label_id)
 
-    result = await connection.execute(query)
+    if not include_reviewed:
+        query = query.where(
+            ~_reviewed_by(session_id, current_user.id, cast(segmentations.c.id, String))
+        )
+
+    remaining = await _count_rows(connection, query)
+    result = await connection.execute(query.limit(limit))
     rows = [dict(r) for r in result.mappings().all()]
 
-    if not include_reviewed:
-        reviewed = await QCService.reviewed_keys(connection, session_id, current_user.id)
-        rows = [r for r in rows if str(r["id"]) not in reviewed]
-
     tiles = []
-    for row in rows[:limit]:
+    for row in rows:
         tiles.append(
             {
                 "item_key": str(row["id"]),
@@ -378,8 +404,7 @@ async def get_roi_tiles(
                 "label_color": row["label_color"],
                 "confidence": row["confidence"],
                 "crop_url": (
-                    f"/api/v1/qc/crop/{row['id']}"
-                    f"?token={create_qc_crop_token(str(row['id']))}"
+                    f"/api/v1/qc/crop/{row['id']}?token={create_qc_crop_token(str(row['id']))}"
                 ),
             }
         )
@@ -411,7 +436,7 @@ async def get_roi_tiles(
     ]
 
     return JsonResponse(
-        data={"tiles": tiles, "remaining": len(rows), "classes": classes},
+        data={"tiles": tiles, "remaining": remaining, "classes": classes},
         message=f"{len(tiles)} crop(s)",
         status_code=200,
     )
@@ -454,7 +479,7 @@ async def get_crop(
         raise HTTPException(status_code=422, detail="Annotation has no usable geometry")
 
     try:
-        path = ROICropService().get_or_create(str(annotation_id), row["s3_key"], bbox)
+        path = await roi_crop_service.get_or_create(str(annotation_id), row["s3_key"], bbox)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except ValueError as exc:
@@ -565,9 +590,7 @@ async def refine_queue(
             images.c.s3_key,
             images.c.job_id,
         )
-        .select_from(
-            qc_consolidated.outerjoin(images, qc_consolidated.c.image_id == images.c.id)
-        )
+        .select_from(qc_consolidated.outerjoin(images, qc_consolidated.c.image_id == images.c.id))
         .where(
             qc_consolidated.c.session_id == session_id,
             qc_consolidated.c.verdict == "refine",
@@ -632,7 +655,12 @@ async def publish_manifest(
         raise HTTPException(status_code=502, detail="Manifest write failed")
 
     return JsonResponse(
-        data={"bucket": row["bucket"], "key": written, "entries": len(entries), "counts": manifest["counts"]},
+        data={
+            "bucket": row["bucket"],
+            "key": written,
+            "entries": len(entries),
+            "counts": manifest["counts"],
+        },
         message=f"Published {len(entries)} verdict(s)",
         status_code=200,
     )

@@ -3,7 +3,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.dependencies.auth import get_current_active_user
@@ -11,13 +11,12 @@ from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import ProjectPermission
 from app.helpers.response_api import JsonResponse
 from app.repositories.annotation import AnnotationSummaryRepository
+from app.repositories.image_quality import ImageQualityRepository
 from app.repositories.project_image import ProjectImageRepository
 from app.repositories.shared_image import SharedImageRepository
 from app.repositories.shared_image_tag import SharedImageTagRepository
 from app.repositories.tag import TagRepository
 from app.schemas.auth import UserBase
-from app.services.image_quality_service import ImageQualityService
-from app.repositories.image_quality import ImageQualityRepository
 from app.schemas.data_management import (
     AddTagsRequest,
     AddTagsResponse,
@@ -27,7 +26,6 @@ from app.schemas.data_management import (
     BulkTagPreviewResponse,
     BulkTagRequest,
     BulkTagResponse,
-    ExploreFilter,
     ExploreResponse,
     PolygonPreview,
     ProjectImageAdd,
@@ -53,9 +51,15 @@ async def _enrich_image(
     image: dict,
     project_id: int,
     annotation_summary: dict | None = None,
+    tags: list[dict] | None = None,
 ) -> SharedImageWithAnnotations:
-    """Enrich image with tags, thumbnail URL, and optional annotation summary."""
-    tags = await SharedImageRepository.get_tags(connection, image["id"], project_id)
+    """Enrich image with tags, thumbnail URL, and optional annotation summary.
+
+    Pass ``tags`` (from ``SharedImageRepository.get_tags_bulk``) when enriching
+    many images so the tags are fetched in one query instead of one per image.
+    """
+    if tags is None:
+        tags = await SharedImageRepository.get_tags(connection, image["id"], project_id)
 
     # Build annotation summary if provided
     ann_summary = None
@@ -105,9 +109,14 @@ async def list_project_images(
         search=search,
     )
 
+    tags_by_image = await SharedImageRepository.get_tags_bulk(
+        connection, [img["id"] for img in images], project_id
+    )
     enriched = []
     for img in images:
-        enriched.append(await _enrich_image(connection, img, project_id))
+        enriched.append(
+            await _enrich_image(connection, img, project_id, tags=tags_by_image.get(img["id"], []))
+        )
 
     return JsonResponse(
         data=ProjectPoolListResponse(
@@ -147,9 +156,7 @@ async def add_images_to_pool(
 
     # Queue quality metrics computation for newly added images
     if images_added > 0:
-        await ImageQualityRepository.bulk_create_pending(
-            connection, payload.shared_image_ids
-        )
+        await ImageQualityRepository.bulk_create_pending(connection, payload.shared_image_ids)
 
         # Dispatch Celery task for background processing (non-blocking)
         # This will process ALL pending images in the project, including newly added ones
@@ -227,9 +234,14 @@ async def get_available_images(
         exclude_task_ids=exclude_task_ids,
     )
 
+    tags_by_image = await SharedImageRepository.get_tags_bulk(
+        connection, [img["id"] for img in images], project_id
+    )
     enriched = []
     for img in images:
-        enriched.append(await _enrich_image(connection, img, project_id))
+        enriched.append(
+            await _enrich_image(connection, img, project_id, tags=tags_by_image.get(img["id"], []))
+        )
 
     return JsonResponse(
         data=enriched,
@@ -262,42 +274,103 @@ async def explore_project_images(
     height_max: int | None = Query(default=None, ge=0),
     file_size_min: int | None = Query(default=None, ge=0),
     file_size_max: int | None = Query(default=None, ge=0),
-    aspect_ratio_min: float | None = Query(default=None, ge=0, description="Minimum aspect ratio (width/height)"),
-    aspect_ratio_max: float | None = Query(default=None, ge=0, description="Maximum aspect ratio (width/height)"),
-    object_count_min: int | None = Query(default=None, ge=0, description="Minimum annotation count per image (detections + segmentations)"),
-    object_count_max: int | None = Query(default=None, ge=0, description="Maximum annotation count per image (detections + segmentations)"),
-    bbox_count_min: int | None = Query(default=None, ge=0, description="Minimum bbox (detection) count per image"),
-    bbox_count_max: int | None = Query(default=None, ge=0, description="Maximum bbox (detection) count per image"),
-    polygon_count_min: int | None = Query(default=None, ge=0, description="Minimum polygon (segmentation) count per image"),
-    polygon_count_max: int | None = Query(default=None, ge=0, description="Maximum polygon (segmentation) count per image"),
+    aspect_ratio_min: float | None = Query(
+        default=None, ge=0, description="Minimum aspect ratio (width/height)"
+    ),
+    aspect_ratio_max: float | None = Query(
+        default=None, ge=0, description="Maximum aspect ratio (width/height)"
+    ),
+    object_count_min: int | None = Query(
+        default=None,
+        ge=0,
+        description="Minimum annotation count per image (detections + segmentations)",
+    ),
+    object_count_max: int | None = Query(
+        default=None,
+        ge=0,
+        description="Maximum annotation count per image (detections + segmentations)",
+    ),
+    bbox_count_min: int | None = Query(
+        default=None, ge=0, description="Minimum bbox (detection) count per image"
+    ),
+    bbox_count_max: int | None = Query(
+        default=None, ge=0, description="Maximum bbox (detection) count per image"
+    ),
+    polygon_count_min: int | None = Query(
+        default=None, ge=0, description="Minimum polygon (segmentation) count per image"
+    ),
+    polygon_count_max: int | None = Query(
+        default=None, ge=0, description="Maximum polygon (segmentation) count per image"
+    ),
     filepath_pattern: str | None = Query(default=None, max_length=255),
     filepath_paths: list[str] | None = Query(default=None),
     image_uids: list[UUID] | None = Query(default=None),
     # Quality metric filters
-    quality_min: float | None = Query(default=None, ge=0, le=1, description="Minimum overall quality score (0-1)"),
-    quality_max: float | None = Query(default=None, ge=0, le=1, description="Maximum overall quality score (0-1)"),
-    sharpness_min: float | None = Query(default=None, ge=0, le=1, description="Minimum sharpness score (0-1)"),
-    sharpness_max: float | None = Query(default=None, ge=0, le=1, description="Maximum sharpness score (0-1)"),
-    brightness_min: float | None = Query(default=None, ge=0, le=1, description="Minimum brightness score (0-1)"),
-    brightness_max: float | None = Query(default=None, ge=0, le=1, description="Maximum brightness score (0-1)"),
-    contrast_min: float | None = Query(default=None, ge=0, le=1, description="Minimum contrast score (0-1)"),
-    contrast_max: float | None = Query(default=None, ge=0, le=1, description="Maximum contrast score (0-1)"),
-    uniqueness_min: float | None = Query(default=None, ge=0, le=1, description="Minimum uniqueness score (0-1)"),
-    uniqueness_max: float | None = Query(default=None, ge=0, le=1, description="Maximum uniqueness score (0-1)"),
+    quality_min: float | None = Query(
+        default=None, ge=0, le=1, description="Minimum overall quality score (0-1)"
+    ),
+    quality_max: float | None = Query(
+        default=None, ge=0, le=1, description="Maximum overall quality score (0-1)"
+    ),
+    sharpness_min: float | None = Query(
+        default=None, ge=0, le=1, description="Minimum sharpness score (0-1)"
+    ),
+    sharpness_max: float | None = Query(
+        default=None, ge=0, le=1, description="Maximum sharpness score (0-1)"
+    ),
+    brightness_min: float | None = Query(
+        default=None, ge=0, le=1, description="Minimum brightness score (0-1)"
+    ),
+    brightness_max: float | None = Query(
+        default=None, ge=0, le=1, description="Maximum brightness score (0-1)"
+    ),
+    contrast_min: float | None = Query(
+        default=None, ge=0, le=1, description="Minimum contrast score (0-1)"
+    ),
+    contrast_max: float | None = Query(
+        default=None, ge=0, le=1, description="Maximum contrast score (0-1)"
+    ),
+    uniqueness_min: float | None = Query(
+        default=None, ge=0, le=1, description="Minimum uniqueness score (0-1)"
+    ),
+    uniqueness_max: float | None = Query(
+        default=None, ge=0, le=1, description="Maximum uniqueness score (0-1)"
+    ),
     # RGB channel filters
-    red_min: float | None = Query(default=None, ge=0, le=1, description="Minimum red channel average (0-1)"),
-    red_max: float | None = Query(default=None, ge=0, le=1, description="Maximum red channel average (0-1)"),
-    green_min: float | None = Query(default=None, ge=0, le=1, description="Minimum green channel average (0-1)"),
-    green_max: float | None = Query(default=None, ge=0, le=1, description="Maximum green channel average (0-1)"),
-    blue_min: float | None = Query(default=None, ge=0, le=1, description="Minimum blue channel average (0-1)"),
-    blue_max: float | None = Query(default=None, ge=0, le=1, description="Maximum blue channel average (0-1)"),
+    red_min: float | None = Query(
+        default=None, ge=0, le=1, description="Minimum red channel average (0-1)"
+    ),
+    red_max: float | None = Query(
+        default=None, ge=0, le=1, description="Maximum red channel average (0-1)"
+    ),
+    green_min: float | None = Query(
+        default=None, ge=0, le=1, description="Minimum green channel average (0-1)"
+    ),
+    green_max: float | None = Query(
+        default=None, ge=0, le=1, description="Maximum green channel average (0-1)"
+    ),
+    blue_min: float | None = Query(
+        default=None, ge=0, le=1, description="Minimum blue channel average (0-1)"
+    ),
+    blue_max: float | None = Query(
+        default=None, ge=0, le=1, description="Maximum blue channel average (0-1)"
+    ),
     # Quality issues filter
-    issues: list[str] | None = Query(default=None, description="Filter by quality issues: blur, low_brightness, high_brightness, low_contrast, duplicate"),
+    issues: list[str] | None = Query(
+        default=None,
+        description="Filter by quality issues: blur, low_brightness, high_brightness, low_contrast, duplicate",
+    ),
     # Annotation overlay options
     include_bboxes: bool = Query(default=True, description="Include bboxes in annotation_summary"),
-    include_polygons: bool = Query(default=True, description="Include polygon data for segmentations"),
-    max_bboxes_per_image: int = Query(default=100, ge=1, le=500, description="Max bboxes per image"),
-    max_polygons_per_image: int = Query(default=50, ge=1, le=200, description="Max polygons per image"),
+    include_polygons: bool = Query(
+        default=True, description="Include polygon data for segmentations"
+    ),
+    max_bboxes_per_image: int = Query(
+        default=100, ge=1, le=500, description="Max bboxes per image"
+    ),
+    max_polygons_per_image: int = Query(
+        default=50, ge=1, le=200, description="Max polygons per image"
+    ),
 ):
     """
     Explore images with combined filtering.
@@ -378,15 +451,26 @@ async def explore_project_images(
     total_seg = sum(s.get("segmentation_count", 0) for s in annotation_summaries.values())
     total_bboxes = sum(len(s.get("bboxes", [])) for s in annotation_summaries.values())
     total_polygons = sum(len(s.get("polygons", [])) for s in annotation_summaries.values())
-    print(f"[DEBUG] Annotation summaries: {len(annotation_summaries)} images, {total_det} detections, {total_seg} segmentations, {total_bboxes} bboxes, {total_polygons} polygons", flush=True)
+    print(
+        f"[DEBUG] Annotation summaries: {len(annotation_summaries)} images, {total_det} detections, {total_seg} segmentations, {total_bboxes} bboxes, {total_polygons} polygons",
+        flush=True,
+    )
     if annotation_summaries:
         first_key = list(annotation_summaries.keys())[0]
-        print(f"[DEBUG] First annotation summary (key={first_key}): {annotation_summaries[first_key]}", flush=True)
+        print(
+            f"[DEBUG] First annotation summary (key={first_key}): {annotation_summaries[first_key]}",
+            flush=True,
+        )
 
+    tags_by_image = await SharedImageRepository.get_tags_bulk(connection, image_ids, project_id)
     enriched = []
     for img in images:
         ann_summary = annotation_summaries.get(img["id"])
-        enriched.append(await _enrich_image(connection, img, project_id, ann_summary))
+        enriched.append(
+            await _enrich_image(
+                connection, img, project_id, ann_summary, tags=tags_by_image.get(img["id"], [])
+            )
+        )
 
     # Build filters applied dict
     filters_applied = {}
@@ -648,7 +732,9 @@ async def add_tags_to_image(
 
     message = "Tags added"
     if replaced_tags:
-        message = f"Added tags (replaced {len(replaced_tags)} existing tag(s) due to 1-per-label rule)"
+        message = (
+            f"Added tags (replaced {len(replaced_tags)} existing tag(s) due to 1-per-label rule)"
+        )
 
     return JsonResponse(
         data=AddTagsResponse(

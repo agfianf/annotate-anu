@@ -12,6 +12,58 @@ import { AnnotationContextMenu } from './canvas/AnnotationContextMenu'
 // Disable hover effects above this count to avoid expensive re-renders.
 const HOVER_DISABLE_THRESHOLD = 300
 
+type Bounds = { x: number; y: number; width: number; height: number }
+type Point = { x: number; y: number }
+
+// Hex color + alpha -> rgba string. The same handful of (color, alpha) pairs is requested for every
+// annotation on every render, so cache the formatted strings instead of re-parsing the hex each time.
+const hexToRgbaCache = new Map<string, string>()
+const hexToRgba = (hex: string, alpha: number): string => {
+  const key = `${hex}|${alpha}`
+  const cached = hexToRgbaCache.get(key)
+  if (cached !== undefined) return cached
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const rgba = `rgba(${r}, ${g}, ${b}, ${alpha})`
+  if (hexToRgbaCache.size > 1024) hexToRgbaCache.clear()
+  hexToRgbaCache.set(key, rgba)
+  return rgba
+}
+
+// Single-pass axis-aligned bounds of a point list. Avoids `Math.min(...xs)` spreads, which allocate
+// two intermediate arrays and throw RangeError on very large polygons.
+const computePointsBounds = (points: ReadonlyArray<Point>): Bounds => {
+  if (points.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
+  let minX = points[0].x
+  let maxX = minX
+  let minY = points[0].y
+  let maxY = minY
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i]
+    if (p.x < minX) minX = p.x
+    else if (p.x > maxX) maxX = p.x
+    if (p.y < minY) minY = p.y
+    else if (p.y > maxY) maxY = p.y
+  }
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+// Flattened, scaled Konva point list, cached per points-array identity. Annotation updates replace the
+// points array, so identity is a safe cache key; a scale change invalidates the entry.
+const flatPointsCache = new WeakMap<ReadonlyArray<Point>, { scale: number; flat: number[] }>()
+const getFlatScaledPoints = (points: ReadonlyArray<Point>, scale: number): number[] => {
+  const cached = flatPointsCache.get(points)
+  if (cached && cached.scale === scale) return cached.flat
+  const flat = new Array<number>(points.length * 2)
+  for (let i = 0; i < points.length; i++) {
+    flat[i * 2] = points[i].x * scale
+    flat[i * 2 + 1] = points[i].y * scale
+  }
+  flatPointsCache.set(points, { scale, flat })
+  return flat
+}
+
 // Helper function to adjust sizes for zoom (keep constant screen size when zooming in)
 const getZoomAdjustedSize = (baseSize: number, zoomLevel: number): number => {
   return zoomLevel > 1 ? baseSize / zoomLevel : baseSize
@@ -69,13 +121,6 @@ const StaticRectAnnotation = React.memo(function StaticRectAnnotation({
 }: StaticRectAnnotationProps) {
   const LABEL_VISIBILITY_ZOOM_THRESHOLD = 0.5
   const ANNOTATION_STROKE_OPACITY = 0.9
-
-  const hexToRgba = (hex: string, alpha: number): string => {
-    const r = parseInt(hex.slice(1, 3), 16)
-    const g = parseInt(hex.slice(3, 5), 16)
-    const b = parseInt(hex.slice(5, 7), 16)
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`
-  }
 
   return (
     <React.Fragment>
@@ -155,14 +200,10 @@ const StaticPolygonAnnotation = React.memo(function StaticPolygonAnnotation({
   const LABEL_VISIBILITY_ZOOM_THRESHOLD = 0.5
   const ANNOTATION_STROKE_OPACITY = 0.9
 
-  const hexToRgba = (hex: string, alpha: number): string => {
-    const r = parseInt(hex.slice(1, 3), 16)
-    const g = parseInt(hex.slice(3, 5), 16)
-    const b = parseInt(hex.slice(5, 7), 16)
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`
-  }
-
-  const points = annotation.points.flatMap(p => [p.x * scale, p.y * scale])
+  const points = useMemo(
+    () => annotation.points.flatMap(p => [p.x * scale, p.y * scale]),
+    [annotation.points, scale]
+  )
   const firstPoint = annotation.points[0]
 
   return (
@@ -298,6 +339,16 @@ const Canvas = React.memo(function Canvas({
   const nodeRefMapRef = useRef<Map<string, Konva.Node>>(new Map())
   const [konvaImage, setKonvaImage] = useState<HTMLImageElement | null>(null)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
+  // Offscreen canvas for the highlight-mode mask. Allocated once, resized only when the stage
+  // dimensions change, and its contents are re-rasterised only when the inputs below change.
+  const highlightOffscreenRef = useRef<HTMLCanvasElement | null>(null)
+  const highlightMaskKeyRef = useRef<{
+    annotations: Annotation[]
+    dimLevel: DimLevel
+    scale: number
+    showPolygons: boolean
+    showRectangles: boolean
+  } | null>(null)
   const [scale, setScale] = useState(1)
   // Track if scale has been calculated for current image (prevents annotations from rendering with stale scale)
   const [scaleInitialized, setScaleInitialized] = useState(false)
@@ -427,14 +478,6 @@ const Canvas = React.memo(function Canvas({
   const LABEL_VISIBILITY_ZOOM_THRESHOLD = 0.3  // Hide labels when zoomed out below this level
   const transformerAnchorSize = getZoomAdjustedHandleSize(12, renderZoomLevel)
   const transformerAnchorStrokeWidth = getZoomAdjustedStrokeWidth(2, renderZoomLevel)
-
-  // Helper function to convert hex color to rgba with opacity
-  const hexToRgba = (hex: string, opacity: number): string => {
-    const r = parseInt(hex.slice(1, 3), 16)
-    const g = parseInt(hex.slice(3, 5), 16)
-    const b = parseInt(hex.slice(5, 7), 16)
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`
-  }
 
   // Get selected label color (default to orange if no label selected)
   const selectedLabelColor = selectedLabelId
@@ -718,25 +761,37 @@ const Canvas = React.memo(function Canvas({
     }
   }, [labelMap, showPolygons, showRectangles])
 
+  // Pre-computed bounds for every annotation, rebuilt only when the annotations array changes.
+  // Shared by viewport culling and tooltip positioning so neither recomputes per render.
+  const annotationBoundsMap = useMemo(() => {
+    const boundsMap = new Map<string, Bounds>()
+    for (const ann of annotations) {
+      if (ann.type === 'rectangle') {
+        const rect = ann as RectangleAnnotation
+        boundsMap.set(ann.id, { x: rect.x, y: rect.y, width: rect.width, height: rect.height })
+      } else if (ann.type === 'polygon') {
+        const poly = ann as PolygonAnnotation
+        if (poly.points.length > 0) {
+          boundsMap.set(ann.id, computePointsBounds(poly.points))
+        }
+      }
+    }
+    return boundsMap
+  }, [annotations])
+
   // Performance optimization: Viewport culling - only render annotations in view
   // This is especially important when zoomed in on a portion of the image
-  const getAnnotationBounds = useCallback((annotation: Annotation): { x: number; y: number; width: number; height: number } => {
+  const getAnnotationBounds = useCallback((annotation: Annotation): Bounds => {
+    const cached = annotationBoundsMap.get(annotation.id)
+    if (cached) return cached
     if (annotation.type === 'rectangle') {
       const rect = annotation as RectangleAnnotation
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
     } else if (annotation.type === 'polygon') {
-      const poly = annotation as PolygonAnnotation
-      if (poly.points.length === 0) return { x: 0, y: 0, width: 0, height: 0 }
-      const xs = poly.points.map(p => p.x)
-      const ys = poly.points.map(p => p.y)
-      const minX = Math.min(...xs)
-      const maxX = Math.max(...xs)
-      const minY = Math.min(...ys)
-      const maxY = Math.max(...ys)
-      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+      return computePointsBounds((annotation as PolygonAnnotation).points)
     }
     return { x: 0, y: 0, width: 0, height: 0 }
-  }, [])
+  }, [annotationBoundsMap])
 
   const isInViewport = useCallback((annotation: Annotation): boolean => {
     // Get viewport bounds in original image coordinates
@@ -1319,14 +1374,7 @@ const Canvas = React.memo(function Canvas({
     } else if (annotation.type === 'polygon') {
       const poly = annotation as PolygonAnnotation
       if (poly.points.length === 0) return false
-      const xs = poly.points.map(p => p.x)
-      const ys = poly.points.map(p => p.y)
-      annBounds = {
-        x: Math.min(...xs),
-        y: Math.min(...ys),
-        width: Math.max(...xs) - Math.min(...xs),
-        height: Math.max(...ys) - Math.min(...ys),
-      }
+      annBounds = computePointsBounds(poly.points)
     } else {
       return false
     }
@@ -1454,10 +1502,9 @@ const Canvas = React.memo(function Canvas({
             }
 
             // Calculate the center of the original polygon (bounding box center)
-            const xs = poly.points.map(p => p.x)
-            const ys = poly.points.map(p => p.y)
-            const originalCenterX = (Math.min(...xs) + Math.max(...xs)) / 2
-            const originalCenterY = (Math.min(...ys) + Math.max(...ys)) / 2
+            const polyBounds = computePointsBounds(poly.points)
+            const originalCenterX = polyBounds.x + polyBounds.width / 2
+            const originalCenterY = polyBounds.y + polyBounds.height / 2
 
             // Calculate offset to move polygon
             let offsetX: number
@@ -1607,54 +1654,6 @@ const Canvas = React.memo(function Canvas({
   const handleCloseContextMenu = useCallback(() => {
     setContextMenuState(null)
   }, [])
-
-  // Pre-compute annotation bounds for tooltip positioning (performance optimization)
-  // This avoids expensive calculations on every hover event
-  const annotationBoundsMap = useMemo(() => {
-    if (!hoverEnabled) {
-      return new Map<string, { x: number; y: number; width: number; height: number }>()
-    }
-
-    const boundsMap = new Map<string, { x: number; y: number; width: number; height: number }>()
-
-    for (const ann of annotations) {
-      if (ann.type === 'rectangle') {
-        const rect = ann as RectangleAnnotation
-        boundsMap.set(ann.id, {
-          x: rect.x,
-          y: rect.y,
-          width: rect.width,
-          height: rect.height,
-        })
-      } else if (ann.type === 'polygon') {
-        const poly = ann as PolygonAnnotation
-        if (poly.points.length > 0) {
-          // Single pass O(n) instead of 4x O(n) with map/spread
-          let minX = poly.points[0].x
-          let minY = poly.points[0].y
-          let maxX = minX
-          let maxY = minY
-
-          for (let i = 1; i < poly.points.length; i++) {
-            const p = poly.points[i]
-            if (p.x < minX) minX = p.x
-            if (p.x > maxX) maxX = p.x
-            if (p.y < minY) minY = p.y
-            if (p.y > maxY) maxY = p.y
-          }
-
-          boundsMap.set(ann.id, {
-            x: minX,
-            y: minY,
-            width: maxX - minX,
-            height: maxY - minY,
-          })
-        }
-      }
-    }
-
-    return boundsMap
-  }, [annotations, hoverEnabled])
 
   useEffect(() => {
     if (!hoverEnabled && hoveredAnnotation) {
@@ -2457,47 +2456,73 @@ const Canvas = React.memo(function Canvas({
                 const w = dimensions.width
                 const h = dimensions.height
 
-                // Create an offscreen canvas for proper compositing
-                // This isolates the destination-out operation from affecting the main layer
-                const offscreen = document.createElement('canvas')
-                offscreen.width = w
-                offscreen.height = h
+                // Reuse a single offscreen canvas for compositing. This isolates the destination-out
+                // operation from the main layer without allocating an image-sized bitmap per draw.
+                let offscreen = highlightOffscreenRef.current
+                if (!offscreen) {
+                  offscreen = document.createElement('canvas')
+                  highlightOffscreenRef.current = offscreen
+                }
+                const resized = offscreen.width !== w || offscreen.height !== h
+                if (resized) {
+                  offscreen.width = w
+                  offscreen.height = h
+                }
                 const offCtx = offscreen.getContext('2d')
                 if (!offCtx) return
 
-                // First, fill the offscreen canvas with dim color
-                offCtx.fillStyle = `rgba(0, 0, 0, ${dimOpacity})`
-                offCtx.fillRect(0, 0, w, h)
+                // The mask only depends on the annotations, dim level, scale and type filters. Pure pan
+                // and zoom redraw the layer without changing any of these, so reuse the rasterised mask.
+                const maskKey = highlightMaskKeyRef.current
+                const maskStale =
+                  resized ||
+                  !maskKey ||
+                  maskKey.annotations !== annotations ||
+                  maskKey.dimLevel !== dimLevel ||
+                  maskKey.scale !== scale ||
+                  maskKey.showPolygons !== showPolygons ||
+                  maskKey.showRectangles !== showRectangles
 
-                // Use destination-out to cut holes for annotations
-                // This correctly handles overlapping areas (union of all shapes)
-                offCtx.globalCompositeOperation = 'destination-out'
-                offCtx.fillStyle = 'rgba(0, 0, 0, 1)' // Fully opaque for clean cutout
+                if (maskStale) {
+                  offCtx.globalCompositeOperation = 'source-over'
+                  offCtx.clearRect(0, 0, w, h)
 
-                annotations.forEach((ann) => {
-                  // Skip hidden annotations
-                  if (ann.hidden) return
-                  if (ann.isVisible === false) return
-                  // Skip based on visibility filters
-                  if (ann.type === 'polygon' && !showPolygons) return
-                  if (ann.type === 'rectangle' && !showRectangles) return
+                  // First, fill the offscreen canvas with dim color
+                  offCtx.fillStyle = `rgba(0, 0, 0, ${dimOpacity})`
+                  offCtx.fillRect(0, 0, w, h)
 
-                  offCtx.beginPath()
-                  if (ann.type === 'rectangle') {
-                    const rect = ann as RectangleAnnotation
-                    offCtx.rect(rect.x * scale, rect.y * scale, rect.width * scale, rect.height * scale)
-                  } else if (ann.type === 'polygon') {
-                    const poly = ann as PolygonAnnotation
-                    if (poly.points.length > 2) {
-                      offCtx.moveTo(poly.points[0].x * scale, poly.points[0].y * scale)
-                      for (let i = 1; i < poly.points.length; i++) {
-                        offCtx.lineTo(poly.points[i].x * scale, poly.points[i].y * scale)
+                  // Use destination-out to cut holes for annotations
+                  // This correctly handles overlapping areas (union of all shapes)
+                  offCtx.globalCompositeOperation = 'destination-out'
+                  offCtx.fillStyle = 'rgba(0, 0, 0, 1)' // Fully opaque for clean cutout
+
+                  annotations.forEach((ann) => {
+                    // Skip hidden annotations
+                    if (ann.hidden) return
+                    if (ann.isVisible === false) return
+                    // Skip based on visibility filters
+                    if (ann.type === 'polygon' && !showPolygons) return
+                    if (ann.type === 'rectangle' && !showRectangles) return
+
+                    offCtx.beginPath()
+                    if (ann.type === 'rectangle') {
+                      const rect = ann as RectangleAnnotation
+                      offCtx.rect(rect.x * scale, rect.y * scale, rect.width * scale, rect.height * scale)
+                    } else if (ann.type === 'polygon') {
+                      const poly = ann as PolygonAnnotation
+                      if (poly.points.length > 2) {
+                        offCtx.moveTo(poly.points[0].x * scale, poly.points[0].y * scale)
+                        for (let i = 1; i < poly.points.length; i++) {
+                          offCtx.lineTo(poly.points[i].x * scale, poly.points[i].y * scale)
+                        }
+                        offCtx.closePath()
                       }
-                      offCtx.closePath()
                     }
-                  }
-                  offCtx.fill()
-                })
+                    offCtx.fill()
+                  })
+
+                  highlightMaskKeyRef.current = { annotations, dimLevel, scale, showPolygons, showRectangles }
+                }
 
                 // Draw the composited offscreen canvas onto the main canvas
                 ctx.drawImage(offscreen, 0, 0)
@@ -2661,7 +2686,7 @@ const Canvas = React.memo(function Canvas({
                 )
               }
 
-              const points = displayPoints.flatMap(p => [p.x * scale, p.y * scale])
+              const points = getFlatScaledPoints(displayPoints, scale)
 
               return (
                 <Group
@@ -3008,14 +3033,9 @@ const Canvas = React.memo(function Canvas({
               )
             : poly.points
 
-          const xs = bboxPoints.map(p => p.x)
-          const ys = bboxPoints.map(p => p.y)
-          const minX = Math.min(...xs)
-          const minY = Math.min(...ys)
-          const maxX = Math.max(...xs)
-          const maxY = Math.max(...ys)
-          topLeft = { x: Math.round(minX), y: Math.round(minY) }
-          bottomRight = { x: Math.round(maxX), y: Math.round(maxY) }
+          const polyBounds = computePointsBounds(bboxPoints)
+          topLeft = { x: Math.round(polyBounds.x), y: Math.round(polyBounds.y) }
+          bottomRight = { x: Math.round(polyBounds.x + polyBounds.width), y: Math.round(polyBounds.y + polyBounds.height) }
         }
 
         if (!topLeft || !bottomRight) return null

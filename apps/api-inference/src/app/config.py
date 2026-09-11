@@ -21,6 +21,16 @@ class Settings(BaseSettings):
     SAM3_DEFAULT_THRESHOLD: float = Field(default=0.5, ge=0.0, le=1.0)
     SAM3_DEFAULT_MASK_THRESHOLD: float = Field(default=0.5, ge=0.0, le=1.0)
     SAM3_CACHE_DIR: str | None = None  # HuggingFace cache directory
+    # bf16 autocast on CUDA roughly halves the forward pass. Measured on an RTX A6000
+    # against fp32: mask IoU > 0.997 per object, scores within 0.003, boxes within 1px.
+    SAM3_AUTOCAST: bool = True
+    # Run one dummy text and point inference at startup so the first real request
+    # does not pay for CUDA context init, lazy kernel loading and cuDNN autotuning.
+    SAM3_WARMUP: bool = True
+    # Vision-encoder outputs kept per model, keyed by image content hash. A repeat
+    # prompt on the same image (another click, another text query) then skips the
+    # encoder, which is most of the forward pass. Each entry is tens of MB on the GPU.
+    SAM3_FEATURE_CACHE_SIZE: int = 4
 
     # HuggingFace Authentication (required for gated models like SAM3)
     HF_TOKEN: str | None = None  # HuggingFace API token

@@ -1,10 +1,9 @@
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Cloud, CloudOff, Copy, Download, Link as LinkIcon, Loader2, RotateCcw, Trash2, Upload } from '@/components/ui/icons'
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import '../App.css'
 import Canvas from '../components/Canvas'
-import { ExportModal } from '../components/ExportModal'
 import { ImportLabelsModal } from '../components/ImportLabelsModal'
 import { LeftSidebar } from '../components/LeftSidebar'
 import { ModelSelector } from '../components/ModelSelector'
@@ -32,6 +31,9 @@ import { generateUUID } from '../lib/utils'
 import type { Annotation, ImageData, Label, PolygonAnnotation, PromptMode, RectangleAnnotation, Tool } from '../types/annotations'
 import type { DirtyImageInfo } from '../hooks/useAutoSave'
 
+// Loaded on demand so the export code (and its jszip dependency) stays out of the annotation route's critical path.
+const ExportModal = lazy(() => import('../components/ExportModal').then(m => ({ default: m.ExportModal })))
+
 const DEFAULT_APPEARANCE_SETTINGS = {
   fillOpacity: 0,        // 0-100% default 0% (no fill when unselected)
   selectedOpacity: 30,   // 0-100% default 30% (fill shown when selected)
@@ -49,6 +51,40 @@ const DEFAULT_APPEARANCE_SETTINGS = {
     pixelsWarning: 2000,       // annotations < this px are flagged as warning
     pixelsCritical: 500,       // annotations < this px are flagged as critical
   },
+}
+
+/**
+ * Debounced localStorage writer. Coalesces rapid writes (slider drags fire on every tick) into a single
+ * trailing write; `flush` persists any pending value immediately (pagehide / unmount).
+ */
+function createDebouncedStorageWriter(key: string, delayMs: number) {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let pending: string | null = null
+  const flush = () => {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+    if (pending !== null) {
+      const value = pending
+      pending = null
+      localStorage.setItem(key, value)
+    }
+  }
+  const write = (value: string) => {
+    pending = value
+    if (timer !== null) clearTimeout(timer)
+    timer = setTimeout(flush, delayMs)
+  }
+  return { write, flush }
+}
+
+const appearanceSettingsWriter = createDebouncedStorageWriter('annotationAppearanceSettings', 300)
+
+const fetchImageAsBlob = async (url: string): Promise<Blob> => {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`)
+  return await response.blob()
 }
 
 // Thumbnail component to prevent re-creating blob URLs on every render
@@ -329,6 +365,59 @@ function AnnotationApp() {
   // Track if we're in undo/redo operation to prevent re-recording
   const isUndoingRef = useRef(false)
 
+  // Per-image / per-label annotation counts, computed once per annotations change instead of
+  // filtering the whole list inside every thumbnail and label row.
+  const { countsByImage, countsByLabel } = useMemo(() => {
+    const byImage = new Map<string, number>()
+    const byLabel = new Map<string, number>()
+    for (const a of annotations) {
+      byImage.set(a.imageId, (byImage.get(a.imageId) ?? 0) + 1)
+      byLabel.set(a.labelId, (byLabel.get(a.labelId) ?? 0) + 1)
+    }
+    return { countsByImage: byImage, countsByLabel: byLabel }
+  }, [annotations])
+
+  // Mirror of the state and storage actions the Canvas handlers need. The handlers below are
+  // `useCallback`s with stable identity (so the memoised Canvas actually skips re-renders) and read the
+  // latest values from this ref at call time instead of closing over them. The storage actions are
+  // included because useJobStorage recreates them whenever its auto-save state changes.
+  const liveRef = useRef({
+    currentImageId,
+    selectedLabelId,
+    isBboxPromptMode,
+    isMagicLoading,
+    labels,
+    annotations,
+    currentAnnotations,
+    currentImage,
+    selectedModel,
+    addAnnotation,
+    addManyAnnotations,
+    updateAnnotation,
+    updateManyAnnotations,
+    removeAnnotation,
+    recordChange,
+  })
+  useLayoutEffect(() => {
+    liveRef.current = {
+      currentImageId,
+      selectedLabelId,
+      isBboxPromptMode,
+      isMagicLoading,
+      labels,
+      annotations,
+      currentAnnotations,
+      currentImage,
+      selectedModel,
+      addAnnotation,
+      addManyAnnotations,
+      updateAnnotation,
+      updateManyAnnotations,
+      removeAnnotation,
+      recordChange,
+    }
+  })
+
   // Set default selected label when labels are loaded
   useEffect(() => {
     if (labels.length > 0 && !selectedLabelId) {
@@ -387,22 +476,35 @@ function AnnotationApp() {
     localStorage.setItem('promptMode', promptMode)
   }, [promptMode])
 
-  // Persist appearance settings to localStorage
+  // Persist appearance settings to localStorage (debounced: sliders update on every tick)
   useEffect(() => {
-    localStorage.setItem('annotationAppearanceSettings', JSON.stringify(appearanceSettings))
+    appearanceSettingsWriter.write(JSON.stringify(appearanceSettings))
   }, [appearanceSettings])
 
-  // Detect orphaned annotations on load
+  // Flush any pending appearance-settings write when the page is hidden or the app unmounts
   useEffect(() => {
-    if (!loading) {
-      const orphans = annotations.filter(ann => !labels.some(l => l.id === ann.labelId))
-      if (orphans.length > 0 && labels.length > 0 && !showOrphanRecoveryModal) {
-        setOrphanedAnnotations(orphans)
-        setShowOrphanRecoveryModal(true)
-        setOrphanRecoveryTarget(labels[0].id) // Default to first label
-      }
+    const flush = () => appearanceSettingsWriter.flush()
+    window.addEventListener('pagehide', flush)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      flush()
     }
-  }, [annotations, labels, loading, showOrphanRecoveryModal])
+  }, [])
+
+  // Detect orphaned annotations (label no longer exists). Runs once loading settles (and again when the
+  // lazy background load completes or the label set changes), never on plain annotation edits: the
+  // annotations are read through liveRef rather than being a dependency.
+  const labelIdSet = useMemo(() => new Set(labels.map(l => l.id)), [labels])
+  useEffect(() => {
+    const settled = !loading && loadingProgress.phase !== 'loading-critical'
+    if (!settled || showOrphanRecoveryModal || labelIdSet.size === 0) return
+    const orphans = liveRef.current.annotations.filter(ann => !labelIdSet.has(ann.labelId))
+    if (orphans.length > 0) {
+      setOrphanedAnnotations(orphans)
+      setShowOrphanRecoveryModal(true)
+      setOrphanRecoveryTarget(labels[0].id) // Default to first label
+    }
+  }, [labelIdSet, labels, loading, loadingProgress.phase, showOrphanRecoveryModal])
 
   /**
    * Handle back navigation with unsaved changes check
@@ -547,7 +649,8 @@ function AnnotationApp() {
     }
   }
 
-  const handleAddAnnotation = async (annotation: Omit<Annotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'>) => {
+  const handleAddAnnotation = useCallback(async (annotation: Omit<Annotation, 'imageId' | 'labelId' | 'createdAt' | 'updatedAt'>) => {
+    const { currentImageId, selectedLabelId, isBboxPromptMode, labels, currentAnnotations, addAnnotation, recordChange } = liveRef.current
     console.log('[APP] handleAddAnnotation called:', {
       type: annotation.type,
       currentImageId,
@@ -611,9 +714,10 @@ function AnnotationApp() {
 
       // Wait a bit and check if state updated
       setTimeout(() => {
+        const latest = liveRef.current.currentAnnotations
         console.log('[APP] Current annotations after add (delayed check):', {
-          count: currentAnnotations.length,
-          ids: currentAnnotations.map(a => a.id)
+          count: latest.length,
+          ids: latest.map(a => a.id)
         })
       }, 100)
 
@@ -627,9 +731,10 @@ function AnnotationApp() {
       console.error('[APP] Failed to save annotation:', error)
       toast.error('Failed to save annotation')
     }
-  }
+  }, [])
 
-  const handleUpdateAnnotation = async (annotation: Annotation) => {
+  const handleUpdateAnnotation = useCallback(async (annotation: Annotation) => {
+    const { currentAnnotations, updateAnnotation, recordChange } = liveRef.current
     console.log('[APP] handleUpdateAnnotation called for:', annotation.type, 'id:', annotation.id)
     if (annotation.type === 'polygon') {
       const poly = annotation as PolygonAnnotation
@@ -645,9 +750,10 @@ function AnnotationApp() {
     if (!isUndoingRef.current) {
       recordChange(currentAnnotations.map(a => a.id === annotation.id ? updatedAnnotation : a))
     }
-  }
+  }, [])
 
-  const handleUpdateManyAnnotations = async (annotationsToUpdate: Annotation[]) => {
+  const handleUpdateManyAnnotations = useCallback(async (annotationsToUpdate: Annotation[]) => {
+    const { currentAnnotations, updateManyAnnotations, recordChange } = liveRef.current
     console.log('[APP] handleUpdateManyAnnotations called for', annotationsToUpdate.length, 'annotations')
     const updatedAnnotations = annotationsToUpdate.map(ann => ({
       ...ann,
@@ -660,9 +766,10 @@ function AnnotationApp() {
       const updateMap = new Map(updatedAnnotations.map(a => [a.id, a]))
       recordChange(currentAnnotations.map(a => updateMap.has(a.id) ? updateMap.get(a.id)! : a))
     }
-  }
+  }, [])
 
-  const handleDeleteAnnotation = async (id: string) => {
+  const handleDeleteAnnotation = useCallback(async (id: string) => {
+    const { currentAnnotations, removeAnnotation, recordChange } = liveRef.current
     await removeAnnotation(id)
     // Remove from selection if it was selected
     setSelectedAnnotations(prev => prev.filter(selectedId => selectedId !== id))
@@ -670,7 +777,7 @@ function AnnotationApp() {
     if (!isUndoingRef.current) {
       recordChange(currentAnnotations.filter(a => a.id !== id))
     }
-  }
+  }, [])
 
   const handleBulkDeleteAnnotations = async (ids: string[]) => {
     await removeManyAnnotations(ids)
@@ -706,8 +813,9 @@ function AnnotationApp() {
   }
 
   // Single annotation label change handler (for inline editing in table)
-  const handleLabelChange = async (annotationId: string, newLabelId: string) => {
+  const handleLabelChange = useCallback(async (annotationId: string, newLabelId: string) => {
     try {
+      const { annotations, updateAnnotation } = liveRef.current
       const annotation = annotations.find(a => a.id === annotationId)
       if (!annotation) return
 
@@ -722,13 +830,14 @@ function AnnotationApp() {
       console.error('Failed to change label:', error)
       toast.error('Failed to change label')
     }
-  }
+  }, [])
 
-  const handleUpdateAnnotationAttributes = async (
+  const handleUpdateAnnotationAttributes = useCallback(async (
     annotationId: string,
     attributes: Record<string, string | number | boolean>
   ) => {
     try {
+      const { annotations, updateAnnotation } = liveRef.current
       const annotation = annotations.find(a => a.id === annotationId)
       if (!annotation) return
 
@@ -744,7 +853,7 @@ function AnnotationApp() {
       console.error('Failed to update attributes:', error)
       toast.error('Failed to update attributes')
     }
-  }
+  }, [])
 
   const handleToggleAnnotationVisibility = async (annotationId: string) => {
     const annotation = annotations.find(a => a.id === annotationId)
@@ -775,66 +884,7 @@ function AnnotationApp() {
     }
   }
 
-  const fetchImageAsBlob = async (url: string): Promise<Blob> => {
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`)
-    return await response.blob()
-  }
-
-  // Magic Select: one click becomes a small box prompt, and SAM3 returns that instance
-  const handleMagicClick = async (point: { x: number; y: number }) => {
-    if (!currentImage || !currentImageId) return
-    if (!selectedLabelId) {
-      toast.error('Select a label first')
-      return
-    }
-    if (isMagicLoading) return
-
-    setIsMagicLoading(true)
-    try {
-      let imageBlob: Blob
-      if (currentImage.s3Key && currentImage.jobId && currentImage.jobImageId) {
-        imageBlob = await fetchImageAsBlob(
-          imagesApi.getFullImageUrl(currentImage.s3Key, currentImage.jobId.toString(), currentImage.jobImageId)
-        )
-      } else if (currentImage.blob && currentImage.blob.size > 0) {
-        imageBlob = currentImage.blob
-      } else {
-        throw new Error('No valid image data available')
-      }
-
-      const imageFile = new File([imageBlob], currentImage.name, { type: imageBlob.type || 'image/jpeg' })
-
-      const result = (await sam3Client.pointPrompt({
-        image: imageFile,
-        points: [[Math.round(point.x), Math.round(point.y)]],
-        point_labels: [1],
-        simplify_tolerance: 1.5,
-      })).data
-
-      if (!result.num_objects) {
-        toast.error('Nothing found there. Try clicking nearer the object centre.')
-        return
-      }
-
-      const hasMask = (result.masks?.[0]?.polygons?.[0]?.length ?? 0) >= 3
-      await handleAutoAnnotateResults({
-        boxes: [result.boxes[0]],
-        masks: hasMask ? [result.masks[0]] : [],
-        scores: [result.scores[0]],
-        annotationType: hasMask ? 'polygon' : 'bbox',
-        labelId: selectedLabelId,
-        modelId: selectedModel?.id,
-      })
-    } catch (error) {
-      console.error('Magic select failed:', error)
-      toast.error(getApiErrorMessage(error, 'Magic select failed'))
-    } finally {
-      setIsMagicLoading(false)
-    }
-  }
-
-  const handleAutoAnnotateResults = async (results: {
+  const handleAutoAnnotateResults = useCallback(async (results: {
     boxes: Array<[number, number, number, number]>
     masks: Array<{ polygons: Array<Array<[number, number]>>; area: number }>
     scores: number[]
@@ -844,6 +894,7 @@ function AnnotationApp() {
     imageId?: string
     modelId?: string
   }) => {
+    const { currentImageId, selectedLabelId, annotations, addManyAnnotations, recordChange } = liveRef.current
     // Use passed imageId for batch processing, otherwise use currentImageId
     const targetImageId = results.imageId || currentImageId
     if (!targetImageId) return
@@ -917,7 +968,62 @@ function AnnotationApp() {
     if (!isUndoingRef.current && currentImageId) {
       recordChange(annotations.filter(a => a.imageId === (results.imageId || currentImageId)))
     }
-  }
+  }, [])
+
+  // Magic Select: one click becomes a small box prompt, and SAM3 returns that instance
+  const handleMagicClick = useCallback(async (point: { x: number; y: number }) => {
+    const { currentImage, currentImageId, selectedLabelId, isMagicLoading, selectedModel } = liveRef.current
+    if (!currentImage || !currentImageId) return
+    if (!selectedLabelId) {
+      toast.error('Select a label first')
+      return
+    }
+    if (isMagicLoading) return
+
+    setIsMagicLoading(true)
+    try {
+      let imageBlob: Blob
+      if (currentImage.s3Key && currentImage.jobId && currentImage.jobImageId) {
+        imageBlob = await fetchImageAsBlob(
+          imagesApi.getFullImageUrl(currentImage.s3Key, currentImage.jobId.toString(), currentImage.jobImageId)
+        )
+      } else if (currentImage.blob && currentImage.blob.size > 0) {
+        imageBlob = currentImage.blob
+      } else {
+        throw new Error('No valid image data available')
+      }
+
+      const imageFile = new File([imageBlob], currentImage.name, { type: imageBlob.type || 'image/jpeg' })
+
+      const result = (await sam3Client.pointPrompt({
+        image: imageFile,
+        points: [[Math.round(point.x), Math.round(point.y)]],
+        point_labels: [1],
+        simplify_tolerance: 1.5,
+      })).data
+
+      if (!result.num_objects) {
+        toast.error('Nothing found there. Try clicking nearer the object centre.')
+        return
+      }
+
+      const hasMask = (result.masks?.[0]?.polygons?.[0]?.length ?? 0) >= 3
+      await handleAutoAnnotateResults({
+        boxes: [result.boxes[0]],
+        masks: hasMask ? [result.masks[0]] : [],
+        scores: [result.scores[0]],
+        annotationType: hasMask ? 'polygon' : 'bbox',
+        labelId: selectedLabelId,
+        modelId: selectedModel?.id,
+      })
+    } catch (error) {
+      console.error('Magic select failed:', error)
+      toast.error(getApiErrorMessage(error, 'Magic select failed'))
+    } finally {
+      setIsMagicLoading(false)
+    }
+  }, [handleAutoAnnotateResults])
+
 
   // Get current image as data URL for canvas
   const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null)
@@ -1648,7 +1754,7 @@ function AnnotationApp() {
 
                     {images.map((image) => {
                       // Count annotations for this specific image
-                      const imageAnnotationCount = annotations.filter(a => a.imageId === image.id).length
+                      const imageAnnotationCount = countsByImage.get(image.id) ?? 0
 
                       return (
                         <ImageThumbnail
@@ -1780,7 +1886,7 @@ function AnnotationApp() {
 
                     {/* Annotation count badge */}
                     <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
-                      {annotations.filter(a => a.labelId === label.id).length}
+                      {countsByLabel.get(label.id) ?? 0}
                     </span>
 
                     {/* Edit Button */}
@@ -1801,7 +1907,7 @@ function AnnotationApp() {
                     <button
                       onClick={async () => {
                         // Check if label has annotations
-                        const count = annotations.filter(a => a.labelId === label.id).length
+                        const count = countsByLabel.get(label.id) ?? 0
 
                         if (count > 0) {
                           // Show confirmation dialog
@@ -1990,7 +2096,7 @@ function AnnotationApp() {
               >
                 {labels.map(label => (
                   <option key={label.id} value={label.id}>
-                    {label.name} ({annotations.filter(a => a.labelId === label.id).length} existing)
+                    {label.name} ({countsByLabel.get(label.id) ?? 0} existing)
                   </option>
                 ))}
               </select>
@@ -2334,14 +2440,18 @@ function AnnotationApp() {
         onClose={() => setShowShortcutsModal(false)}
       />
 
-      {/* Export Modal */}
-      <ExportModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        images={images}
-        annotations={annotations}
-        labels={labels}
-      />
+      {/* Export Modal (lazy-loaded; only mounted while open) */}
+      {showExportModal && (
+        <Suspense fallback={null}>
+          <ExportModal
+            isOpen={showExportModal}
+            onClose={() => setShowExportModal(false)}
+            images={images}
+            annotations={annotations}
+            labels={labels}
+          />
+        </Suspense>
+      )}
 
       <ImportLabelsModal
         isOpen={showImportModal}

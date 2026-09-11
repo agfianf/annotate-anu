@@ -4,8 +4,8 @@ import json
 from datetime import datetime
 from typing import Annotated
 
-import redis
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from redis import asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.config import settings
@@ -20,6 +20,17 @@ from app.services.mock_classifier import IMAGENET_SUBSET, mock_classifier
 from app.services.mock_detector import COCO_SUBSET
 
 router = APIRouter(prefix="/api/v1/inference", tags=["Inference Proxy"])
+
+# One async Redis client (with its own connection pool) shared across requests,
+# created on first use so importing this module never touches the network.
+_redis_client: aioredis.Redis | None = None
+
+
+def _get_redis() -> aioredis.Redis:
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+    return _redis_client
 
 
 def _get_sam3_model(sam3_url: str) -> ModelBase:
@@ -227,7 +238,9 @@ async def inference_text(
     text_prompt: str = Form(..., description="Text description of objects to segment"),
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
     mask_threshold: float = Form(0.5, ge=0.0, le=1.0, description="Mask generation threshold"),
-    simplify_tolerance: float = Form(1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance"),
+    simplify_tolerance: float = Form(
+        1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance"
+    ),
     return_visualization: bool = Form(False, description="Return visualization image"),
     connection: Annotated[AsyncConnection | None, Depends(get_async_conn)] = None,
 ):
@@ -313,7 +326,9 @@ async def inference_bbox(
     bounding_boxes: str = Form(..., description="JSON array of [x1, y1, x2, y2, label] boxes"),
     threshold: float = Form(0.5, ge=0.0, le=1.0, description="Detection confidence threshold"),
     mask_threshold: float = Form(0.5, ge=0.0, le=1.0, description="Mask generation threshold"),
-    simplify_tolerance: float = Form(1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance"),
+    simplify_tolerance: float = Form(
+        1.5, ge=0.0, le=10.0, description="Polygon simplification tolerance"
+    ),
     return_visualization: bool = Form(False, description="Return visualization image"),
     connection: Annotated[AsyncConnection | None, Depends(get_async_conn)] = None,
 ):
@@ -668,10 +683,9 @@ async def get_batch_classification_progress(job_id: str):
         Job progress with status, processed count, total, and failed count
     """
     # First check Redis for progress updates
-    redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
     progress_key = f"classification:progress:{job_id}"
 
-    redis_progress = redis_client.hgetall(progress_key)
+    redis_progress = await _get_redis().hgetall(progress_key)
 
     if redis_progress:
         return {

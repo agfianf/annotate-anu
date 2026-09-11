@@ -5,9 +5,9 @@
 
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Loader2 } from '@/components/ui/icons';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { VisibilityState } from '../../hooks/useExploreVisibility';
-import { useJustifiedRows } from '../../hooks/useJustifiedRows';
+import { useJustifiedRows, type ImageWithRowInfo } from '../../hooks/useJustifiedRows';
 import type { SharedImage } from '../../lib/data-management-client';
 import { JustifiedRow } from './JustifiedRow';
 
@@ -30,6 +30,8 @@ interface VirtualizedImageGridProps {
   /** Optional filter function for annotation confidence filtering */
   shouldShowAnnotation?: (labelId?: string, confidence?: number) => boolean;
 }
+
+const EMPTY_ROW: ImageWithRowInfo[] = [];
 
 export function VirtualizedImageGrid({
   images,
@@ -68,7 +70,7 @@ export function VirtualizedImageGrid({
 
   // Force re-render state - used by onChange to trigger updates outside React's render cycle
   const [, forceUpdate] = useState(0);
-  
+
   // Calculate justified layout
   const { layout, imagesWithRowInfo } = useJustifiedRows({
     images,
@@ -76,6 +78,24 @@ export function VirtualizedImageGrid({
     targetRowHeight,
     spacing,
   });
+
+  // Resolve each row's image list once per layout, not per visible row per scroll tick.
+  // Rows are stable array references so memoized JustifiedRow instances skip re-rendering
+  // while scrolling.
+  const rowImageLists = useMemo(() => {
+    const byId = new Map<string, ImageWithRowInfo>();
+    for (const img of imagesWithRowInfo) {
+      byId.set(img.id, img);
+    }
+    return layout.rows.map((row) => {
+      const list: ImageWithRowInfo[] = [];
+      for (const id of row.images) {
+        const img = byId.get(id);
+        if (img) list.push(img);
+      }
+      return list;
+    });
+  }, [layout, imagesWithRowInfo]);
 
   // Custom onChange handler that defers updates to avoid flushSync warning
   // See: https://github.com/TanStack/virtual/issues/613
@@ -112,21 +132,20 @@ export function VirtualizedImageGrid({
 
   // Get virtual items for rendering and infinite scroll
   const virtualItems = rowVirtualizer.getVirtualItems();
+  const lastVisibleIndex = virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
 
   // Infinite scroll trigger
   useEffect(() => {
-    const lastItem = virtualItems[virtualItems.length - 1];
-
     if (
-      lastItem &&
-      lastItem.index >= layout.rows.length - 2 &&
+      lastVisibleIndex >= 0 &&
+      lastVisibleIndex >= layout.rows.length - 2 &&
       hasNextPage &&
       !isFetchingNextPage
     ) {
       fetchNextPage();
     }
   }, [
-    virtualItems.length, // Use length instead of calling getVirtualItems() in dependency
+    lastVisibleIndex,
     layout.rows.length,
     hasNextPage,
     isFetchingNextPage,
@@ -173,14 +192,12 @@ export function VirtualizedImageGrid({
           }
 
           const row = layout.rows[virtualRow.index];
-          const rowImages = row.images
-            .map((id) => imagesWithRowInfo.find((img) => img.id === id))
-            .filter(Boolean) as typeof imagesWithRowInfo;
+          const rowImages = rowImageLists[virtualRow.index] ?? EMPTY_ROW;
 
           return (
             <JustifiedRow
               key={virtualRow.index}
-              virtualRow={virtualRow}
+              top={virtualRow.start}
               row={row}
               images={rowImages}
               selectedImages={selectedImages}

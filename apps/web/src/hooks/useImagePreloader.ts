@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { imagesApi } from '../lib/api-client'
 import type { ImageData } from '../types/annotations'
 
@@ -78,37 +78,41 @@ export function useImagePreloader(
   const { windowSize = 2, priorityLoad = true } = options
 
   const [loading, setLoading] = useState(false)
-  const cacheRef = useRef<Map<string, HTMLImageElement>>(new Map())
-  const loadingRef = useRef<Set<string>>(new Set()) // Prevent duplicate loads
+  // Stable Map instances created once per hook instance. Held in state rather
+  // than refs so `cache` can be returned from the hook without reading a ref
+  // during render; mutating them never triggers a re-render.
+  const [cache] = useState(() => new Map<string, HTMLImageElement>())
+  const [inFlight] = useState(() => new Map<string, Promise<HTMLImageElement>>())
 
   /**
    * Preload a single image and cache it
    */
   const preloadImage = useCallback(
-    async (imageData: ImageData): Promise<HTMLImageElement> => {
+    (imageData: ImageData): Promise<HTMLImageElement> => {
       // Check cache first
-      if (cacheRef.current.has(imageData.id)) {
-        return cacheRef.current.get(imageData.id)!
+      const cached = cache.get(imageData.id)
+      if (cached) {
+        return Promise.resolve(cached)
       }
 
-      // Prevent duplicate loads
-      if (loadingRef.current.has(imageData.id)) {
-        // Wait for existing load
-        return new Promise((resolve) => {
-          const interval = setInterval(() => {
-            const cached = cacheRef.current.get(imageData.id)
-            if (cached) {
-              clearInterval(interval)
-              resolve(cached)
-            }
-          }, 50)
-        })
+      // Share the in-flight load instead of polling for it
+      const existing = inFlight.get(imageData.id)
+      if (existing) {
+        return existing
       }
 
-      loadingRef.current.add(imageData.id)
-
-      return new Promise((resolve, reject) => {
+      const load = new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image()
+
+        img.onload = () => {
+          cache.set(imageData.id, img)
+          resolve(img)
+        }
+
+        img.onerror = (err) => {
+          console.error('[useImagePreloader] Failed to load image:', imageData.id, err)
+          reject(err)
+        }
 
         // For job mode, use API URL
         if (imageData.s3Key && imageData.jobId && imageData.jobImageId) {
@@ -121,25 +125,16 @@ export function useImagePreloader(
           // For local mode, use blob URL
           img.src = URL.createObjectURL(imageData.blob)
         } else {
-          loadingRef.current.delete(imageData.id)
           reject(new Error('No image source available'))
-          return
         }
-
-        img.onload = () => {
-          cacheRef.current.set(imageData.id, img)
-          loadingRef.current.delete(imageData.id)
-          resolve(img)
-        }
-
-        img.onerror = (err) => {
-          loadingRef.current.delete(imageData.id)
-          console.error('[useImagePreloader] Failed to load image:', imageData.id, err)
-          reject(err)
-        }
+      }).finally(() => {
+        inFlight.delete(imageData.id)
       })
+
+      inFlight.set(imageData.id, load)
+      return load
     },
-    []
+    [cache, inFlight]
   )
 
   /**
@@ -184,24 +179,25 @@ export function useImagePreloader(
    * Get cached image element
    */
   const getCachedImage = useCallback((imageId: string): HTMLImageElement | null => {
-    return cacheRef.current.get(imageId) || null
-  }, [])
+    return cache.get(imageId) || null
+  }, [cache])
 
   // Cleanup blob URLs on unmount
   useEffect(() => {
     return () => {
-      cacheRef.current.forEach((img) => {
+      cache.forEach((img) => {
         if (img.src.startsWith('blob:')) {
           URL.revokeObjectURL(img.src)
         }
       })
-      cacheRef.current.clear()
+      cache.clear()
+      inFlight.clear()
     }
-  }, [])
+  }, [cache, inFlight])
 
   return {
     loading,
-    cache: cacheRef.current,
+    cache,
     preloadImage,
     preloadWindow,
     getCachedImage,

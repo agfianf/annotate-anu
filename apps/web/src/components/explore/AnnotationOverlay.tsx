@@ -5,7 +5,7 @@
  * Enhanced with source icons (manual vs AI) and confidence display
  */
 
-import { useId } from 'react';
+import { memo, useId, useMemo } from 'react';
 import type { BboxPreview, PolygonPreview } from '../../lib/data-management-client';
 import type { AnnotationDisplayState, DimLevel, StrokeOpacityLevel } from '../../hooks/useExploreVisibility';
 import { getTextColorForBackground } from '../../lib/colors';
@@ -110,7 +110,12 @@ const LABEL_PADDING_X = 0.006;  // Horizontal padding
 const LABEL_PADDING_Y = 0.004;  // Vertical padding
 const LABEL_CHAR_WIDTH = 0.008; // Approximate width per character
 
-export function AnnotationOverlay({
+interface PolygonGeometry {
+  path: string;
+  centroid: [number, number];
+}
+
+export const AnnotationOverlay = memo(function AnnotationOverlay({
   bboxes,
   polygons,
   displayOptions = defaultDisplayOptions,
@@ -120,13 +125,34 @@ export function AnnotationOverlay({
   // Generate unique ID for mask to avoid conflicts with multiple overlays
   const maskId = useId();
 
-  // Filter annotations if filter function provided
-  const filteredBboxes = shouldShowAnnotation
-    ? bboxes?.filter((bbox) => shouldShowAnnotation(bbox.label_id, bbox.confidence))
-    : bboxes;
-  const filteredPolygons = shouldShowAnnotation
-    ? polygons?.filter((poly) => shouldShowAnnotation(poly.label_id, poly.confidence))
-    : polygons;
+  // Filter annotations if filter function provided (memoized: this component is
+  // mounted once per visible thumbnail and re-renders on every scroll tick)
+  const filteredBboxes = useMemo(
+    () =>
+      shouldShowAnnotation
+        ? bboxes?.filter((bbox) => shouldShowAnnotation(bbox.label_id, bbox.confidence))
+        : bboxes,
+    [bboxes, shouldShowAnnotation]
+  );
+  const filteredPolygons = useMemo(
+    () =>
+      shouldShowAnnotation
+        ? polygons?.filter((poly) => shouldShowAnnotation(poly.label_id, poly.confidence))
+        : polygons,
+    [polygons, shouldShowAnnotation]
+  );
+
+  // SVG path strings and centroids are pure functions of the polygon points;
+  // compute them once per polygon list instead of per render (and twice per
+  // render in highlight mode, where the mask duplicates each path).
+  const polygonGeometry = useMemo<PolygonGeometry[] | undefined>(
+    () =>
+      filteredPolygons?.map((poly) => ({
+        path: pointsToPath(poly.points),
+        centroid: getCentroid(poly.points),
+      })),
+    [filteredPolygons]
+  );
 
   const showBboxes = displayOptions.showBboxes && filteredBboxes && filteredBboxes.length > 0;
   const showPolygons = displayOptions.showPolygons && filteredPolygons && filteredPolygons.length > 0;
@@ -172,13 +198,12 @@ export function AnnotationOverlay({
               ))}
 
               {/* Black cutouts for polygons = fully transparent (spotlight) */}
-              {showPolygons && filteredPolygons?.map((poly, idx) => {
-                const pathD = pointsToPath(poly.points);
-                if (!pathD) return null;
+              {showPolygons && polygonGeometry?.map((geom, idx) => {
+                if (!geom.path) return null;
                 return (
                   <path
                     key={`mask-poly-${idx}`}
-                    d={pathD}
+                    d={geom.path}
                     fill="black"
                   />
                 );
@@ -259,9 +284,9 @@ export function AnnotationOverlay({
 
       {/* Render polygons (segmentations) */}
       {showPolygons && filteredPolygons?.map((poly, idx) => {
-        const centroid = getCentroid(poly.points);
-        const pathD = pointsToPath(poly.points);
-        if (!pathD) return null;
+        const geom = polygonGeometry?.[idx];
+        if (!geom || !geom.path) return null;
+        const { path: pathD, centroid } = geom;
 
         // Show confidence for non-manual annotations (format: "Label 85" - no % sign)
         const confidenceText = poly.source !== 'manual' && poly.confidence != null
@@ -317,4 +342,4 @@ export function AnnotationOverlay({
       })}
     </svg>
   );
-}
+});

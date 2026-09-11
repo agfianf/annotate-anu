@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useDebouncedPersist } from './useDebouncedPersist';
 
 /**
  * Metadata field visibility with color support
@@ -160,28 +161,22 @@ function loadVisibility(projectId: string): VisibilityState {
   };
 }
 
-function saveVisibility(projectId: string, visibility: VisibilityState): void {
-  try {
-    localStorage.setItem(getStorageKey(projectId), JSON.stringify(visibility));
-  } catch (e) {
-    console.warn('Failed to save visibility state to localStorage:', e);
-  }
-}
-
 export function useExploreVisibility(projectId: string) {
   const [visibility, setVisibility] = useState<VisibilityState>(() =>
     loadVisibility(projectId)
   );
+  const [loadedProjectId, setLoadedProjectId] = useState(projectId);
 
-  // Persist to localStorage on change
-  useEffect(() => {
-    saveVisibility(projectId, visibility);
-  }, [projectId, visibility]);
-
-  // Reload when projectId changes
-  useEffect(() => {
+  // Reload when projectId changes. Adjusting state during render (rather than
+  // in an effect) re-renders before commit, so the previous project's state is
+  // never persisted under the new project's key.
+  if (loadedProjectId !== projectId) {
+    setLoadedProjectId(projectId);
     setVisibility(loadVisibility(projectId));
-  }, [projectId]);
+  }
+
+  // Persist to localStorage on change (trailing debounce, flushed on hide/unmount)
+  useDebouncedPersist(getStorageKey(projectId), visibility, 300);
 
   /**
    * Toggle visibility for a specific tag
@@ -306,7 +301,9 @@ export function useExploreVisibility(projectId: string) {
   /**
    * Show all items (reset to default visible state)
    */
-  const showAll = useCallback((_allTagIds?: string[], _allCategoryIds?: string[], _allLabelNames?: string[]) => {
+  const showAll = useCallback<
+    (allTagIds?: string[], allCategoryIds?: string[], allLabelNames?: string[]) => void
+  >(() => {
     setVisibility((prev) => ({
       tags: {},
       categories: {},

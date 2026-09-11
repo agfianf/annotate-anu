@@ -1,5 +1,6 @@
 """File Share router with file browsing, upload, and thumbnail endpoints."""
 
+import os
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
@@ -156,13 +157,9 @@ async def upload_files(
             uploaded.append(saved_path)
 
         except HTTPException as e:
-            failed.append(
-                UploadFailure(filename=file.filename or "unknown", reason=e.detail)
-            )
+            failed.append(UploadFailure(filename=file.filename or "unknown", reason=e.detail))
         except Exception as e:
-            failed.append(
-                UploadFailure(filename=file.filename or "unknown", reason=str(e))
-            )
+            failed.append(UploadFailure(filename=file.filename or "unknown", reason=str(e)))
 
     return JsonResponse(
         data=UploadResponse(
@@ -184,15 +181,21 @@ async def get_thumbnail(
     path: str,
     current_user: Annotated[UserBase, Depends(get_current_active_user)],
     thumb: ThumbnailService = Depends(get_thumbnail_service),
-    size: str = Query(default="2x", pattern="^(1x|2x|4x)$", description="Thumbnail size (1x=256px, 2x=512px, 4x=1024px)"),
+    size: str = Query(
+        default="2x",
+        pattern="^(1x|2x|4x)$",
+        description="Thumbnail size (1x=256px, 2x=512px, 4x=1024px)",
+    ),
 ):
     """Get thumbnail for an image with specified size. Generates on-demand if not cached."""
     try:
         thumbnail_path = await thumb.get_or_create_thumbnail(path, size)
+        # Passing the stat lets Starlette emit ETag/Last-Modified and answer If-None-Match / If-Modified-Since with a 304
         return FileResponse(
             thumbnail_path,
             media_type="image/jpeg",
             headers={"Cache-Control": "public, max-age=86400"},  # 24h cache
+            stat_result=os.stat(thumbnail_path),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

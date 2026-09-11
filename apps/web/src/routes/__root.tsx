@@ -6,6 +6,7 @@
 import {
   createRootRouteWithContext,
   createRoute,
+  lazyRouteComponent,
   Outlet,
   redirect,
 } from '@tanstack/react-router'
@@ -18,24 +19,26 @@ import type { User } from '../lib/api-client'
 // Context providers that need router access
 import { ExploreViewProvider } from '../contexts/ExploreViewContext'
 
-// Lazy load page components
-import LandingPage from '../pages/LandingPage'
-import LoginPage from '../pages/LoginPage'
-import RegisterPage from '../pages/RegisterPage'
-import AnimationDemoPage from '../pages/AnimationDemoPage'
-import AnnotationApp from '../pages/AnnotationApp'
-import QCPage from '../pages/QCPage'
-import StoragePage from '../pages/StoragePage'
-import DashboardLayout from '../components/DashboardLayout'
-import DashboardPage from '../pages/DashboardPage'
-import ProfilePage from '../pages/ProfilePage'
-import AdminPage from '../pages/AdminPage'
-import ProjectsPage from '../pages/ProjectsPage'
-import ProjectDetailPage from '../pages/ProjectDetailPage'
-import TasksPage from '../pages/TasksPage'
-import JobsPage from '../pages/JobsPage'
-import FileSharePage from '../pages/FileSharePage'
-import ModelConfigPage from '../pages/ModelConfigPage'
+// Page components are code-split per route. Each import() becomes its own chunk,
+// so the entry bundle only carries the router, auth, and shared UI.
+// `defaultPreload: 'intent'` in router.ts starts fetching a chunk on link hover.
+const DashboardLayout = lazyRouteComponent(() => import('../components/DashboardLayout'))
+const LandingPage = lazyRouteComponent(() => import('../pages/LandingPage'))
+const LoginPage = lazyRouteComponent(() => import('../pages/LoginPage'))
+const RegisterPage = lazyRouteComponent(() => import('../pages/RegisterPage'))
+const AnimationDemoPage = lazyRouteComponent(() => import('../pages/AnimationDemoPage'))
+const AnnotationApp = lazyRouteComponent(() => import('../pages/AnnotationApp'))
+const QCPage = lazyRouteComponent(() => import('../pages/QCPage'))
+const StoragePage = lazyRouteComponent(() => import('../pages/StoragePage'))
+const DashboardPage = lazyRouteComponent(() => import('../pages/DashboardPage'))
+const ProfilePage = lazyRouteComponent(() => import('../pages/ProfilePage'))
+const AdminPage = lazyRouteComponent(() => import('../pages/AdminPage'))
+const ProjectsPage = lazyRouteComponent(() => import('../pages/ProjectsPage'))
+const ProjectDetailPage = lazyRouteComponent(() => import('../pages/ProjectDetailPage'))
+const TasksPage = lazyRouteComponent(() => import('../pages/TasksPage'))
+const JobsPage = lazyRouteComponent(() => import('../pages/JobsPage'))
+const FileSharePage = lazyRouteComponent(() => import('../pages/FileSharePage'))
+const ModelConfigPage = lazyRouteComponent(() => import('../pages/ModelConfigPage'))
 
 // ============================================================================
 // Context Types

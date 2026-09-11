@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useDebouncedPersist } from './useDebouncedPersist';
 import type { Label } from '../types/annotations';
 
 /**
@@ -46,12 +47,55 @@ function loadFilters(projectId: string): AnnotationFiltersState {
   return { ...defaultFiltersState };
 }
 
-function saveFilters(projectId: string, filters: AnnotationFiltersState): void {
-  try {
-    localStorage.setItem(getStorageKey(projectId), JSON.stringify(filters));
-  } catch (e) {
-    console.warn('Failed to save annotation filters to localStorage:', e);
+function labelFilterEquals(a: LabelConfidenceFilter, b: LabelConfidenceFilter): boolean {
+  return (
+    a.labelId === b.labelId &&
+    a.labelName === b.labelName &&
+    a.labelColor === b.labelColor &&
+    a.minConfidence === b.minConfidence &&
+    a.maxConfidence === b.maxConfidence &&
+    a.isVisible === b.isVisible
+  );
+}
+
+/**
+ * Build the label filter map for `labels`, preserving existing per-label
+ * settings and refreshing name/color. Returns `prev` unchanged when nothing
+ * differs so callers can skip a state update (and the persist it triggers).
+ */
+function mergeLabelFilters(
+  prev: Record<string, LabelConfidenceFilter>,
+  labels: Label[]
+): Record<string, LabelConfidenceFilter> {
+  const next: Record<string, LabelConfidenceFilter> = {};
+  let changed = false;
+
+  labels.forEach((label) => {
+    const existing = prev[label.id];
+    const merged: LabelConfidenceFilter = existing
+      ? { ...existing, labelName: label.name, labelColor: label.color }
+      : {
+          labelId: label.id,
+          labelName: label.name,
+          labelColor: label.color,
+          minConfidence: 0,
+          maxConfidence: 100,
+          isVisible: true,
+        };
+    if (!existing || !labelFilterEquals(existing, merged)) {
+      changed = true;
+      next[label.id] = merged;
+    } else {
+      next[label.id] = existing;
+    }
+  });
+
+  // Labels that disappeared also count as a change
+  if (!changed && Object.keys(prev).length !== labels.length) {
+    changed = true;
   }
+
+  return changed ? next : prev;
 }
 
 /**
@@ -61,48 +105,34 @@ export function useAnnotationFilters(projectId: string, labels?: Label[]) {
   const [filters, setFilters] = useState<AnnotationFiltersState>(() =>
     loadFilters(projectId)
   );
+  const [loadedProjectId, setLoadedProjectId] = useState(projectId);
+  const [syncedLabels, setSyncedLabels] = useState<Label[] | undefined>(undefined);
 
-  // Persist to localStorage on change
-  useEffect(() => {
-    saveFilters(projectId, filters);
-  }, [projectId, filters]);
+  // Derived-state updates are done during render (React's "adjust state when a
+  // prop changes" pattern) rather than in effects: the component re-renders
+  // before commit, so no stale intermediate state is ever persisted.
+  let currentFilters = filters;
 
   // Reload when projectId changes
-  useEffect(() => {
-    setFilters(loadFilters(projectId));
-  }, [projectId]);
+  if (loadedProjectId !== projectId) {
+    currentFilters = loadFilters(projectId);
+    setLoadedProjectId(projectId);
+    setFilters(currentFilters);
+  }
 
   // Auto-initialize filters when labels are provided/updated
-  useEffect(() => {
+  if (labels !== syncedLabels) {
+    setSyncedLabels(labels);
     if (labels && labels.length > 0) {
-      setFilters((prev) => {
-        const newLabelFilters: Record<string, LabelConfidenceFilter> = {};
-
-        labels.forEach((label) => {
-          // Preserve existing filter if present, otherwise create default
-          if (prev.labelFilters[label.id]) {
-            newLabelFilters[label.id] = {
-              ...prev.labelFilters[label.id],
-              // Update name and color in case they changed
-              labelName: label.name,
-              labelColor: label.color,
-            };
-          } else {
-            newLabelFilters[label.id] = {
-              labelId: label.id,
-              labelName: label.name,
-              labelColor: label.color,
-              minConfidence: 0,
-              maxConfidence: 100,
-              isVisible: true,
-            };
-          }
-        });
-
-        return { labelFilters: newLabelFilters };
-      });
+      const merged = mergeLabelFilters(currentFilters.labelFilters, labels);
+      if (merged !== currentFilters.labelFilters) {
+        setFilters({ labelFilters: merged });
+      }
     }
-  }, [labels]);
+  }
+
+  // Persist to localStorage on change (trailing debounce, flushed on hide/unmount)
+  useDebouncedPersist(getStorageKey(projectId), filters, 300);
 
   /**
    * Initialize filters from project labels
@@ -110,30 +140,8 @@ export function useAnnotationFilters(projectId: string, labels?: Label[]) {
    */
   const initializeFromLabels = useCallback((labels: Label[]) => {
     setFilters((prev) => {
-      const newLabelFilters: Record<string, LabelConfidenceFilter> = {};
-
-      labels.forEach((label) => {
-        // Preserve existing filter if present, otherwise create default
-        if (prev.labelFilters[label.id]) {
-          newLabelFilters[label.id] = {
-            ...prev.labelFilters[label.id],
-            // Update name and color in case they changed
-            labelName: label.name,
-            labelColor: label.color,
-          };
-        } else {
-          newLabelFilters[label.id] = {
-            labelId: label.id,
-            labelName: label.name,
-            labelColor: label.color,
-            minConfidence: 0,
-            maxConfidence: 100,
-            isVisible: true,
-          };
-        }
-      });
-
-      return { labelFilters: newLabelFilters };
+      const merged = mergeLabelFilters(prev.labelFilters, labels);
+      return merged === prev.labelFilters ? prev : { labelFilters: merged };
     });
   }, []);
 
