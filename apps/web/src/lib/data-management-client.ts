@@ -7,6 +7,8 @@ import type { AxiosInstance, AxiosResponse, AxiosError, InternalAxiosRequestConf
 import axios from 'axios';
 import { getAccessToken, getRefreshToken, setTokens, clearTokens, getStoredUser } from './api-client';
 import type { ApiResponse as AuthApiResponse, TokenOnlyResponse } from './api-client';
+import { filterContractToSearchParams, toFilterContract } from './explore-filter-contract';
+import type { ImageFilterContract } from './explore-filter-contract';
 
 // ============================================================================
 // Types
@@ -189,10 +191,18 @@ export interface PolygonPreview {
 }
 
 export interface AnnotationSummary {
+  /** Total detections on the image, independent of how many bboxes were returned. */
   detection_count: number;
+  /** Total segmentations on the image, independent of how many polygons were returned. */
   segmentation_count: number;
+  /** Only present when geometry was requested; capped at `max_bboxes_per_image`. */
   bboxes?: BboxPreview[];
+  /** Only present when geometry was requested; capped at `max_polygons_per_image`. */
   polygons?: PolygonPreview[];
+  /** True when the bbox preview hit its per-image cap. It does not say how many were left out: the preview mixes detection boxes with segmentation bounding boxes, so no exact overflow count is derivable and no label should promise one. */
+  bboxes_truncated?: boolean;
+  /** True when the polygon preview hit its per-image cap. As with `bboxes_truncated`, this is a cap-reached flag, not a count. */
+  polygons_truncated?: boolean;
 }
 
 export interface JobAssociation {
@@ -257,6 +267,45 @@ export interface ExploreFilters {
   blue_max?: number;
   // Quality issues filter
   issues?: string[]; // Filter by quality issues: blur, low_brightness, high_brightness, low_contrast, duplicate
+}
+
+/**
+ * Paging and display controls for the explore endpoint.
+ *
+ * These are deliberately not part of `ImageFilterContract`: changing any of them must never change which images match, only how many are returned per request and how much geometry each carries. Counts (`detection_count`, `segmentation_count`) are returned whether or not geometry is requested.
+ */
+export interface ExploreQueryOptions {
+  page?: number;
+  page_size?: number;
+  /** Request bbox geometry for overlays. Defaults to the endpoint's default (true) when omitted. */
+  include_bboxes?: boolean;
+  /** Request polygon geometry for overlays. Defaults to the endpoint's default (true) when omitted. */
+  include_polygons?: boolean;
+  max_bboxes_per_image?: number;
+  max_polygons_per_image?: number;
+  /** @deprecated Alias for `include_bboxes`, which is the name the endpoint uses. */
+  include_bbox?: boolean;
+  /** @deprecated Alias for `include_polygons`, which is the name the endpoint uses. */
+  include_polygon?: boolean;
+}
+
+/**
+ * "Every image matching these filters, except these ones" — the all-matches alternative to sending a list of ids, for bulk actions whose target set is larger than the loaded pages.
+ *
+ * Membership is resolved when the action runs, not when the user made the selection.
+ */
+export interface ImageSelectionScope {
+  filters: ImageFilterContract;
+  excluded_image_ids?: string[];
+}
+
+function serialiseSelectionScope(scope: ImageSelectionScope): Record<string, unknown> {
+  return {
+    filters: toFilterContract(scope.filters),
+    ...(scope.excluded_image_ids && scope.excluded_image_ids.length > 0
+      ? { excluded_image_ids: scope.excluded_image_ids }
+      : {}),
+  };
 }
 
 export interface ApiResponse<T> {
@@ -719,85 +768,37 @@ export const projectImagesApi = {
   },
 
   /**
-   * Explore images with advanced filtering
+   * Explore images with advanced filtering.
+   *
+   * Membership filters are serialised through the canonical contract, so this request, the export snapshot, and the analytics panels always describe the same image set. `signal` lets an obsolete request be cancelled when filters change again before it lands.
    */
   async explore(
     projectId: string,
-    filters?: ExploreFilters & { page?: number; page_size?: number }
+    filters?: ExploreFilters & ExploreQueryOptions,
+    signal?: AbortSignal
   ): Promise<ExploreResponse> {
-    const queryParams = new URLSearchParams();
+    const queryParams = filterContractToSearchParams(toFilterContract(filters ?? {}));
+
     if (filters?.page) queryParams.append('page', filters.page.toString());
     if (filters?.page_size) queryParams.append('page_size', filters.page_size.toString());
-    if (filters?.search) queryParams.append('search', filters.search);
-    if (filters?.tag_ids) {
-      filters.tag_ids.forEach((id) => queryParams.append('tag_ids', id));
+
+    // Geometry is requested, not assumed: with overlays hidden the response carries counts only.
+    const includeBboxes = filters?.include_bboxes ?? filters?.include_bbox;
+    const includePolygons = filters?.include_polygons ?? filters?.include_polygon;
+    if (includeBboxes !== undefined) queryParams.append('include_bboxes', includeBboxes.toString());
+    if (includePolygons !== undefined) {
+      queryParams.append('include_polygons', includePolygons.toString());
     }
-    if (filters?.excluded_tag_ids) {
-      filters.excluded_tag_ids.forEach((id) => queryParams.append('excluded_tag_ids', id));
+    if (filters?.max_bboxes_per_image !== undefined) {
+      queryParams.append('max_bboxes_per_image', filters.max_bboxes_per_image.toString());
     }
-    if (filters?.include_match_mode) {
-      queryParams.append('include_match_mode', filters.include_match_mode);
-    }
-    if (filters?.exclude_match_mode) {
-      queryParams.append('exclude_match_mode', filters.exclude_match_mode);
-    }
-    if (filters?.task_ids && filters.task_ids.length > 0) {
-      filters.task_ids.forEach((id) => queryParams.append('task_ids', id.toString()));
-    }
-    if (filters?.job_id !== undefined) queryParams.append('job_id', filters.job_id.toString());
-    if (filters?.is_annotated !== undefined) {
-      queryParams.append('is_annotated', filters.is_annotated.toString());
-    }
-    // Metadata filters - round width/height to integers as backend expects int
-    if (filters?.width_min !== undefined) queryParams.append('width_min', Math.round(filters.width_min).toString());
-    if (filters?.width_max !== undefined) queryParams.append('width_max', Math.round(filters.width_max).toString());
-    if (filters?.height_min !== undefined) queryParams.append('height_min', Math.round(filters.height_min).toString());
-    if (filters?.height_max !== undefined) queryParams.append('height_max', Math.round(filters.height_max).toString());
-    // Aspect ratio filters (float values)
-    if (filters?.aspect_ratio_min !== undefined) queryParams.append('aspect_ratio_min', filters.aspect_ratio_min.toString());
-    if (filters?.aspect_ratio_max !== undefined) queryParams.append('aspect_ratio_max', filters.aspect_ratio_max.toString());
-    if (filters?.file_size_min !== undefined) queryParams.append('file_size_min', Math.round(filters.file_size_min).toString());
-    if (filters?.file_size_max !== undefined) queryParams.append('file_size_max', Math.round(filters.file_size_max).toString());
-    if (filters?.filepath_pattern) queryParams.append('filepath_pattern', filters.filepath_pattern);
-    if (filters?.filepath_paths && filters.filepath_paths.length > 0) {
-      filters.filepath_paths.forEach((path) => queryParams.append('filepath_paths', path));
-    }
-    if (filters?.image_uids && filters.image_uids.length > 0) {
-      filters.image_uids.forEach((id) => queryParams.append('image_uids', id));
-    }
-    // Quality metric filters
-    if (filters?.quality_min !== undefined) queryParams.append('quality_min', filters.quality_min.toString());
-    if (filters?.quality_max !== undefined) queryParams.append('quality_max', filters.quality_max.toString());
-    if (filters?.sharpness_min !== undefined) queryParams.append('sharpness_min', filters.sharpness_min.toString());
-    if (filters?.sharpness_max !== undefined) queryParams.append('sharpness_max', filters.sharpness_max.toString());
-    if (filters?.brightness_min !== undefined) queryParams.append('brightness_min', filters.brightness_min.toString());
-    if (filters?.brightness_max !== undefined) queryParams.append('brightness_max', filters.brightness_max.toString());
-    if (filters?.contrast_min !== undefined) queryParams.append('contrast_min', filters.contrast_min.toString());
-    if (filters?.contrast_max !== undefined) queryParams.append('contrast_max', filters.contrast_max.toString());
-    if (filters?.uniqueness_min !== undefined) queryParams.append('uniqueness_min', filters.uniqueness_min.toString());
-    if (filters?.uniqueness_max !== undefined) queryParams.append('uniqueness_max', filters.uniqueness_max.toString());
-    // RGB channel filters
-    if (filters?.red_min !== undefined) queryParams.append('red_min', filters.red_min.toString());
-    if (filters?.red_max !== undefined) queryParams.append('red_max', filters.red_max.toString());
-    if (filters?.green_min !== undefined) queryParams.append('green_min', filters.green_min.toString());
-    if (filters?.green_max !== undefined) queryParams.append('green_max', filters.green_max.toString());
-    if (filters?.blue_min !== undefined) queryParams.append('blue_min', filters.blue_min.toString());
-    if (filters?.blue_max !== undefined) queryParams.append('blue_max', filters.blue_max.toString());
-    // Annotation count filters (objects per image)
-    if (filters?.object_count_min !== undefined) queryParams.append('object_count_min', filters.object_count_min.toString());
-    if (filters?.object_count_max !== undefined) queryParams.append('object_count_max', filters.object_count_max.toString());
-    // BBox and Polygon count filters
-    if (filters?.bbox_count_min !== undefined) queryParams.append('bbox_count_min', filters.bbox_count_min.toString());
-    if (filters?.bbox_count_max !== undefined) queryParams.append('bbox_count_max', filters.bbox_count_max.toString());
-    if (filters?.polygon_count_min !== undefined) queryParams.append('polygon_count_min', filters.polygon_count_min.toString());
-    if (filters?.polygon_count_max !== undefined) queryParams.append('polygon_count_max', filters.polygon_count_max.toString());
-    // Quality issues filter
-    if (filters?.issues && filters.issues.length > 0) {
-      filters.issues.forEach((issue) => queryParams.append('issues', issue));
+    if (filters?.max_polygons_per_image !== undefined) {
+      queryParams.append('max_polygons_per_image', filters.max_polygons_per_image.toString());
     }
 
     const response: AxiosResponse<ApiResponse<ExploreResponse>> = await dataClient.get(
-      `/api/v1/projects/${projectId}/explore?${queryParams.toString()}`
+      `/api/v1/projects/${projectId}/explore?${queryParams.toString()}`,
+      { signal }
     );
     return response.data.data;
   },
@@ -876,19 +877,71 @@ export const projectImagesApi = {
   },
 
   /**
-   * Get sidebar aggregations for FiftyOne-style filtering
+   * Preview a bulk tag operation whose targets are named by filter scope rather than by id.
+   *
+   * The scope is resolved when the preview request arrives and again when the operation runs, so the two can differ if the project changes in between; the preview is an estimate, not a reservation.
+   */
+  async bulkTagPreviewScope(
+    projectId: number,
+    scope: ImageSelectionScope,
+    tagIds: string[]
+  ): Promise<BulkTagPreviewResponse> {
+    const response: AxiosResponse<ApiResponse<BulkTagPreviewResponse>> = await dataClient.post(
+      `/api/v1/projects/${projectId}/images/bulk-tag/preview`,
+      { scope: serialiseSelectionScope(scope), tag_ids: tagIds }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Bulk add tags to every image matching a filter scope, minus the ones the user deselected.
+   *
+   * Membership is resolved at action time: the server runs the filter when the request arrives, so an image that started matching after the user made the selection is included, and one that stopped matching is not. Say that in the UI rather than implying the set was frozen when the selection was made.
+   *
+   * The server rejects a scope resolving to more than 50,000 images, and a scope matching none, with 400.
+   */
+  async bulkTagScope(
+    projectId: number,
+    scope: ImageSelectionScope,
+    tagIds: string[]
+  ): Promise<BulkTagResponse> {
+    const response: AxiosResponse<ApiResponse<BulkTagResponse>> = await dataClient.post(
+      `/api/v1/projects/${projectId}/images/bulk-tag`,
+      { scope: serialiseSelectionScope(scope), tag_ids: tagIds }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Bulk remove tags from every image matching a filter scope. Membership is resolved at action time and the same 50,000-image and empty-scope limits apply; see `bulkTagScope`.
+   */
+  async bulkUntagScope(
+    projectId: number,
+    scope: ImageSelectionScope,
+    tagIds: string[]
+  ): Promise<BulkTagResponse> {
+    const response: AxiosResponse<ApiResponse<BulkTagResponse>> = await dataClient.delete(
+      `/api/v1/projects/${projectId}/images/bulk-tag`,
+      { data: { scope: serialiseSelectionScope(scope), tag_ids: tagIds } }
+    );
+    return response.data.data;
+  },
+
+  /**
+   * Get sidebar aggregations for FiftyOne-style filtering.
+   *
+   * Takes the full membership contract so facet counts describe the same subset the gallery shows; fields the endpoint does not yet read are ignored by it.
    */
   async getSidebarAggregations(
     projectId: string,
-    filters?: { tag_ids?: string[] }
+    filters?: ImageFilterContract,
+    signal?: AbortSignal
   ): Promise<SidebarAggregationResponse> {
-    const queryParams = new URLSearchParams();
-    if (filters?.tag_ids) {
-      filters.tag_ids.forEach((id) => queryParams.append('tag_ids', id));
-    }
+    const queryParams = filterContractToSearchParams(toFilterContract(filters ?? {}));
 
     const response: AxiosResponse<ApiResponse<SidebarAggregationResponse>> = await dataClient.get(
-      `/api/v1/projects/${projectId}/explore/sidebar?${queryParams.toString()}`
+      `/api/v1/projects/${projectId}/explore/sidebar?${queryParams.toString()}`,
+      { signal }
     );
     return response.data.data;
   },

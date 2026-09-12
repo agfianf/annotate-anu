@@ -24,7 +24,7 @@ export function useAnnotationCoverage({
 }: UseAnnotationCoverageOptions) {
   return useQuery<AnnotationCoverageResponse>({
     queryKey: ['annotation-coverage', projectId], // No filters in key
-    queryFn: () => analyticsApi.getAnnotationCoverage(projectId, {}),
+    queryFn: ({ signal }) => analyticsApi.getAnnotationCoverage(projectId, {}, signal),
     enabled: enabled && !!projectId,
     staleTime: 300000, // Cache for 5 minutes (static data)
     gcTime: 600000, // Keep in cache for 10 minutes

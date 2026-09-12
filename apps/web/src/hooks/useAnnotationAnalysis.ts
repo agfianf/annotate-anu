@@ -27,7 +27,7 @@ export function useAnnotationAnalysis({
 }: UseAnnotationAnalysisOptions) {
   return useQuery({
     queryKey: ['annotation-analysis', projectId, gridSize],
-    queryFn: () => analyticsApi.getAnnotationAnalysis(projectId, {}, gridSize),
+    queryFn: ({ signal }) => analyticsApi.getAnnotationAnalysis(projectId, {}, gridSize, signal),
     enabled: enabled && !!projectId,
     staleTime: 300000, // Cache for 5 minutes
     gcTime: 600000, // Keep in cache for 10 minutes

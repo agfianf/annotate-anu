@@ -27,7 +27,7 @@ export function useEnhancedDatasetStats({
 }: UseEnhancedDatasetStatsOptions) {
   return useQuery({
     queryKey: ['enhanced-dataset-stats', projectId, categoryId],
-    queryFn: () => analyticsApi.getEnhancedDatasetStats(projectId, {}, categoryId),
+    queryFn: ({ signal }) => analyticsApi.getEnhancedDatasetStats(projectId, {}, categoryId, signal),
     enabled: enabled && !!projectId,
     staleTime: 300000, // Cache for 5 minutes
     gcTime: 600000, // Keep in cache for 10 minutes

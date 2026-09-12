@@ -21,6 +21,8 @@ export interface AuthenticatedImageState {
 
 interface CacheEntry {
   promise: Promise<string>;
+  /** Aborts the in-flight fetch; only fired once the last subscriber has released the entry. */
+  controller?: AbortController;
   blobUrl?: string;
   error?: Error;
   /** Number of mounted hook instances currently using this entry */
@@ -56,8 +58,11 @@ function touch(url: string, entry: CacheEntry): void {
   cache.set(url, entry);
 }
 
-async function fetchBlobUrl(url: string): Promise<{ blobUrl: string; size: number }> {
-  const blob = await fetchImageAsBlob(url);
+async function fetchBlobUrl(
+  url: string,
+  signal: AbortSignal
+): Promise<{ blobUrl: string; size: number }> {
+  const blob = await fetchImageAsBlob(url, signal);
   return { blobUrl: URL.createObjectURL(blob), size: blob.size };
 }
 
@@ -65,8 +70,10 @@ function startFetch(key: string, url: string, entry: CacheEntry): void {
   entry.error = undefined;
   entry.blobUrl = undefined;
   entry.snapshot = LOADING_STATE;
+  const controller = new AbortController();
+  entry.controller = controller;
 
-  const promise = fetchBlobUrl(url).then(
+  const promise = fetchBlobUrl(url, controller.signal).then(
     ({ blobUrl, size }) => {
       // The entry may have been evicted and replaced while the fetch was in
       // flight; only adopt the result if this entry is still the live one.
@@ -74,6 +81,7 @@ function startFetch(key: string, url: string, entry: CacheEntry): void {
         URL.revokeObjectURL(blobUrl);
         return blobUrl;
       }
+      entry.controller = undefined;
       entry.blobUrl = blobUrl;
       entry.size = size;
       totalBytes += size;
@@ -83,6 +91,10 @@ function startFetch(key: string, url: string, entry: CacheEntry): void {
       return blobUrl;
     },
     (err: unknown) => {
+      // The entry was evicted, cancelled, or replaced while the fetch was in
+      // flight; there is no live state left to report the failure on.
+      if (cache.get(key) !== entry) throw err;
+      entry.controller = undefined;
       const error = err instanceof Error ? err : new Error('Failed to load image');
       entry.error = error;
       entry.snapshot = { blobUrl: null, isLoading: false, error };
@@ -119,12 +131,29 @@ function acquire(key: string, url: string): CacheEntry {
   return entry;
 }
 
-function release(url: string, entry: CacheEntry): void {
+function release(key: string, entry: CacheEntry): void {
   entry.refCount = Math.max(0, entry.refCount - 1);
   entry.lastUsed = Date.now();
-  if (entry.refCount === 0) {
+  if (entry.refCount > 0) return;
+
+  // Cancellation is reference counted: only the departure of the last
+  // subscriber may abort a shared request. Deferred by a tick because
+  // unmount/remount pairs (scrolling a row out and back, StrictMode's double
+  // effect invocation) re-acquire the same entry immediately, and aborting
+  // those would refetch an image that is still on screen.
+  setTimeout(() => {
+    if (entry.refCount > 0 || cache.get(key) !== entry) {
+      evictIfNeeded();
+      return;
+    }
+    if (entry.controller) {
+      cache.delete(key);
+      entry.controller.abort();
+      entry.controller = undefined;
+      return;
+    }
     evictIfNeeded();
-  }
+  }, 0);
 }
 
 function evictEntry(url: string, entry: CacheEntry): void {
@@ -158,6 +187,8 @@ function clearImageCache(): void {
   cache.clear()
   totalBytes = 0
   for (const entry of entries) {
+    // Requests started under the previous token must not land in the new session.
+    entry.controller?.abort()
     if (entry.blobUrl) URL.revokeObjectURL(entry.blobUrl)
     notify(entry)
   }

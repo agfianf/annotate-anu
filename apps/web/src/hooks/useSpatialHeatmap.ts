@@ -24,7 +24,7 @@ export function useSpatialHeatmap({
 }: UseSpatialHeatmapOptions) {
   return useQuery<SpatialHeatmapResponse>({
     queryKey: ['spatial-heatmap', projectId, filters],
-    queryFn: () => analyticsApi.getSpatialHeatmap(projectId, filters),
+    queryFn: ({ signal }) => analyticsApi.getSpatialHeatmap(projectId, filters, signal),
     enabled: enabled && !!projectId,
     staleTime: 60000, // Cache for 1 minute
     gcTime: 300000, // Keep in cache for 5 minutes
