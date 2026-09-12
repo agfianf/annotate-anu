@@ -29,7 +29,7 @@ class ThumbnailService:
         image_path : str
             Relative path to image
         size_key : str
-            Size key for thumbnail (1x, 2x, 4x)
+            Size key for thumbnail (1x, 2x, 3x, 4x)
 
         Returns
         -------
@@ -47,7 +47,7 @@ class ThumbnailService:
         relative_path : str
             Relative path to image
         size_key : str
-            Size key for thumbnail (1x, 2x, 4x)
+            Size key for thumbnail (1x, 2x, 3x, 4x)
 
         Returns
         -------
