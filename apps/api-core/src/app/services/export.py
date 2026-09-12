@@ -9,15 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.config import settings
 from app.models.annotation import detections, image_tags, segmentations
 from app.models.data_management import (
-    project_images,
-    shared_image_tags,
-    shared_images,
     tag_categories,
     tags,
 )
@@ -27,16 +24,137 @@ from app.models.project import labels, projects
 from app.models.task import tasks
 from app.models.user import users
 from app.repositories.activity import ProjectActivityRepository
+from app.repositories.annotation_write import TABLES as ANNOTATION_TABLES
 from app.repositories.export import ExportRepository
+from app.repositories.project_image import IMAGE_ORDER_BY, ProjectImageRepository
 from app.schemas.export import (
     ClassificationMappingConfig,
     ExportCreate,
     ExportPreview,
+    ExportScope,
     FilterSnapshot,
     ModeOptions,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def as_filter_snapshot(filter_snapshot: FilterSnapshot | dict) -> FilterSnapshot:
+    """Coerce a stored snapshot dict into the canonical contract.
+
+    Export records keep their snapshot as JSONB, so the background task reads back a plain dict. Validating it here means the dict and the request model resolve through exactly one filter implementation.
+    """
+    if isinstance(filter_snapshot, FilterSnapshot):
+        return filter_snapshot
+    return FilterSnapshot.model_validate(filter_snapshot or {})
+
+
+async def query_export_images(
+    connection: AsyncConnection,
+    project_id: int,
+    filter_snapshot: FilterSnapshot | dict,
+) -> list[dict]:
+    """The images an export covers, in the gallery's own order.
+
+    This is the only definition of export membership. It resolves through `ProjectImageRepository.build_filtered_query`, the same builder the explore endpoint and the analytics aggregates use, so a preview, an exported manifest, and the gallery page the user was looking at describe the same set. Ordered by `IMAGE_ORDER_BY` so a manifest's row order is stable between two exports of an unchanged project.
+    """
+    stmt = ProjectImageRepository.build_filtered_query(
+        project_id, as_filter_snapshot(filter_snapshot)
+    ).order_by(*IMAGE_ORDER_BY)
+    result = await connection.execute(stmt)
+    return [dict(row._mapping) for row in result.fetchall()]
+
+
+async def count_export_images(
+    connection: AsyncConnection,
+    project_id: int,
+    filter_snapshot: FilterSnapshot | dict,
+) -> int:
+    """How many images the filter snapshot matches, counted in SQL.
+
+    Same membership rule as :func:`query_export_images`, projecting only ids so nothing but the count crosses the wire. This is what `preview_export` reports: a preview is four integers and a warning list, so it must never pay for the rows the export itself writes.
+    """
+    base_query = ProjectImageRepository.filtered_image_ids_subquery(
+        project_id, as_filter_snapshot(filter_snapshot)
+    )
+    stmt = select(func.count()).select_from(base_query.subquery())
+    return (await connection.execute(stmt)).scalar() or 0
+
+
+#: The annotation kind that decides whether an image counts as annotated, per export mode.
+#:
+#: Keyed by mode rather than by a project-wide "is annotated" flag on purpose: a classification
+#: export is about `image_tags`, and an image covered in detections still exports an empty class
+#: for it. Whatever the general annotated predicate elsewhere comes to mean, an export's warning
+#: has to be about the kind of annotation that export writes.
+#:
+#: Values are keys of `AnnotationWriteRepository.TABLES`, not tables: that mapping is the one
+#: definition of which table each annotation kind is written to, and the one
+#: `ProjectImageRepository.has_any_annotation` builds the general annotated predicate from.
+#: Naming the tables again here is exactly the drift that produced the `is_annotated` bug —
+#: a fifth annotation kind must reach every reader by being added in one place.
+ANNOTATION_KIND_BY_EXPORT_MODE = {
+    "detection": "detections",
+    "segmentation": "segmentations",
+    "classification": "tags",
+}
+
+#: Every mode must name a kind the write repository actually knows, or the warning would
+#: quietly describe the wrong table. Checked at import so a rename fails loudly, here.
+assert set(ANNOTATION_KIND_BY_EXPORT_MODE.values()) <= set(ANNOTATION_TABLES)
+
+
+def annotated_shared_image_ids(export_mode: str) -> Select:
+    """Shared images carrying at least one annotation of this export's kind.
+
+    Annotations hang off job images (`images.id`), so an image is annotated when any of its job rows has a row in the mode's annotation table. Projected as `shared_image_id` so callers can join it to the exported set.
+    """
+    kind = ANNOTATION_KIND_BY_EXPORT_MODE.get(export_mode, "tags")
+    annotation_table = ANNOTATION_TABLES[kind]
+    return (
+        select(images.c.shared_image_id)
+        .select_from(
+            images.join(annotation_table, annotation_table.c.image_id == images.c.id),
+        )
+        .where(images.c.shared_image_id.isnot(None))
+        .distinct()
+    )
+
+
+def exported_job_image_ids(project_id: int, filter_snapshot: FilterSnapshot | dict) -> Select:
+    """The `images.id` rows belonging to the exported shared images, as a subquery.
+
+    Annotation tables key on job images, so every per-annotation aggregate has to cross this bridge. Building it from `filtered_image_ids_subquery` keeps the aggregate anchored to the canonical filtered set instead of to a list of ids fetched into Python first.
+    """
+    return select(images.c.id).where(
+        images.c.shared_image_id.in_(
+            ProjectImageRepository.filtered_image_ids_subquery(
+                project_id, as_filter_snapshot(filter_snapshot)
+            )
+        )
+    )
+
+
+def describe_filter_scope(filter_snapshot: FilterSnapshot | dict) -> list[str]:
+    """Names of the constraints that actually narrow the set, in contract order.
+
+    Match modes are reported only when the tag list they govern is present, since on their own they constrain nothing.
+    """
+    snapshot = as_filter_snapshot(filter_snapshot)
+    empty = FilterSnapshot()
+    active: list[str] = []
+    for name in snapshot.__class__.model_fields:
+        value = getattr(snapshot, name)
+        if value == getattr(empty, name):
+            continue
+        if name == "include_match_mode" and not snapshot.tag_ids:
+            continue
+        if name == "exclude_match_mode" and not snapshot.excluded_tag_ids:
+            continue
+        if value in ([], ""):
+            continue
+        active.append(name)
+    return active
 
 
 async def resolve_export_metadata(
@@ -178,14 +296,12 @@ class ExportService:
         project_id: int,
         export_config: ExportCreate,
     ) -> ExportPreview:
-        """Generate preview counts without creating export."""
-        # Query filtered images
-        image_data = await self._query_filtered_images(
-            connection, project_id, export_config.filter_snapshot
-        )
+        """Counts for an export that has not been created yet, aggregated in SQL.
 
-        image_count = len(image_data)
-        image_ids = [img["id"] for img in image_data]
+        Every number here is a `SELECT count(...)` against `ProjectImageRepository.filtered_image_ids_subquery` — the same membership rule `query_export_images` resolves for the export itself. The preview used to fetch every matching `shared_images` row and then pass the ids back as five `IN` lists, so previewing a 100 000-image export moved 100 000 rows over the wire to produce four integers. The execution path in `app.tasks.export` still materialises rows, because it writes them.
+        """
+        filters = export_config.filter_snapshot
+        image_count = await count_export_images(connection, project_id, filters)
 
         # Get annotation counts
         annotation_counts = {}
@@ -195,10 +311,10 @@ class ExportService:
 
         if export_config.export_mode == "classification":
             # Count image_tags
-            tag_count = await self._count_image_tags(connection, image_ids)
+            tag_count = await self._count_image_tags(connection, project_id, filters)
             annotation_counts["classification"] = tag_count
             class_counts = await self._get_class_counts_for_classification(
-                connection, project_id, image_ids, export_config.classification_config
+                connection, project_id, filters, export_config.classification_config
             )
 
         elif export_config.export_mode == "detection":
@@ -206,7 +322,7 @@ class ExportService:
             det_count, det_class_counts = await self._count_detections(
                 connection,
                 project_id,
-                image_ids,
+                filters,
                 export_config.mode_options,
             )
             annotation_counts["detection"] = det_count
@@ -218,7 +334,7 @@ class ExportService:
                 and export_config.mode_options.include_bbox_from_segmentation
             ):
                 seg_bbox_count = await self._count_segmentation_bboxes(
-                    connection, project_id, image_ids, export_config.mode_options
+                    connection, project_id, filters, export_config.mode_options
                 )
                 annotation_counts["detection_from_segmentation"] = seg_bbox_count
 
@@ -227,7 +343,7 @@ class ExportService:
             seg_count, seg_class_counts = await self._count_segmentations(
                 connection,
                 project_id,
-                image_ids,
+                filters,
                 export_config.mode_options,
             )
             annotation_counts["segmentation"] = seg_count
@@ -239,12 +355,12 @@ class ExportService:
                 and export_config.mode_options.convert_bbox_to_segmentation
             ):
                 bbox_seg_count = await self._count_detection_as_segmentation(
-                    connection, project_id, image_ids, export_config.mode_options
+                    connection, project_id, filters, export_config.mode_options
                 )
                 annotation_counts["segmentation_from_detection"] = bbox_seg_count
 
         # Get split counts
-        split_counts = await self._get_split_counts(connection, image_ids)
+        split_counts = await self._get_split_counts(connection, project_id, filters)
 
         # Generate warnings
         if image_count == 0:
@@ -253,13 +369,21 @@ class ExportService:
             warnings.append("No annotations found for the selected images")
 
         images_without_annotations = await self._count_images_without_annotations(
-            connection, project_id, image_ids, export_config.export_mode
+            connection, project_id, filters, export_config.export_mode
         )
         if images_without_annotations > 0:
             warnings.append(f"{images_without_annotations} images have no annotations")
 
+        active_filters = describe_filter_scope(export_config.filter_snapshot)
+
         return ExportPreview(
             image_count=image_count,
+            scope=ExportScope(
+                image_count=image_count,
+                active_filters=active_filters,
+                is_whole_project=not active_filters,
+                filters=export_config.filter_snapshot,
+            ),
             annotation_counts=annotation_counts,
             class_counts=class_counts,
             split_counts=split_counts,
@@ -358,139 +482,14 @@ class ExportService:
 
         return export_data
 
-    async def _query_filtered_images(
+    async def _count_image_tags(
         self,
         connection: AsyncConnection,
         project_id: int,
         filters: FilterSnapshot,
-    ) -> list[dict]:
-        """Query images matching the filter."""
-        # Base query - join project_images with shared_images
-        query = (
-            select(
-                shared_images.c.id,
-                shared_images.c.file_path,
-                shared_images.c.filename,
-                shared_images.c.width,
-                shared_images.c.height,
-            )
-            .join(
-                project_images,
-                shared_images.c.id == project_images.c.shared_image_id,
-            )
-            .where(project_images.c.project_id == project_id)
-        )
-
-        # Apply tag filters
-        if filters.tag_ids:
-            if filters.include_match_mode == "OR":
-                # Any of the tags
-                subquery = (
-                    select(shared_image_tags.c.shared_image_id)
-                    .where(shared_image_tags.c.tag_id.in_(filters.tag_ids))
-                    .distinct()
-                )
-                query = query.where(shared_images.c.id.in_(subquery))
-            else:
-                # All of the tags (AND)
-                for tag_id in filters.tag_ids:
-                    subquery = select(shared_image_tags.c.shared_image_id).where(
-                        shared_image_tags.c.tag_id == tag_id
-                    )
-                    query = query.where(shared_images.c.id.in_(subquery))
-
-        # Apply excluded tag filters
-        if filters.excluded_tag_ids:
-            if filters.exclude_match_mode == "OR":
-                # Exclude if has ANY of these tags
-                subquery = (
-                    select(shared_image_tags.c.shared_image_id)
-                    .where(shared_image_tags.c.tag_id.in_(filters.excluded_tag_ids))
-                    .distinct()
-                )
-                query = query.where(shared_images.c.id.notin_(subquery))
-            else:
-                # Exclude only if has ALL of these tags
-                subquery = (
-                    select(shared_image_tags.c.shared_image_id)
-                    .where(shared_image_tags.c.tag_id.in_(filters.excluded_tag_ids))
-                    .group_by(shared_image_tags.c.shared_image_id)
-                    .having(func.count(shared_image_tags.c.tag_id) == len(filters.excluded_tag_ids))
-                )
-                query = query.where(shared_images.c.id.notin_(subquery))
-
-        # Apply task/job filters
-        if filters.task_ids or filters.job_id:
-            # Join through images -> jobs -> tasks
-            job_query = (
-                select(images.c.shared_image_id)
-                .join(jobs, images.c.job_id == jobs.c.id)
-                .where(images.c.shared_image_id.isnot(None))
-            )
-            if filters.job_id:
-                job_query = job_query.where(jobs.c.id == filters.job_id)
-            if filters.task_ids:
-                job_query = job_query.where(jobs.c.task_id.in_(filters.task_ids))
-            query = query.where(shared_images.c.id.in_(job_query))
-
-        # Apply filepath filters
-        if filters.filepath_paths:
-            # OR logic for paths
-            from sqlalchemy import or_
-
-            path_conditions = [
-                shared_images.c.file_path.like(f"{path}%") for path in filters.filepath_paths
-            ]
-            query = query.where(or_(*path_conditions))
-
-        # Apply image UID filter
-        if filters.image_uids:
-            query = query.where(shared_images.c.id.in_(filters.image_uids))
-
-        # Apply dimension filters
-        if filters.width_min:
-            query = query.where(shared_images.c.width >= filters.width_min)
-        if filters.width_max:
-            query = query.where(shared_images.c.width <= filters.width_max)
-        if filters.height_min:
-            query = query.where(shared_images.c.height >= filters.height_min)
-        if filters.height_max:
-            query = query.where(shared_images.c.height <= filters.height_max)
-
-        # Apply file size filters
-        if filters.file_size_min:
-            query = query.where(shared_images.c.file_size_bytes >= filters.file_size_min)
-        if filters.file_size_max:
-            query = query.where(shared_images.c.file_size_bytes <= filters.file_size_max)
-
-        # Apply annotation status filter
-        if filters.is_annotated is not None:
-            # Check if image has any detections or segmentations
-            ann_subquery = (
-                select(images.c.shared_image_id)
-                .where(images.c.shared_image_id.isnot(None))
-                .where(images.c.is_annotated == True)  # noqa: E712
-                .distinct()
-            )
-            if filters.is_annotated:
-                query = query.where(shared_images.c.id.in_(ann_subquery))
-            else:
-                query = query.where(shared_images.c.id.notin_(ann_subquery))
-
-        result = await connection.execute(query)
-        return [dict(row._mapping) for row in result.fetchall()]
-
-    async def _count_image_tags(
-        self,
-        connection: AsyncConnection,
-        image_ids: list[UUID],
     ) -> int:
-        """Count image tags for given images."""
-        if not image_ids:
-            return 0
-
-        # Need to map shared_image_ids to image_ids in images table
-        subquery = select(images.c.id).where(images.c.shared_image_id.in_(image_ids))
+        """Count image tags across the exported images."""
+        subquery = exported_job_image_ids(project_id, filters)
         stmt = (
             select(func.count()).select_from(image_tags).where(image_tags.c.image_id.in_(subquery))
         )
@@ -501,15 +500,11 @@ class ExportService:
         self,
         connection: AsyncConnection,
         project_id: int,
-        image_ids: list[UUID],
+        filters: FilterSnapshot,
         mode_options: ModeOptions | None,
     ) -> tuple[int, dict[str, int]]:
         """Count detections and get per-label counts."""
-        if not image_ids:
-            return 0, {}
-
-        # Map shared_image_ids to image_ids
-        subquery = select(images.c.id).where(images.c.shared_image_id.in_(image_ids))
+        subquery = exported_job_image_ids(project_id, filters)
 
         # Base query
         query = (
@@ -537,15 +532,11 @@ class ExportService:
         self,
         connection: AsyncConnection,
         project_id: int,
-        image_ids: list[UUID],
+        filters: FilterSnapshot,
         mode_options: ModeOptions | None,
     ) -> tuple[int, dict[str, int]]:
         """Count segmentations and get per-label counts."""
-        if not image_ids:
-            return 0, {}
-
-        # Map shared_image_ids to image_ids
-        subquery = select(images.c.id).where(images.c.shared_image_id.in_(image_ids))
+        subquery = exported_job_image_ids(project_id, filters)
 
         # Base query
         query = (
@@ -573,14 +564,11 @@ class ExportService:
         self,
         connection: AsyncConnection,
         project_id: int,
-        image_ids: list[UUID],
+        filters: FilterSnapshot,
         mode_options: ModeOptions | None,
     ) -> int:
         """Count segmentation bboxes (for detection mode with conversion)."""
-        if not image_ids:
-            return 0
-
-        subquery = select(images.c.id).where(images.c.shared_image_id.in_(image_ids))
+        subquery = exported_job_image_ids(project_id, filters)
         query = (
             select(func.count())
             .select_from(segmentations)
@@ -597,14 +585,11 @@ class ExportService:
         self,
         connection: AsyncConnection,
         project_id: int,
-        image_ids: list[UUID],
+        filters: FilterSnapshot,
         mode_options: ModeOptions | None,
     ) -> int:
         """Count detections that can be converted to segmentation."""
-        if not image_ids:
-            return 0
-
-        subquery = select(images.c.id).where(images.c.shared_image_id.in_(image_ids))
+        subquery = exported_job_image_ids(project_id, filters)
         query = (
             select(func.count()).select_from(detections).where(detections.c.image_id.in_(subquery))
         )
@@ -619,15 +604,11 @@ class ExportService:
         self,
         connection: AsyncConnection,
         project_id: int,
-        image_ids: list[UUID],
+        filters: FilterSnapshot,
         classification_config: ClassificationMappingConfig | None,
     ) -> dict[str, int]:
         """Get class counts for classification export."""
-        if not image_ids:
-            return {}
-
-        # Map shared_image_ids to image_ids in images table
-        subquery = select(images.c.id).where(images.c.shared_image_id.in_(image_ids))
+        subquery = exported_job_image_ids(project_id, filters)
 
         # Query image_tags with labels
         query = (
@@ -643,11 +624,13 @@ class ExportService:
     async def _get_split_counts(
         self,
         connection: AsyncConnection,
-        image_ids: list[UUID],
+        project_id: int,
+        filters: FilterSnapshot,
     ) -> dict[str, int]:
         """Get counts per task split."""
-        if not image_ids:
-            return {"train": 0, "val": 0, "test": 0, "none": 0}
+        exported_ids = ProjectImageRepository.filtered_image_ids_subquery(
+            project_id, as_filter_snapshot(filters)
+        )
 
         # Query images -> jobs -> tasks to get splits
         query = (
@@ -660,7 +643,7 @@ class ExportService:
                     tasks, jobs.c.task_id == tasks.c.id
                 )
             )
-            .where(images.c.shared_image_id.in_(image_ids))
+            .where(images.c.shared_image_id.in_(exported_ids))
             .group_by(tasks.c.split)
         )
 
@@ -676,33 +659,28 @@ class ExportService:
         self,
         connection: AsyncConnection,
         project_id: int,
-        image_ids: list[UUID],
+        filters: FilterSnapshot,
         export_mode: str,
     ) -> int:
-        """Count images without annotations for the given mode."""
-        if not image_ids:
-            return 0
+        """How many of the exported images carry no annotation of this export's kind.
 
-        # Map shared_image_ids to image_ids
-        subquery = select(images.c.id, images.c.shared_image_id).where(
-            images.c.shared_image_id.in_(image_ids)
-        )
+        Counted over `shared_images.id` from the canonical filtered set, not over `images` rows. Counting job images answered a different question twice over: a pool image with no `images` row was invisible to the warning even though the export writes it, and an image reached by two jobs was counted twice. The fixture makes the gap concrete — six images are exported, one is annotated, and the job-image version reported one unannotated image instead of five.
 
-        if export_mode == "detection":
-            # Images with at least one detection
-            ann_subquery = select(detections.c.image_id).distinct()
-        elif export_mode == "segmentation":
-            # Images with at least one segmentation
-            ann_subquery = select(segmentations.c.image_id).distinct()
-        else:
-            # Classification - images with at least one image_tag
-            ann_subquery = select(image_tags.c.image_id).distinct()
+        The exported set and the annotated set are each materialised once and joined, so neither can be re-derived into a second, independently aliased copy of itself — which is how this query previously cross-joined the export with itself. The outer join also keeps a NULL `shared_image_id` from swallowing the result, as `NOT IN` over a nullable column would.
+        """
+        exported_images = ProjectImageRepository.filtered_image_ids_subquery(
+            project_id, as_filter_snapshot(filters)
+        ).subquery()
+        annotated = annotated_shared_image_ids(export_mode).subquery()
 
-        # Count images NOT in annotated set
         count_query = (
             select(func.count())
-            .select_from(subquery.subquery())
-            .where(subquery.c.id.notin_(ann_subquery))
+            .select_from(
+                exported_images.outerjoin(
+                    annotated, annotated.c.shared_image_id == exported_images.c.id
+                )
+            )
+            .where(annotated.c.shared_image_id.is_(None))
         )
 
         result = await connection.execute(count_query)
