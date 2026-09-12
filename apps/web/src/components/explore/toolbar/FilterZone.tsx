@@ -36,21 +36,22 @@ export function FilterZone({
   onAnnotatedFilterChange,
 }: FilterZoneProps) {
   return (
-    <div className="flex items-center gap-2 flex-1 min-w-0">
-      {/* Search Input */}
-      <div className="relative flex-1 min-w-[180px] max-w-xs">
+    <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+      {/* Search Input — takes the whole row below ~sm so it never squeezes the selectors */}
+      <div className="relative basis-full sm:basis-auto sm:flex-1 min-w-0 sm:min-w-[180px] max-w-full sm:max-w-xs">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
           type="text"
           value={searchValue}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search by filename..."
-          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm transition-all hover:border-gray-300"
+          className="w-full pl-10 pr-10 py-2 rounded-lg border border-gray-200 bg-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm transition-all hover:border-gray-300"
         />
         {searchValue && (
           <button
+            type="button"
             onClick={() => onSearchChange('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+            className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-6 h-6 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
             aria-label="Clear search"
           >
             <span className="text-lg leading-none">&times;</span>
@@ -67,7 +68,7 @@ export function FilterZone({
       />
 
       {/* Annotated Status Filter */}
-      <div className="relative">
+      <div className="relative flex-shrink-0">
         <select
           value={isAnnotatedFilter === undefined ? '' : isAnnotatedFilter.toString()}
           onChange={(e) => {

@@ -75,6 +75,7 @@ const GRID_ICONS: Record<GridSize, typeof Grid3X3> = {
 
 export function GridSlider({ value, onChange, className = '' }: GridSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const currentIndex = GRID_SIZES.indexOf(value);
@@ -112,23 +113,29 @@ export function GridSlider({ value, onChange, className = '' }: GridSliderProps)
     }
   }, [findNearestStop, onChange, value]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  // Pointer Events rather than mouse events, so mouse, touch, and pen all drag the thumb.
+  // Pointer capture keeps move/up events on the track even when the finger leaves it.
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button > 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    draggingRef.current = true;
     setIsDragging(true);
     handleTrackInteraction(e.clientX);
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      handleTrackInteraction(moveEvent.clientX);
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
   }, [handleTrackInteraction]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) return;
+    handleTrackInteraction(e.clientX);
+  }, [handleTrackInteraction]);
+
+  const endDrag = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    setIsDragging(false);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  }, []);
 
   // Keyboard navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -164,8 +171,13 @@ export function GridSlider({ value, onChange, className = '' }: GridSliderProps)
       <div
         ref={trackRef}
         className="relative w-32 h-6 flex items-center cursor-pointer select-none"
-        onMouseDown={handleMouseDown}
+        style={{ touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
         role="slider"
+        aria-orientation="horizontal"
         aria-valuemin={0}
         aria-valuemax={4}
         aria-valuenow={currentIndex}

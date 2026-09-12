@@ -10,6 +10,7 @@ import { FilterZone } from './FilterZone';
 import { ViewZone } from './ViewZone';
 import { ActionZone } from './ActionZone';
 import { StatusBar } from './StatusBar';
+import type { ExploreFilterChipKey, SidebarFilters } from './StatusBar';
 import type { GridSize } from './GridSlider';
 import type { AnnotationDisplayState } from '../../../hooks/useExploreVisibility';
 
@@ -22,36 +23,6 @@ interface Tag {
   id: string;
   name: string;
   color: string;
-}
-
-interface SidebarFilters {
-  tagFilters: Record<string, 'include' | 'exclude'>;
-  includeMatchMode: 'AND' | 'OR';
-  excludeMatchMode: 'AND' | 'OR';
-  widthRange?: { min: number; max: number };
-  heightRange?: { min: number; max: number };
-  aspectRatioRange?: { min: number; max: number };
-  sizeRange?: { min: number; max: number };
-  filepathPattern?: string;
-  filepathPaths?: string[];
-  imageIds?: string[];
-  quality_min?: number;
-  quality_max?: number;
-  sharpness_min?: number;
-  sharpness_max?: number;
-  brightness_min?: number;
-  brightness_max?: number;
-  contrast_min?: number;
-  contrast_max?: number;
-  uniqueness_min?: number;
-  uniqueness_max?: number;
-  quality_issues?: string[];
-  object_count_min?: number;
-  object_count_max?: number;
-  bbox_count_min?: number;
-  bbox_count_max?: number;
-  polygon_count_min?: number;
-  polygon_count_max?: number;
 }
 
 interface ExploreToolbarProps {
@@ -72,10 +43,28 @@ interface ExploreToolbarProps {
 
   // Action Zone props
   onExport: () => void;
+  /** Images currently materialised in the client. */
+  loadedCount?: number;
+  /** Server-reported total for the current filters. */
+  matchingCount?: number;
+  /** Every image in the project, ignoring filters. */
+  projectTotal?: number;
+  selectedCount?: number;
+  onSelectLoaded?: () => void;
+  onClearSelection?: () => void;
+  onSelectAllMatching?: () => void;
+  isAllMatchingSelected?: boolean;
+  /** A filter change is committed but the matching set has not resolved yet. */
+  isResultsPending?: boolean;
+  /** The same filters are being re-fetched in the background. */
+  isBackgroundRefreshing?: boolean;
 
   // Status Bar props
   sidebarFilters: SidebarFilters;
   allTags: Tag[];
+  /** Job filter, stored outside `sidebarFilters`. */
+  selectedJobId?: number | null;
+  selectedJobName?: string;
   onClearSearch: () => void;
   onClearTasks: () => void;
   onClearAnnotatedFilter: () => void;
@@ -92,14 +81,18 @@ interface ExploreToolbarProps {
   onClearBboxCount: () => void;
   onClearPolygonCount: () => void;
   onClearAll: () => void;
+  /** Removes exactly one constraint. Takes precedence over every grouped handler above. */
+  onRemoveFilter?: (key: ExploreFilterChipKey) => void;
 
   // Display config
   annotationDisplay: AnnotationDisplayState;
   onDisplayConfigClick?: () => void;
 
   // Image counts
-  filteredCount: number;
-  totalCount: number;
+  /** @deprecated Ambiguous. Prefer `loadedCount`; kept as its fallback. */
+  filteredCount?: number;
+  /** @deprecated Ambiguous. Prefer `matchingCount`; kept as its fallback. */
+  totalCount?: number;
 }
 
 export function ExploreToolbar({
@@ -120,10 +113,22 @@ export function ExploreToolbar({
 
   // Action Zone
   onExport,
+  loadedCount,
+  matchingCount,
+  projectTotal,
+  selectedCount,
+  onSelectLoaded,
+  onClearSelection,
+  onSelectAllMatching,
+  isAllMatchingSelected,
+  isResultsPending,
+  isBackgroundRefreshing,
 
   // Status Bar
   sidebarFilters,
   allTags,
+  selectedJobId,
+  selectedJobName,
   onClearSearch,
   onClearTasks,
   onClearAnnotatedFilter,
@@ -140,6 +145,7 @@ export function ExploreToolbar({
   onClearBboxCount,
   onClearPolygonCount,
   onClearAll,
+  onRemoveFilter,
   annotationDisplay,
   onDisplayConfigClick,
   filteredCount,
@@ -148,7 +154,7 @@ export function ExploreToolbar({
   return (
     <div className="glass-strong rounded-xl shadow-lg relative z-20">
       {/* Row 1: Control Bar */}
-      <div className="flex items-center gap-3 p-2">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 p-2">
         {/* Filter Zone (Left) */}
         <FilterZone
           searchValue={searchValue}
@@ -160,8 +166,8 @@ export function ExploreToolbar({
           onAnnotatedFilterChange={onAnnotatedFilterChange}
         />
 
-        {/* Divider */}
-        <div className="w-px h-6 bg-gray-200/50 flex-shrink-0" />
+        {/* Divider — dropped once the zones wrap, where it would separate nothing */}
+        <div className="w-px h-6 bg-gray-200/50 flex-shrink-0 hidden lg:block" />
 
         {/* View Zone (Middle) */}
         <ViewZone
@@ -172,10 +178,20 @@ export function ExploreToolbar({
         />
 
         {/* Divider */}
-        <div className="w-px h-6 bg-gray-200/50 flex-shrink-0" />
+        <div className="w-px h-6 bg-gray-200/50 flex-shrink-0 hidden lg:block" />
 
         {/* Action Zone (Right) */}
-        <ActionZone onExport={onExport} />
+        <ActionZone
+          onExport={onExport}
+          loadedCount={loadedCount ?? filteredCount}
+          matchingCount={matchingCount ?? totalCount}
+          selectedCount={selectedCount}
+          onSelectLoaded={onSelectLoaded}
+          onClearSelection={onClearSelection}
+          onSelectAllMatching={onSelectAllMatching}
+          isAllMatchingSelected={isAllMatchingSelected}
+          isResultsPending={isResultsPending}
+        />
       </div>
 
       {/* Row 2: Status Bar */}
@@ -185,6 +201,8 @@ export function ExploreToolbar({
         isAnnotatedFilter={isAnnotatedFilter}
         sidebarFilters={sidebarFilters}
         allTags={allTags}
+        selectedJobId={selectedJobId}
+        selectedJobName={selectedJobName}
         onClearSearch={onClearSearch}
         onClearTasks={onClearTasks}
         onClearAnnotatedFilter={onClearAnnotatedFilter}
@@ -201,10 +219,16 @@ export function ExploreToolbar({
         onClearBboxCount={onClearBboxCount}
         onClearPolygonCount={onClearPolygonCount}
         onClearAll={onClearAll}
+        onRemoveFilter={onRemoveFilter}
         annotationDisplay={annotationDisplay}
         onDisplayConfigClick={onDisplayConfigClick}
         filteredCount={filteredCount}
         totalCount={totalCount}
+        projectTotal={projectTotal}
+        matchingCount={matchingCount}
+        loadedCount={loadedCount}
+        isResultsPending={isResultsPending}
+        isBackgroundRefreshing={isBackgroundRefreshing}
       />
     </div>
   );
@@ -214,6 +238,7 @@ export function ExploreToolbar({
 export { FilterZone } from './FilterZone';
 export { ViewZone } from './ViewZone';
 export { ActionZone } from './ActionZone';
-export { StatusBar } from './StatusBar';
+export { StatusBar, EXPLORE_FILTER_CHIP_KEYS } from './StatusBar';
+export type { ExploreFilterChipKey, SidebarFilters } from './StatusBar';
 export { GridSlider, GRID_SIZE_CONFIGS, useGridSize } from './GridSlider';
 export type { GridSize } from './GridSlider';

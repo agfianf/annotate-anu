@@ -13,6 +13,7 @@ import {
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
 import { Loader2 } from '@/components/ui/icons'
 import { z } from 'zod'
+import { exploreViewSearchSchema } from '../hooks/useExploreUrlSync'
 import type { QueryClient } from '@tanstack/react-query'
 import type { User } from '../lib/api-client'
 
@@ -66,11 +67,17 @@ const loginSearchSchema = z.object({
   redirect: z.string().optional(),
 })
 
-// Project detail page tabs
-const projectDetailSearchSchema = z.object({
-  tab: z.enum(['readme', 'tasks', 'configuration', 'history', 'explore']).default('readme').catch('readme'),
-  fullview: z.coerce.boolean().optional(),
-})
+// Project detail page tabs, plus the Explore tab's saved view. `view` carries a versioned,
+// Zod-validated encoding of the gallery's filter contract and `filter` is the legacy base64
+// snapshot that export-history links still use; both are `.catch(undefined)` inside
+// `exploreViewSearchSchema`, so a stale or hand-edited link degrades to the unfiltered gallery
+// instead of failing route validation.
+const projectDetailSearchSchema = z
+  .object({
+    tab: z.enum(['readme', 'tasks', 'configuration', 'history', 'explore']).default('readme').catch('readme'),
+    fullview: z.coerce.boolean().optional(),
+  })
+  .extend(exploreViewSearchSchema.shape)
 
 // Annotation app
 const qcSearchSchema = z.object({
