@@ -1,8 +1,16 @@
-"""Analytics router for dataset statistics and insights."""
+"""Analytics router for dataset statistics and insights.
+
+Every panel here describes the same image set the gallery is showing. The filters arrive as the canonical `ImageFilterParams` contract — the whole contract, not a subset of it — and each aggregate is computed in SQL over `ProjectImageRepository.filtered_image_ids_subquery`. Handlers used to declare a smaller filter set by hand and then materialise up to 10 000 matching images to count them in Python; a project larger than that got numbers describing its first 10 000 matches, labelled as the whole filtered set.
+
+Three reading rules the panels commit to, so a number can be trusted:
+
+- **Counts are exact.** No handler caps how many images it aggregates over.
+- **Facet counts mean "current results".** A tag count, a histogram bucket, a quality bucket counts matching images after every active filter, including one on the facet's own field. Every panel total therefore equals the gallery's matching count.
+- **Only plotted points are sampled**, never a count. The scatter plot and the heatmap's dots are systematic samples whose size and total the response states; the statistics beside them are exact.
+"""
 
 import math
-from collections import Counter
-from typing import Annotated, Literal
+from typing import Annotated, Sequence
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
@@ -13,9 +21,8 @@ from app.config import settings
 from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import ProjectPermission
 from app.helpers.response_api import JsonResponse
+from app.repositories.analytics import AnalyticsRepository
 from app.repositories.image_quality import ImageQualityRepository
-from app.repositories.project_image import ProjectImageRepository
-from app.repositories.shared_image import SharedImageRepository
 from app.repositories.tag import TagRepository
 from app.repositories.tag_category import TagCategoryRepository
 from app.schemas.analytics import (
@@ -24,8 +31,10 @@ from app.schemas.analytics import (
     ClassBalanceResponse,
     DimensionInsightsResponse,
     EnhancedDatasetStatsResponse,
+    FlaggedImage,
     FlaggedImageEnhanced,
     ImageQualityResponse,
+    IssueBreakdown,
     IssueBreakdownEnhanced,
     ProcessQualityResponse,
     QualityBucket,
@@ -40,10 +49,57 @@ from app.schemas.data_management import (
     FileSizeStats,
     TagDistribution,
 )
+from app.schemas.image_filters import ImageFilterParams
 from app.services.analytics_service import AnalyticsService
 from app.services.image_quality_service import ImageQualityService
 
 router = APIRouter(prefix="/api/v1/projects", tags=["Analytics"])
+
+
+def image_filters(filters: Annotated[ImageFilterParams, Query()]) -> ImageFilterParams:
+    """Bind the whole image-membership contract from the query string.
+
+    The model has to be the only query-bound parameter of the function that declares it: FastAPI 0.141 stops treating a Pydantic model as a query model as soon as another query parameter sits beside it, and then rejects every request with `filters: Field required`. Wrapping it in its own dependency is what lets a handler take `category_id` or `grid_size` as well. Do not inline `Annotated[ImageFilterParams, Query()]` into a handler that has any other query parameter.
+    """
+    return filters
+
+
+#: The canonical image-membership contract, for every filtered analytics panel.
+#:
+#: One dependency everywhere, so analytics cannot drift back into accepting a smaller filter set
+#: than the gallery. Unknown query parameters are ignored, and a request that sends no filters at
+#: all describes the whole project pool, exactly as before.
+ImageFilters = Annotated[ImageFilterParams, Depends(image_filters)]
+
+#: Density buckets for objects per image, inclusive at both ends.
+DENSITY_BUCKETS: tuple[tuple[str, int, int], ...] = (
+    ("0", 0, 0),
+    ("1", 1, 1),
+    ("2-5", 2, 5),
+    ("6-10", 6, 10),
+    ("11-20", 11, 20),
+    ("21+", 21, 10000),
+)
+
+#: Quality score buckets shown on the overall-quality histogram.
+QUALITY_BUCKETS: tuple[tuple[str, float, float], ...] = (
+    ("Poor (0-0.3)", 0.0, 0.3),
+    ("Fair (0.3-0.5)", 0.3, 0.5),
+    ("Good (0.5-0.7)", 0.5, 0.7),
+    ("Excellent (0.7-1.0)", 0.7, 1.0),
+)
+
+#: Shared 0-1 buckets for every individual metric and RGB channel histogram.
+SCORE_BUCKETS: tuple[tuple[str, float, float], ...] = (
+    ("0.0-0.2", 0.0, 0.2),
+    ("0.2-0.4", 0.2, 0.4),
+    ("0.4-0.6", 0.4, 0.6),
+    ("0.6-0.8", 0.6, 0.8),
+    ("0.8-1.0", 0.8, 1.0),
+)
+
+#: How many points the scatter plot and the heatmap overlay carry at most.
+MAX_PLOTTED_POINTS = 500
 
 # One async Redis client (with its own connection pool) shared across requests,
 # created on first use so importing this module never touches the network.
@@ -57,245 +113,442 @@ def _get_redis() -> aioredis.Redis:
     return _redis_client
 
 
-def compute_dynamic_bins(values: list[int], max_bins: int = 8) -> list[tuple[int, int]]:
+def _sturges_bin_count(n: int, max_bins: int) -> int:
+    """Sturges' rule, clamped to between three and ``max_bins`` bins."""
+    return min(max(math.ceil(math.log2(n) + 1), 3), max_bins)
+
+
+def dimension_bins(
+    count: int, min_val: int, max_val: int, max_bins: int = 8
+) -> list[tuple[int, int]]:
+    """Evenly spaced integer bins for ``count`` values spanning ``min_val``..``max_val``.
+
+    Takes the range and the population size rather than the values themselves, so the bins can be chosen without pulling every image into memory. Sturges' rule only ever needed the count.
     """
-    Compute dynamic bins using Sturges' rule.
-    Returns list of (min, max) tuples for each bin.
-    """
-    if not values:
+    if count <= 0:
         return []
-
-    min_val = min(values)
-    max_val = max(values)
-
     if min_val == max_val:
         return [(min_val, max_val)]
 
-    # Sturges' rule: k = ceil(log2(n) + 1)
-    n = len(values)
-    num_bins = min(max(math.ceil(math.log2(n) + 1), 3), max_bins)
-
-    # Create evenly spaced bins
-    bin_width = (max_val - min_val) / num_bins
+    num_bins = _sturges_bin_count(count, max_bins)
+    width = (max_val - min_val) / num_bins
     bins = []
-
-    for i in range(num_bins):
-        bin_min = int(min_val + i * bin_width)
-        bin_max = int(min_val + (i + 1) * bin_width)
-        # Ensure last bin captures max value
-        if i == num_bins - 1:
-            bin_max = max_val
+    for index in range(num_bins):
+        bin_min = int(min_val + index * width)
+        bin_max = max_val if index == num_bins - 1 else int(min_val + (index + 1) * width)
         bins.append((bin_min, bin_max))
-
     return bins
+
+
+def ratio_bins(
+    count: int, min_val: float, max_val: float, max_bins: int = 8
+) -> list[tuple[float, float]]:
+    """Evenly spaced aspect-ratio bins, rounded to two decimals as the panels display them."""
+    if count <= 0:
+        return []
+    if min_val == max_val:
+        return [(min_val, max_val)]
+
+    num_bins = _sturges_bin_count(count, max_bins)
+    width = (max_val - min_val) / num_bins
+    bins = []
+    for index in range(num_bins):
+        bin_min = round(min_val + index * width, 2)
+        bin_max = (
+            round(max_val, 2) if index == num_bins - 1 else round(min_val + (index + 1) * width, 2)
+        )
+        bins.append((bin_min, bin_max))
+    return bins
+
+
+def compute_dynamic_bins(values: list[int], max_bins: int = 8) -> list[tuple[int, int]]:
+    """Dynamic bins for an in-memory list of values. Kept for callers that already hold the values."""
+    if not values:
+        return []
+    return dimension_bins(len(values), min(values), max(values), max_bins=max_bins)
 
 
 def compute_dynamic_ratio_bins(values: list[float], max_bins: int = 8) -> list[tuple[float, float]]:
+    """Dynamic aspect-ratio bins for an in-memory list of values."""
+    if not values:
+        return []
+    return ratio_bins(len(values), min(values), max(values), max_bins=max_bins)
+
+
+# ============================================================================
+# Shared panel builders — each one aggregates in SQL over the filtered set
+# ============================================================================
+async def _tag_distribution(
+    connection: AsyncConnection, project_id: int, filters: ImageFilterParams
+) -> list[TagDistribution]:
+    """Tags carried by the matching images, most used first.
+
+    A "current results" facet: each count is the number of *matching* images carrying the tag, so the distribution narrows as the gallery narrows. Tags no matching image carries are absent rather than listed as zero, which is what the panel has always shown.
     """
-    Compute dynamic bins for aspect ratios using Sturges' rule.
-    Returns list of (min, max) tuples for each bin.
+    counts = await AnalyticsRepository.tag_image_counts(connection, project_id, filters)
+    if not counts:
+        return []
+
+    all_tags = await TagRepository.list_with_usage_count(connection, project_id)
+    tag_map = {tag["id"]: tag for tag in all_tags}
+    all_categories = await TagCategoryRepository.list_for_project(connection, project_id)
+    category_map = {category["id"]: category for category in all_categories}
+
+    distribution = []
+    for tag_id, count in counts:
+        tag_info = tag_map.get(tag_id)
+        if not tag_info:
+            continue
+        category_id = tag_info.get("category_id")
+        category_info = category_map.get(category_id) if category_id else None
+        distribution.append(
+            TagDistribution(
+                tag_id=str(tag_id),
+                name=tag_info["name"],
+                count=count,
+                color=tag_info.get("color", "#6B7280"),
+                category_id=str(category_id) if category_id else None,
+                category_name=category_info["name"] if category_info else None,
+                category_color=category_info.get("color") if category_info else None,
+            )
+        )
+    return distribution
+
+
+async def _dimension_histogram(
+    connection: AsyncConnection, project_id: int, filters: ImageFilterParams, summary: dict
+) -> list[DimensionBucket]:
+    """Histogram of each matching image's larger dimension."""
+    bins = dimension_bins(
+        summary["measured_images"], summary["min_dimension"], summary["max_dimension"]
+    )
+    if not bins:
+        return []
+    counts = await AnalyticsRepository.dimension_bucket_counts(
+        connection, project_id, filters, bins
+    )
+    return [
+        DimensionBucket(bucket=f"{low}-{high}px", count=count, min=low, max=high)
+        for (low, high), count in zip(bins, counts)
+    ]
+
+
+async def _aspect_ratio_histogram(
+    connection: AsyncConnection, project_id: int, filters: ImageFilterParams, summary: dict
+) -> list[AspectRatioBucket]:
+    """Histogram of width divided by height across the matching images."""
+    bins = ratio_bins(
+        summary["measured_images"],
+        round(summary["min_ratio"], 3),
+        round(summary["max_ratio"], 3),
+    )
+    if not bins:
+        return []
+    counts = await AnalyticsRepository.aspect_ratio_bucket_counts(
+        connection, project_id, filters, bins
+    )
+    return [
+        AspectRatioBucket(bucket=f"{low:.2f}-{high:.2f}", count=count, min=low, max=high)
+        for (low, high), count in zip(bins, counts)
+    ]
+
+
+async def _file_size_stats(
+    connection: AsyncConnection, project_id: int, filters: ImageFilterParams
+) -> FileSizeStats:
+    """Min, max, mean, and median file size over the matching images."""
+    summary = await AnalyticsRepository.file_size_summary(connection, project_id, filters)
+    return FileSizeStats(
+        min=summary["min"],
+        max=summary["max"],
+        avg=summary["avg"],
+        median=summary["median"],
+    )
+
+
+def _round_to_multiple(value: int, multiple: int = 32) -> int:
+    return max(multiple, ((value + multiple // 2) // multiple) * multiple)
+
+
+async def _dimension_insights(
+    connection: AsyncConnection, project_id: int, filters: ImageFilterParams, summary: dict
+) -> dict:
+    """Median dimensions, spread, a resize recommendation, and a sampled scatter plot.
+
+    Every statistic is exact over the whole matching set. `scatter_data` is the one sampled field: at most `MAX_PLOTTED_POINTS` points drawn systematically (every *k*-th image in gallery order), with `scatter_total` and `scatter_sample_size` saying what the plot is a sample of.
+    """
+    measured = summary["measured_images"]
+    if not measured:
+        return {
+            "median_width": 0,
+            "median_height": 0,
+            "median_aspect_ratio": 1.0,
+            "min_width": 0,
+            "max_width": 0,
+            "min_height": 0,
+            "max_height": 0,
+            "dimension_variance": 0.0,
+            "recommended_resize": {"width": 640, "height": 640, "reason": "No dimension data"},
+            "scatter_data": [],
+            "scatter_total": 0,
+            "scatter_sample_size": 0,
+            "aspect_ratio_distribution": [],
+        }
+
+    median_width = summary["median_width"]
+    median_height = summary["median_height"]
+    median_ratio = summary["median_ratio"]
+
+    cv_width = summary["stddev_width"] / summary["avg_width"] if summary["avg_width"] else 0.0
+    cv_height = summary["stddev_height"] / summary["avg_height"] if summary["avg_height"] else 0.0
+    dimension_variance = min((cv_width + cv_height) / 2 / 0.5, 1.0)
+
+    if 0.9 <= median_ratio <= 1.1:
+        size = _round_to_multiple((median_width + median_height) // 2)
+        recommended_resize = {
+            "width": size,
+            "height": size,
+            "reason": f"Near-square median ({median_ratio:.2f}), recommend square",
+        }
+    else:
+        recommended_resize = {
+            "width": _round_to_multiple(median_width),
+            "height": _round_to_multiple(median_height),
+            "reason": f"Based on median dimensions ({median_width}x{median_height})",
+        }
+
+    shapes = await AnalyticsRepository.aspect_ratio_shape_counts(connection, project_id, filters)
+    scatter = await AnalyticsRepository.dimension_scatter_sample(
+        connection, project_id, filters, limit=MAX_PLOTTED_POINTS
+    )
+
+    return {
+        "median_width": median_width,
+        "median_height": median_height,
+        "median_aspect_ratio": round(median_ratio, 3),
+        "min_width": summary["min_width"],
+        "max_width": summary["max_width"],
+        "min_height": summary["min_height"],
+        "max_height": summary["max_height"],
+        "dimension_variance": round(dimension_variance, 3),
+        "recommended_resize": recommended_resize,
+        "scatter_data": scatter,
+        "scatter_total": measured,
+        "scatter_sample_size": len(scatter),
+        "aspect_ratio_distribution": [
+            {"bucket": "Portrait (<0.9)", "count": shapes["portrait"], "min": 0.0, "max": 0.9},
+            {"bucket": "Square (0.9-1.1)", "count": shapes["square"], "min": 0.9, "max": 1.1},
+            {
+                "bucket": "Landscape (1.1-2.0)",
+                "count": shapes["landscape"],
+                "min": 1.1,
+                "max": 2.0,
+            },
+            {
+                "bucket": "Ultra-wide (>2.0)",
+                "count": shapes["ultra_wide"],
+                "min": 2.0,
+                "max": 100.0,
+            },
+        ],
+    }
+
+
+async def _class_balance(
+    connection: AsyncConnection,
+    project_id: int,
+    filters: ImageFilterParams,
+    category_id: UUID | None,
+) -> dict:
+    """Class distribution and imbalance over the matching images.
+
+    Counts come from SQL; the Gini coefficient and the recommendation wording stay in `AnalyticsService` so the panel keeps saying the same things it always did.
+    """
+    all_tags = await TagRepository.list_with_usage_count(connection, project_id)
+    if category_id is not None:
+        all_tags = [tag for tag in all_tags if tag.get("category_id") == category_id]
+    tag_map = {tag["id"]: tag for tag in all_tags}
+
+    counts = [
+        (tag_id, count)
+        for tag_id, count in await AnalyticsRepository.tag_image_counts(
+            connection, project_id, filters
+        )
+        if tag_id in tag_map
+    ]
+    total_annotations = sum(count for _, count in counts)
+
+    class_distribution = []
+    for tag_id, count in counts:
+        percentage = (count / total_annotations * 100) if total_annotations else 0.0
+        if percentage < 5:
+            tag_status = "severely_underrepresented"
+        elif percentage < 15:
+            tag_status = "underrepresented"
+        else:
+            tag_status = "healthy"
+        class_distribution.append(
+            {
+                "tag_id": str(tag_id),
+                "tag_name": tag_map[tag_id]["name"],
+                "annotation_count": count,
+                "image_count": count,
+                "percentage": round(percentage, 2),
+                "status": tag_status,
+            }
+        )
+
+    imbalance_score = AnalyticsService._gini_coefficient([count for _, count in counts])
+    if imbalance_score < 0.3:
+        imbalance_level = "balanced"
+    elif imbalance_score < 0.6:
+        imbalance_level = "moderate"
+    else:
+        imbalance_level = "severe"
+
+    return {
+        "class_distribution": class_distribution,
+        "imbalance_score": round(imbalance_score, 3),
+        "imbalance_level": imbalance_level,
+        "recommendations": AnalyticsService._generate_balance_recommendations(
+            class_distribution, imbalance_score
+        ),
+    }
+
+
+async def _annotation_coverage(
+    connection: AsyncConnection, project_id: int, filters: ImageFilterParams
+) -> dict:
+    """Coverage, object totals, and the density histogram over every matching image."""
+    return await AnalyticsRepository.annotation_coverage(
+        connection, project_id, filters, DENSITY_BUCKETS
+    )
+
+
+async def _spatial_heatmap(
+    connection: AsyncConnection, project_id: int, filters: ImageFilterParams, grid_size: int
+) -> dict:
+    """Annotation heatmap for the matching images.
+
+    The grid, the centre of mass, the spread, the clustering score, and the annotation total are exact over every annotation on every matching image. `annotation_points` is a systematic sample of at most `MAX_PLOTTED_POINTS` centres, reported alongside the exact total so the overlay is never mistaken for the whole distribution.
+    """
+    summary = await AnalyticsRepository.annotation_spatial_summary(
+        connection, project_id, filters, grid_size=grid_size
+    )
+    grid = summary["grid_density"]
+    non_zero = [count for row in grid for count in row if count > 0]
+    if len(non_zero) > 1 and summary["max_cell_count"] > 0:
+        mean_count = sum(non_zero) / len(non_zero)
+        variance = sum((count - mean_count) ** 2 for count in non_zero) / len(non_zero)
+        coefficient = (variance**0.5) / mean_count if mean_count else 0.0
+        clustering_score = min(coefficient / 2.0, 1.0)
+    else:
+        clustering_score = 0.0
+
+    points = (
+        await AnalyticsRepository.annotation_center_sample(
+            connection, project_id, filters, limit=MAX_PLOTTED_POINTS
+        )
+        if summary["total_annotations"]
+        else []
+    )
+
+    return {
+        **summary,
+        "clustering_score": round(clustering_score, 3),
+        "annotation_points": points,
+        "annotation_points_sample_size": len(points),
+    }
+
+
+def _dynamic_count_histogram(values: Sequence[int]) -> list[dict]:
+    """Dynamic-bin histogram over one integer per matching image.
+
+    The values are per-image annotation counts, one small integer each, so the whole matching set fits comfortably in memory where the image rows did not.
     """
     if not values:
         return []
-
-    min_val = min(values)
-    max_val = max(values)
-
-    if min_val == max_val:
-        return [(min_val, max_val)]
-
-    # Sturges' rule: k = ceil(log2(n) + 1)
-    n = len(values)
-    num_bins = min(max(math.ceil(math.log2(n) + 1), 3), max_bins)
-
-    # Create evenly spaced bins
-    bin_width = (max_val - min_val) / num_bins
-    bins = []
-
-    for i in range(num_bins):
-        bin_min = round(min_val + i * bin_width, 2)
-        bin_max = round(min_val + (i + 1) * bin_width, 2)
-        # Ensure last bin captures max value
-        if i == num_bins - 1:
-            bin_max = round(max_val, 2)
-        bins.append((bin_min, bin_max))
-
-    return bins
+    bins = AnalyticsService._create_dynamic_bins(list(values))
+    return [
+        {
+            "bucket": label,
+            "count": sum(1 for value in values if low <= value <= high),
+            "min": low,
+            "max": high,
+        }
+        for label, low, high in bins
+    ]
 
 
+async def _quality_panel(
+    connection: AsyncConnection, project_id: int, filters: ImageFilterParams, total: int
+) -> dict:
+    """Every quality readout for the matching images, aggregated in SQL."""
+    status_counts = await AnalyticsRepository.quality_status_counts(connection, project_id, filters)
+    completed = status_counts.get("completed", 0)
+    if total > 0 and completed == total:
+        quality_status = "complete"
+    elif completed > 0:
+        quality_status = "partial"
+    else:
+        quality_status = "pending"
+
+    async def histogram(metric: str, buckets) -> list[QualityBucket]:
+        counts = await AnalyticsRepository.quality_metric_histogram(
+            connection, project_id, filters, metric, buckets
+        )
+        return [
+            QualityBucket(bucket=label, count=count, min=low, max=high)
+            for (label, low, high), count in zip(buckets, counts)
+        ]
+
+    return {
+        "quality_status": quality_status,
+        "status_counts": status_counts,
+        "averages": await AnalyticsRepository.quality_averages(connection, project_id, filters),
+        "quality_distribution": await histogram("overall_quality", QUALITY_BUCKETS),
+        "sharpness_histogram": await histogram("sharpness", SCORE_BUCKETS),
+        "brightness_histogram": await histogram("brightness", SCORE_BUCKETS),
+        "contrast_histogram": await histogram("contrast", SCORE_BUCKETS),
+        "uniqueness_histogram": await histogram("uniqueness", SCORE_BUCKETS),
+        "red_histogram": await histogram("red_avg", SCORE_BUCKETS),
+        "green_histogram": await histogram("green_avg", SCORE_BUCKETS),
+        "blue_histogram": await histogram("blue_avg", SCORE_BUCKETS),
+        "issue_counts": await AnalyticsRepository.quality_issue_counts(
+            connection, project_id, filters
+        ),
+        "flagged": await AnalyticsRepository.flagged_images(
+            connection, project_id, filters, limit=20
+        ),
+    }
+
+
+# ============================================================================
+# Filtered analytics panels
+# ============================================================================
 @router.get(
     "/{project_id}/analytics/dataset-stats", response_model=JsonResponse[DatasetStatsResponse, None]
 )
 async def get_dataset_stats(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
-    # Filter parameters (same as explore endpoint)
-    tag_ids: list[UUID] | None = Query(default=None),
-    excluded_tag_ids: list[UUID] | None = Query(default=None),
-    include_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    exclude_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    task_ids: list[int] | None = Query(default=None),
-    job_id: int | None = Query(default=None),
-    is_annotated: bool | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=255),
-    width_min: int | None = Query(default=None, ge=0),
-    width_max: int | None = Query(default=None, ge=0),
-    height_min: int | None = Query(default=None, ge=0),
-    height_max: int | None = Query(default=None, ge=0),
-    file_size_min: int | None = Query(default=None, ge=0),
-    file_size_max: int | None = Query(default=None, ge=0),
-    filepath_pattern: str | None = Query(default=None, max_length=255),
-    filepath_paths: list[str] | None = Query(default=None),
-    image_uids: list[UUID] | None = Query(default=None),
+    filters: ImageFilters,
 ):
-    """
-    Get dataset statistics for analytics panel.
-    Returns tag distribution, dimension histogram, and file size stats.
-    Applies the same filters as the explore endpoint for consistency.
+    """Tag distribution, dimension and aspect-ratio histograms, and file size stats.
+
+    Every number covers the whole filtered set, counted in SQL. Filters are the gallery's own contract, so this panel and the gallery's matching count always agree.
     """
     project_id = project["id"]
-
-    # Get filtered images (all pages to compute accurate stats)
-    images, total = await ProjectImageRepository.explore(
-        connection,
-        project_id=project_id,
-        page=1,
-        page_size=10000,  # Large limit to get all filtered images
-        tag_ids=tag_ids,
-        excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode,
-        exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids,
-        job_id=job_id,
-        is_annotated=is_annotated,
-        search=search,
-        width_min=width_min,
-        width_max=width_max,
-        height_min=height_min,
-        height_max=height_max,
-        file_size_min=file_size_min,
-        file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern,
-        filepath_paths=filepath_paths,
-        image_uids=image_uids,
-    )
-
-    # Get all project tags with usage counts
-    all_tags = await TagRepository.list_with_usage_count(connection, project_id)
-    tag_map = {tag["id"]: tag for tag in all_tags}
-
-    # Get all tag categories for category info lookup
-    all_categories = await TagCategoryRepository.list_for_project(connection, project_id)
-    category_map = {cat["id"]: cat for cat in all_categories}
-
-    # Compute tag distribution from filtered images (one query for all images)
-    tags_by_image = await SharedImageRepository.get_tags_bulk(
-        connection, [img["id"] for img in images], project_id
-    )
-    tag_counter = Counter()
-    for image_tags in tags_by_image.values():
-        for tag in image_tags:
-            tag_counter[tag["id"]] += 1
-
-    # Build tag distribution list with category info
-    tag_distribution = []
-    for tag_id, count in tag_counter.most_common():
-        tag_info = tag_map.get(tag_id)
-        if tag_info:
-            # Get category info if available
-            category_id = tag_info.get("category_id")
-            category_info = category_map.get(category_id) if category_id else None
-
-            tag_distribution.append(
-                TagDistribution(
-                    tag_id=str(tag_id),
-                    name=tag_info["name"],
-                    count=count,
-                    color=tag_info.get("color", "#6B7280"),
-                    category_id=str(category_id) if category_id else None,
-                    category_name=category_info["name"] if category_info else None,
-                    category_color=category_info.get("color") if category_info else None,
-                )
-            )
-
-    # Collect dimension and aspect ratio data
-    dimensions = []  # Use max(width, height) for dimension binning
-    aspect_ratios = []
-
-    for img in images:
-        width = img.get("width")
-        height = img.get("height")
-        if width and height and height > 0:
-            # Use the larger dimension for binning
-            dimensions.append(max(width, height))
-            # Calculate aspect ratio (width / height)
-            aspect_ratios.append(round(width / height, 3))
-
-    # Compute dynamic dimension bins using Sturges' rule
-    dimension_bins = compute_dynamic_bins(dimensions, max_bins=8)
-
-    # Count images in each dimension bin
-    dimension_histogram = []
-    if dimensions and dimension_bins:
-        max_dim = max(dimensions)
-        for bin_min, bin_max in dimension_bins:
-            count = sum(
-                1
-                for d in dimensions
-                if bin_min <= d < bin_max or (bin_max == max_dim and d == bin_max)
-            )
-            bucket_label = f"{bin_min}-{bin_max}px"
-            dimension_histogram.append(
-                DimensionBucket(
-                    bucket=bucket_label,
-                    count=count,
-                    min=bin_min,
-                    max=bin_max,
-                )
-            )
-
-    # Compute dynamic aspect ratio bins
-    ratio_bins = compute_dynamic_ratio_bins(aspect_ratios, max_bins=8)
-
-    # Count images in each aspect ratio bin
-    aspect_ratio_histogram = []
-    if aspect_ratios and ratio_bins:
-        max_ratio = max(aspect_ratios)
-        for bin_min, bin_max in ratio_bins:
-            count = sum(
-                1
-                for r in aspect_ratios
-                if bin_min <= r < bin_max or (bin_max == max_ratio and r == bin_max)
-            )
-            bucket_label = f"{bin_min:.2f}-{bin_max:.2f}"
-            aspect_ratio_histogram.append(
-                AspectRatioBucket(
-                    bucket=bucket_label,
-                    count=count,
-                    min=bin_min,
-                    max=bin_max,
-                )
-            )
-
-    # Compute file size stats
-    file_sizes = [
-        img["file_size_bytes"] for img in images if img.get("file_size_bytes") is not None
-    ]
-    if file_sizes:
-        file_size_stats = FileSizeStats(
-            min=min(file_sizes),
-            max=max(file_sizes),
-            avg=sum(file_sizes) / len(file_sizes),
-            median=sorted(file_sizes)[len(file_sizes) // 2] if file_sizes else 0,
-        )
-    else:
-        file_size_stats = FileSizeStats(min=0, max=0, avg=0, median=0)
+    total = await AnalyticsRepository.count_images(connection, project_id, filters)
+    summary = await AnalyticsRepository.dimension_summary(connection, project_id, filters)
 
     response_data = DatasetStatsResponse(
-        tag_distribution=tag_distribution,
-        dimension_histogram=dimension_histogram,
-        aspect_ratio_histogram=aspect_ratio_histogram,
-        file_size_stats=file_size_stats,
+        tag_distribution=await _tag_distribution(connection, project_id, filters),
+        dimension_histogram=await _dimension_histogram(connection, project_id, filters, summary),
+        aspect_ratio_histogram=await _aspect_ratio_histogram(
+            connection, project_id, filters, summary
+        ),
+        file_size_stats=await _file_size_stats(connection, project_id, filters),
     )
 
     return JsonResponse(
@@ -312,66 +565,15 @@ async def get_dataset_stats(
 async def get_annotation_coverage(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
-    # Same filter parameters as dataset-stats
-    tag_ids: list[UUID] | None = Query(default=None),
-    excluded_tag_ids: list[UUID] | None = Query(default=None),
-    include_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    exclude_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    task_ids: list[int] | None = Query(default=None),
-    job_id: int | None = Query(default=None),
-    is_annotated: bool | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=255),
-    width_min: int | None = Query(default=None, ge=0),
-    width_max: int | None = Query(default=None, ge=0),
-    height_min: int | None = Query(default=None, ge=0),
-    height_max: int | None = Query(default=None, ge=0),
-    file_size_min: int | None = Query(default=None, ge=0),
-    file_size_max: int | None = Query(default=None, ge=0),
-    filepath_pattern: str | None = Query(default=None, max_length=255),
-    filepath_paths: list[str] | None = Query(default=None),
-    image_uids: list[UUID] | None = Query(default=None),
+    filters: ImageFilters,
 ):
-    """
-    Get annotation coverage analytics.
-    Shows percentage annotated, density distribution, and coverage by category.
-    """
+    """Percentage annotated, object density distribution, and object totals."""
     project_id = project["id"]
-
-    # Get filtered images
-    images, total = await ProjectImageRepository.explore(
-        connection,
-        project_id=project_id,
-        page=1,
-        page_size=10000,
-        tag_ids=tag_ids,
-        excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode,
-        exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids,
-        job_id=job_id,
-        is_annotated=is_annotated,
-        search=search,
-        width_min=width_min,
-        width_max=width_max,
-        height_min=height_min,
-        height_max=height_max,
-        file_size_min=file_size_min,
-        file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern,
-        filepath_paths=filepath_paths,
-        image_uids=image_uids,
-    )
-
-    # Compute coverage metrics
-    coverage_data = await AnalyticsService.compute_annotation_coverage(
-        connection, project_id, images
-    )
-
-    response_data = AnnotationCoverageResponse(**coverage_data)
+    coverage = await _annotation_coverage(connection, project_id, filters)
 
     return JsonResponse(
-        data=response_data,
-        message=f"Annotation coverage computed from {total} images",
+        data=AnnotationCoverageResponse(**coverage),
+        message=f"Annotation coverage computed from {coverage['total_images']} images",
         status_code=status.HTTP_200_OK,
     )
 
@@ -382,68 +584,16 @@ async def get_annotation_coverage(
 async def get_class_balance(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
-    # Same filter parameters
-    tag_ids: list[UUID] | None = Query(default=None),
-    excluded_tag_ids: list[UUID] | None = Query(default=None),
-    include_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    exclude_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    task_ids: list[int] | None = Query(default=None),
-    job_id: int | None = Query(default=None),
-    is_annotated: bool | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=255),
-    width_min: int | None = Query(default=None, ge=0),
-    width_max: int | None = Query(default=None, ge=0),
-    height_min: int | None = Query(default=None, ge=0),
-    height_max: int | None = Query(default=None, ge=0),
-    file_size_min: int | None = Query(default=None, ge=0),
-    file_size_max: int | None = Query(default=None, ge=0),
-    filepath_pattern: str | None = Query(default=None, max_length=255),
-    filepath_paths: list[str] | None = Query(default=None),
-    image_uids: list[UUID] | None = Query(default=None),
+    filters: ImageFilters,
     category_id: UUID | None = Query(default=None, description="Filter by tag category"),
 ):
-    """
-    Get class balance analytics.
-    Shows class distribution, imbalance score, and recommendations.
-
-    Supports category_id filter for per-category class balance analysis.
-    """
+    """Class distribution, imbalance score, and recommendations over the matching images."""
     project_id = project["id"]
-
-    # Get filtered images
-    images, total = await ProjectImageRepository.explore(
-        connection,
-        project_id=project_id,
-        page=1,
-        page_size=10000,
-        tag_ids=tag_ids,
-        excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode,
-        exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids,
-        job_id=job_id,
-        is_annotated=is_annotated,
-        search=search,
-        width_min=width_min,
-        width_max=width_max,
-        height_min=height_min,
-        height_max=height_max,
-        file_size_min=file_size_min,
-        file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern,
-        filepath_paths=filepath_paths,
-        image_uids=image_uids,
-    )
-
-    # Compute class balance metrics
-    balance_data = await AnalyticsService.compute_class_balance(
-        connection, project_id, images, category_id=category_id
-    )
-
-    response_data = ClassBalanceResponse(**balance_data)
+    total = await AnalyticsRepository.count_images(connection, project_id, filters)
+    balance_data = await _class_balance(connection, project_id, filters, category_id)
 
     return JsonResponse(
-        data=response_data,
+        data=ClassBalanceResponse(**balance_data),
         message=f"Class balance computed from {total} images",
         status_code=status.HTTP_200_OK,
     )
@@ -456,64 +606,22 @@ async def get_class_balance(
 async def get_spatial_heatmap(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
-    # Same filter parameters
-    tag_ids: list[UUID] | None = Query(default=None),
-    excluded_tag_ids: list[UUID] | None = Query(default=None),
-    include_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    exclude_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    task_ids: list[int] | None = Query(default=None),
-    job_id: int | None = Query(default=None),
-    is_annotated: bool | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=255),
-    width_min: int | None = Query(default=None, ge=0),
-    width_max: int | None = Query(default=None, ge=0),
-    height_min: int | None = Query(default=None, ge=0),
-    height_max: int | None = Query(default=None, ge=0),
-    file_size_min: int | None = Query(default=None, ge=0),
-    file_size_max: int | None = Query(default=None, ge=0),
-    filepath_pattern: str | None = Query(default=None, max_length=255),
-    filepath_paths: list[str] | None = Query(default=None),
-    image_uids: list[UUID] | None = Query(default=None),
+    filters: ImageFilters,
 ):
-    """
-    Get spatial heatmap of annotation distribution.
-    Shows normalized coordinates where annotations cluster on images.
-    """
+    """Where annotations cluster on the matching images."""
     project_id = project["id"]
+    total = await AnalyticsRepository.count_images(connection, project_id, filters)
+    heatmap_data = await _spatial_heatmap(connection, project_id, filters, grid_size=10)
 
-    # Get filtered images
-    images, total = await ProjectImageRepository.explore(
-        connection,
-        project_id=project_id,
-        page=1,
-        page_size=10000,
-        tag_ids=tag_ids,
-        excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode,
-        exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids,
-        job_id=job_id,
-        is_annotated=is_annotated,
-        search=search,
-        width_min=width_min,
-        width_max=width_max,
-        height_min=height_min,
-        height_max=height_max,
-        file_size_min=file_size_min,
-        file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern,
-        filepath_paths=filepath_paths,
-        image_uids=image_uids,
+    sampled = heatmap_data["annotation_points_sample_size"]
+    plotted = (
+        f"{sampled} of {heatmap_data['total_annotations']} annotation centres plotted"
+        if sampled < heatmap_data["total_annotations"]
+        else f"{heatmap_data['total_annotations']} annotation centres plotted"
     )
-
-    # Compute spatial heatmap (stub for now - needs annotation bbox data)
-    heatmap_data = await AnalyticsService.compute_spatial_heatmap(connection, project_id, images)
-
-    response_data = SpatialHeatmapResponse(**heatmap_data)
-
     return JsonResponse(
-        data=response_data,
-        message=f"Spatial heatmap computed from {total} images",
+        data=SpatialHeatmapResponse(**heatmap_data),
+        message=f"Spatial heatmap computed from {total} images; {plotted}",
         status_code=status.HTTP_200_OK,
     )
 
@@ -524,60 +632,38 @@ async def get_spatial_heatmap(
 async def get_image_quality(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
-    # Same filter parameters
-    tag_ids: list[UUID] | None = Query(default=None),
-    excluded_tag_ids: list[UUID] | None = Query(default=None),
-    include_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    exclude_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    task_ids: list[int] | None = Query(default=None),
-    job_id: int | None = Query(default=None),
-    is_annotated: bool | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=255),
-    width_min: int | None = Query(default=None, ge=0),
-    width_max: int | None = Query(default=None, ge=0),
-    height_min: int | None = Query(default=None, ge=0),
-    height_max: int | None = Query(default=None, ge=0),
-    file_size_min: int | None = Query(default=None, ge=0),
-    file_size_max: int | None = Query(default=None, ge=0),
-    filepath_pattern: str | None = Query(default=None, max_length=255),
-    filepath_paths: list[str] | None = Query(default=None),
-    image_uids: list[UUID] | None = Query(default=None),
+    filters: ImageFilters,
 ):
-    """
-    Get image quality analytics.
-    Shows quality score distribution, issue breakdown, and flagged images.
+    """Quality score distribution, issue breakdown, and flagged images for the matching set.
+
+    `corrupted` stays zero: the quality pipeline records no such issue, so reporting anything else would be inventing a number.
     """
     project_id = project["id"]
+    total = await AnalyticsRepository.count_images(connection, project_id, filters)
+    panel = await _quality_panel(connection, project_id, filters, total)
+    issues = panel["issue_counts"]
 
-    # Get filtered images
-    images, total = await ProjectImageRepository.explore(
-        connection,
-        project_id=project_id,
-        page=1,
-        page_size=10000,
-        tag_ids=tag_ids,
-        excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode,
-        exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids,
-        job_id=job_id,
-        is_annotated=is_annotated,
-        search=search,
-        width_min=width_min,
-        width_max=width_max,
-        height_min=height_min,
-        height_max=height_max,
-        file_size_min=file_size_min,
-        file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern,
-        filepath_paths=filepath_paths,
-        image_uids=image_uids,
+    response_data = ImageQualityResponse(
+        quality_distribution=panel["quality_distribution"],
+        issue_breakdown=IssueBreakdown(
+            blur_detected=issues["blur"],
+            low_brightness=issues["low_brightness"],
+            high_brightness=issues["high_brightness"],
+            low_contrast=issues["low_contrast"],
+            corrupted=0,
+        ),
+        flagged_images=[
+            FlaggedImage(
+                image_id=str(flagged["shared_image_id"]),
+                filename=flagged.get("filename", ""),
+                quality_score=flagged.get("overall_quality") or 0.0,
+                issues=flagged.get("issues") or [],
+                blur_score=flagged.get("sharpness") or 0.0,
+                brightness=flagged.get("brightness") or 0.0,
+            )
+            for flagged in panel["flagged"]
+        ],
     )
-
-    # Compute image quality (stub for now - needs async processing)
-    quality_data = await AnalyticsService.compute_image_quality(connection, project_id, images)
-
-    response_data = ImageQualityResponse(**quality_data)
 
     return JsonResponse(
         data=response_data,
@@ -593,64 +679,22 @@ async def get_image_quality(
 async def get_dimension_insights(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
-    # Same filter parameters
-    tag_ids: list[UUID] | None = Query(default=None),
-    excluded_tag_ids: list[UUID] | None = Query(default=None),
-    include_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    exclude_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    task_ids: list[int] | None = Query(default=None),
-    job_id: int | None = Query(default=None),
-    is_annotated: bool | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=255),
-    width_min: int | None = Query(default=None, ge=0),
-    width_max: int | None = Query(default=None, ge=0),
-    height_min: int | None = Query(default=None, ge=0),
-    height_max: int | None = Query(default=None, ge=0),
-    file_size_min: int | None = Query(default=None, ge=0),
-    file_size_max: int | None = Query(default=None, ge=0),
-    filepath_pattern: str | None = Query(default=None, max_length=255),
-    filepath_paths: list[str] | None = Query(default=None),
-    image_uids: list[UUID] | None = Query(default=None),
+    filters: ImageFilters,
 ):
-    """
-    Get dimension insights analytics (Roboflow-style).
-    Shows median dimensions, aspect ratio distribution, scatter plot data, and resize recommendations.
-    """
+    """Median dimensions, aspect ratio distribution, scatter sample, and resize recommendation."""
     project_id = project["id"]
+    total = await AnalyticsRepository.count_images(connection, project_id, filters)
+    summary = await AnalyticsRepository.dimension_summary(connection, project_id, filters)
+    insights_data = await _dimension_insights(connection, project_id, filters, summary)
 
-    # Get filtered images
-    images, total = await ProjectImageRepository.explore(
-        connection,
-        project_id=project_id,
-        page=1,
-        page_size=10000,
-        tag_ids=tag_ids,
-        excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode,
-        exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids,
-        job_id=job_id,
-        is_annotated=is_annotated,
-        search=search,
-        width_min=width_min,
-        width_max=width_max,
-        height_min=height_min,
-        height_max=height_max,
-        file_size_min=file_size_min,
-        file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern,
-        filepath_paths=filepath_paths,
-        image_uids=image_uids,
+    plotted = (
+        f"scatter plot shows {insights_data['scatter_sample_size']} of "
+        f"{insights_data['scatter_total']} measured images, every "
+        f"{max(1, insights_data['scatter_total'] // MAX_PLOTTED_POINTS)}th in gallery order"
     )
-
-    # Compute dimension insights
-    insights_data = AnalyticsService.compute_dimension_insights(images)
-
-    response_data = DimensionInsightsResponse(**insights_data)
-
     return JsonResponse(
-        data=response_data,
-        message=f"Dimension insights computed from {total} images",
+        data=DimensionInsightsResponse(**insights_data),
+        message=f"Dimension insights computed from {total} images; {plotted}",
         status_code=status.HTTP_200_OK,
     )
 
@@ -667,265 +711,13 @@ async def get_dimension_insights(
 async def get_enhanced_dataset_stats(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
-    # Filter parameters
-    tag_ids: list[UUID] | None = Query(default=None),
-    excluded_tag_ids: list[UUID] | None = Query(default=None),
-    include_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    exclude_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    task_ids: list[int] | None = Query(default=None),
-    job_id: int | None = Query(default=None),
-    is_annotated: bool | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=255),
-    width_min: int | None = Query(default=None, ge=0),
-    width_max: int | None = Query(default=None, ge=0),
-    height_min: int | None = Query(default=None, ge=0),
-    height_max: int | None = Query(default=None, ge=0),
-    file_size_min: int | None = Query(default=None, ge=0),
-    file_size_max: int | None = Query(default=None, ge=0),
-    filepath_pattern: str | None = Query(default=None, max_length=255),
-    filepath_paths: list[str] | None = Query(default=None),
-    image_uids: list[UUID] | None = Query(default=None),
+    filters: ImageFilters,
     category_id: UUID | None = Query(default=None, description="Filter class balance by category"),
 ):
+    """Dataset stats, dimension insights, class balance, and image quality in one response.
+
+    `total_images` is the exact number of matching images, not the number of rows a handler managed to fetch.
     """
-    Get enhanced dataset statistics (consolidated).
-
-    Combines: Dataset Stats + Dimension Insights + Class Balance + Image Quality
-    This is the main endpoint for the Dataset Statistics panel with tabs.
-    """
-    project_id = project["id"]
-
-    # Get filtered images
-    images, total = await ProjectImageRepository.explore(
-        connection,
-        project_id=project_id,
-        page=1,
-        page_size=10000,
-        tag_ids=tag_ids,
-        excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode,
-        exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids,
-        job_id=job_id,
-        is_annotated=is_annotated,
-        search=search,
-        width_min=width_min,
-        width_max=width_max,
-        height_min=height_min,
-        height_max=height_max,
-        file_size_min=file_size_min,
-        file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern,
-        filepath_paths=filepath_paths,
-        image_uids=image_uids,
-    )
-
-    shared_image_ids = [img["id"] for img in images]
-
-    # === Original Dataset Stats ===
-    # Get tag distribution
-    all_tags = await TagRepository.list_with_usage_count(connection, project_id)
-    tag_map = {tag["id"]: tag for tag in all_tags}
-    all_categories = await TagCategoryRepository.list_for_project(connection, project_id)
-    category_map = {cat["id"]: cat for cat in all_categories}
-
-    tags_by_image = await SharedImageRepository.get_tags_bulk(
-        connection, shared_image_ids, project_id
-    )
-    tag_counter = Counter()
-    for image_tags in tags_by_image.values():
-        for tag in image_tags:
-            tag_counter[tag["id"]] += 1
-
-    tag_distribution = []
-    for tag_id, count in tag_counter.most_common():
-        tag_info = tag_map.get(tag_id)
-        if tag_info:
-            category_id_val = tag_info.get("category_id")
-            category_info = category_map.get(category_id_val) if category_id_val else None
-            tag_distribution.append(
-                TagDistribution(
-                    tag_id=str(tag_id),
-                    name=tag_info["name"],
-                    count=count,
-                    color=tag_info.get("color", "#6B7280"),
-                    category_id=str(category_id_val) if category_id_val else None,
-                    category_name=category_info["name"] if category_info else None,
-                    category_color=category_info.get("color") if category_info else None,
-                )
-            )
-
-    # Dimension histogram
-    dimensions = []
-    aspect_ratios = []
-    for img in images:
-        width, height = img.get("width"), img.get("height")
-        if width and height and height > 0:
-            dimensions.append(max(width, height))
-            aspect_ratios.append(round(width / height, 3))
-
-    dimension_bins = compute_dynamic_bins(dimensions, max_bins=8)
-    dimension_histogram = []
-    if dimensions and dimension_bins:
-        max_dim = max(dimensions)
-        for bin_min, bin_max in dimension_bins:
-            count = sum(
-                1
-                for d in dimensions
-                if bin_min <= d < bin_max or (bin_max == max_dim and d == bin_max)
-            )
-            dimension_histogram.append(
-                DimensionBucket(
-                    bucket=f"{bin_min}-{bin_max}px", count=count, min=bin_min, max=bin_max
-                )
-            )
-
-    ratio_bins = compute_dynamic_ratio_bins(aspect_ratios, max_bins=8)
-    aspect_ratio_histogram = []
-    if aspect_ratios and ratio_bins:
-        max_ratio = max(aspect_ratios)
-        for bin_min, bin_max in ratio_bins:
-            count = sum(
-                1
-                for r in aspect_ratios
-                if bin_min <= r < bin_max or (bin_max == max_ratio and r == bin_max)
-            )
-            aspect_ratio_histogram.append(
-                AspectRatioBucket(
-                    bucket=f"{bin_min:.2f}-{bin_max:.2f}", count=count, min=bin_min, max=bin_max
-                )
-            )
-
-    # File size stats
-    file_sizes = [img["file_size_bytes"] for img in images if img.get("file_size_bytes")]
-    if file_sizes:
-        file_size_stats = FileSizeStats(
-            min=min(file_sizes),
-            max=max(file_sizes),
-            avg=sum(file_sizes) / len(file_sizes),
-            median=sorted(file_sizes)[len(file_sizes) // 2],
-        )
-    else:
-        file_size_stats = FileSizeStats(min=0, max=0, avg=0, median=0)
-
-    # === Dimension Insights ===
-    dim_insights = AnalyticsService.compute_dimension_insights(images)
-
-    # === Class Balance ===
-    balance_data = await AnalyticsService.compute_class_balance(
-        connection, project_id, images, category_id=category_id
-    )
-
-    # === Image Quality ===
-    quality_stats = await ImageQualityRepository.get_statistics_for_project(
-        connection, project_id, shared_image_ids if shared_image_ids else None
-    )
-
-    status_counts = quality_stats.get("status_counts", {})
-
-    # Determine overall quality status
-    if status_counts.get("completed", 0) == total and total > 0:
-        quality_status = "complete"
-    elif status_counts.get("completed", 0) > 0:
-        quality_status = "partial"
-    else:
-        quality_status = "pending"
-
-    # Get quality distribution and flagged images
-    quality_distribution_data = await ImageQualityRepository.get_quality_distribution(
-        connection, project_id, shared_image_ids if shared_image_ids else None
-    )
-
-    # Build quality histogram buckets
-    quality_scores = [
-        m.get("overall_quality", 0)
-        for m in quality_distribution_data
-        if m.get("overall_quality") is not None
-    ]
-    quality_distribution = []
-    if quality_scores:
-        buckets = [
-            ("Poor (0-0.3)", 0.0, 0.3),
-            ("Fair (0.3-0.5)", 0.3, 0.5),
-            ("Good (0.5-0.7)", 0.5, 0.7),
-            ("Excellent (0.7-1.0)", 0.7, 1.0),
-        ]
-        for label, min_val, max_val in buckets:
-            count = sum(
-                1 for s in quality_scores if min_val <= s < max_val or (max_val == 1.0 and s == 1.0)
-            )
-            quality_distribution.append(
-                QualityBucket(bucket=label, count=count, min=min_val, max=max_val)
-            )
-
-    # Build individual metric histograms for interactive filtering
-    def build_metric_histogram(metric_name: str, buckets_config: list) -> list:
-        """Build histogram for a specific metric."""
-        values = [
-            m.get(metric_name) for m in quality_distribution_data if m.get(metric_name) is not None
-        ]
-        if not values:
-            return []
-        histogram = []
-        for label, min_val, max_val in buckets_config:
-            count = sum(
-                1 for v in values if min_val <= v < max_val or (max_val == 1.0 and v == 1.0)
-            )
-            histogram.append(QualityBucket(bucket=label, count=count, min=min_val, max=max_val))
-        return histogram
-
-    # Use consistent score-based buckets for all metrics (raw 0-1 scale)
-    score_buckets = [
-        ("0.0-0.2", 0.0, 0.2),
-        ("0.2-0.4", 0.2, 0.4),
-        ("0.4-0.6", 0.4, 0.6),
-        ("0.6-0.8", 0.6, 0.8),
-        ("0.8-1.0", 0.8, 1.0),
-    ]
-
-    sharpness_histogram = build_metric_histogram("sharpness", score_buckets)
-    brightness_histogram = build_metric_histogram("brightness", score_buckets)
-    contrast_histogram = build_metric_histogram("contrast", score_buckets)
-    uniqueness_histogram = build_metric_histogram("uniqueness", score_buckets)
-
-    # RGB channel histograms
-    red_histogram = build_metric_histogram("red_avg", score_buckets)
-    green_histogram = build_metric_histogram("green_avg", score_buckets)
-    blue_histogram = build_metric_histogram("blue_avg", score_buckets)
-
-    # Count issues
-    issue_counts = {
-        "blur": 0,
-        "low_brightness": 0,
-        "high_brightness": 0,
-        "low_contrast": 0,
-        "duplicate": 0,
-    }
-    for m in quality_distribution_data:
-        issues = m.get("issues", [])
-        if issues:
-            for issue in issues:
-                if issue in issue_counts:
-                    issue_counts[issue] += 1
-
-    issue_breakdown = IssueBreakdownEnhanced(**issue_counts)
-
-    # Get flagged images
-    flagged_raw = await ImageQualityRepository.get_flagged_images(connection, project_id, limit=20)
-    flagged_images = [
-        FlaggedImageEnhanced(
-            shared_image_id=str(f["shared_image_id"]),
-            filename=f.get("filename", ""),
-            file_path=f.get("file_path", ""),
-            overall_quality=f.get("overall_quality", 0),
-            sharpness=f.get("sharpness"),
-            brightness=f.get("brightness"),
-            issues=f.get("issues", []),
-        )
-        for f in flagged_raw
-    ]
-
-    # Build response
     from app.schemas.analytics import (
         AspectRatioDistributionBucket,
         ClassDistribution,
@@ -933,55 +725,74 @@ async def get_enhanced_dataset_stats(
         DimensionInsightsScatterPoint,
     )
 
+    project_id = project["id"]
+    total = await AnalyticsRepository.count_images(connection, project_id, filters)
+    summary = await AnalyticsRepository.dimension_summary(connection, project_id, filters)
+
+    dim_insights = await _dimension_insights(connection, project_id, filters, summary)
+    balance_data = await _class_balance(connection, project_id, filters, category_id)
+    panel = await _quality_panel(connection, project_id, filters, total)
+    issues = panel["issue_counts"]
+    averages = {key: value for key, value in panel["averages"].items() if value is not None}
+
     response_data = EnhancedDatasetStatsResponse(
-        total_images=len(images),
+        total_images=total,
         # Original Dataset Stats
-        tag_distribution=tag_distribution,
-        dimension_histogram=dimension_histogram,
-        aspect_ratio_histogram=aspect_ratio_histogram,
-        file_size_stats=file_size_stats,
+        tag_distribution=await _tag_distribution(connection, project_id, filters),
+        dimension_histogram=await _dimension_histogram(connection, project_id, filters, summary),
+        aspect_ratio_histogram=await _aspect_ratio_histogram(
+            connection, project_id, filters, summary
+        ),
+        file_size_stats=await _file_size_stats(connection, project_id, filters),
         # Dimension Insights
-        median_width=dim_insights.get("median_width", 0),
-        median_height=dim_insights.get("median_height", 0),
-        median_aspect_ratio=dim_insights.get("median_aspect_ratio", 0.0),
-        min_width=dim_insights.get("min_width", 0),
-        max_width=dim_insights.get("max_width", 0),
-        min_height=dim_insights.get("min_height", 0),
-        max_height=dim_insights.get("max_height", 0),
-        dimension_variance=dim_insights.get("dimension_variance", 0.0),
-        recommended_resize=DimensionInsightsRecommendedResize(**dim_insights["recommended_resize"])
-        if dim_insights.get("recommended_resize")
-        else None,
+        median_width=dim_insights["median_width"],
+        median_height=dim_insights["median_height"],
+        median_aspect_ratio=dim_insights["median_aspect_ratio"],
+        min_width=dim_insights["min_width"],
+        max_width=dim_insights["max_width"],
+        min_height=dim_insights["min_height"],
+        max_height=dim_insights["max_height"],
+        dimension_variance=dim_insights["dimension_variance"],
+        recommended_resize=DimensionInsightsRecommendedResize(**dim_insights["recommended_resize"]),
         scatter_data=[
-            DimensionInsightsScatterPoint(**p) for p in dim_insights.get("scatter_data", [])
+            DimensionInsightsScatterPoint(**point) for point in dim_insights["scatter_data"]
         ],
         aspect_ratio_distribution=[
-            AspectRatioDistributionBucket(**b)
-            for b in dim_insights.get("aspect_ratio_distribution", [])
+            AspectRatioDistributionBucket(**bucket)
+            for bucket in dim_insights["aspect_ratio_distribution"]
         ],
         # Class Balance
         class_distribution=[
-            ClassDistribution(**c) for c in balance_data.get("class_distribution", [])
+            ClassDistribution(**entry) for entry in balance_data["class_distribution"]
         ],
-        imbalance_score=balance_data.get("imbalance_score", 0.0),
-        imbalance_level=balance_data.get("imbalance_level", "balanced"),
-        class_recommendations=balance_data.get("recommendations", []),
+        imbalance_score=balance_data["imbalance_score"],
+        imbalance_level=balance_data["imbalance_level"],
+        class_recommendations=balance_data["recommendations"],
         # Image Quality
-        quality_status=quality_status,
-        quality_status_counts=QualityStatusCounts(**status_counts),
-        quality_averages=QualityMetricsAverages(**quality_stats.get("averages", {}))
-        if quality_stats.get("averages")
-        else None,
-        quality_distribution=quality_distribution,
-        sharpness_histogram=sharpness_histogram,
-        brightness_histogram=brightness_histogram,
-        contrast_histogram=contrast_histogram,
-        uniqueness_histogram=uniqueness_histogram,
-        red_histogram=red_histogram,
-        green_histogram=green_histogram,
-        blue_histogram=blue_histogram,
-        issue_breakdown=issue_breakdown,
-        flagged_images=flagged_images,
+        quality_status=panel["quality_status"],
+        quality_status_counts=QualityStatusCounts(**panel["status_counts"]),
+        quality_averages=QualityMetricsAverages(**averages) if averages else None,
+        quality_distribution=panel["quality_distribution"],
+        sharpness_histogram=panel["sharpness_histogram"],
+        brightness_histogram=panel["brightness_histogram"],
+        contrast_histogram=panel["contrast_histogram"],
+        uniqueness_histogram=panel["uniqueness_histogram"],
+        red_histogram=panel["red_histogram"],
+        green_histogram=panel["green_histogram"],
+        blue_histogram=panel["blue_histogram"],
+        issue_breakdown=IssueBreakdownEnhanced(**issues),
+        flagged_images=[
+            FlaggedImageEnhanced(
+                shared_image_id=str(flagged["shared_image_id"]),
+                filename=flagged.get("filename", ""),
+                file_path=flagged.get("file_path", ""),
+                overall_quality=flagged.get("overall_quality") or 0,
+                sharpness=flagged.get("sharpness"),
+                brightness=flagged.get("brightness"),
+                issues=flagged.get("issues") or [],
+            )
+            for flagged in panel["flagged"]
+        ],
     )
 
     return JsonResponse(
@@ -998,78 +809,10 @@ async def get_enhanced_dataset_stats(
 async def get_annotation_analysis(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
-    # Filter parameters
-    tag_ids: list[UUID] | None = Query(default=None),
-    excluded_tag_ids: list[UUID] | None = Query(default=None),
-    include_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    exclude_match_mode: Literal["AND", "OR"] = Query(default="OR"),
-    task_ids: list[int] | None = Query(default=None),
-    job_id: int | None = Query(default=None),
-    is_annotated: bool | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=255),
-    width_min: int | None = Query(default=None, ge=0),
-    width_max: int | None = Query(default=None, ge=0),
-    height_min: int | None = Query(default=None, ge=0),
-    height_max: int | None = Query(default=None, ge=0),
-    file_size_min: int | None = Query(default=None, ge=0),
-    file_size_max: int | None = Query(default=None, ge=0),
-    filepath_pattern: str | None = Query(default=None, max_length=255),
-    filepath_paths: list[str] | None = Query(default=None),
-    image_uids: list[UUID] | None = Query(default=None),
+    filters: ImageFilters,
     grid_size: int = Query(default=10, ge=5, le=20, description="Grid size for heatmap"),
 ):
-    """
-    Get annotation analysis (consolidated).
-
-    Combines: Annotation Coverage + Spatial Heatmap
-    This is the main endpoint for the Annotation Analysis panel.
-    """
-    project_id = project["id"]
-
-    # Get filtered images
-    images, total = await ProjectImageRepository.explore(
-        connection,
-        project_id=project_id,
-        page=1,
-        page_size=10000,
-        tag_ids=tag_ids,
-        excluded_tag_ids=excluded_tag_ids,
-        include_match_mode=include_match_mode,
-        exclude_match_mode=exclude_match_mode,
-        task_ids=task_ids,
-        job_id=job_id,
-        is_annotated=is_annotated,
-        search=search,
-        width_min=width_min,
-        width_max=width_max,
-        height_min=height_min,
-        height_max=height_max,
-        file_size_min=file_size_min,
-        file_size_max=file_size_max,
-        filepath_pattern=filepath_pattern,
-        filepath_paths=filepath_paths,
-        image_uids=image_uids,
-    )
-
-    # Compute annotation coverage
-    coverage_data = await AnalyticsService.compute_annotation_coverage(
-        connection, project_id, images
-    )
-
-    # Compute spatial heatmap
-    heatmap_data = await AnalyticsService.compute_spatial_heatmap(
-        connection, project_id, images, grid_size=grid_size
-    )
-
-    # Compute bbox and polygon count distributions (dynamic binning)
-    shared_image_ids = [img["id"] for img in images]
-    bbox_histogram = await AnalyticsService.compute_bbox_count_distribution(
-        connection, shared_image_ids
-    )
-    polygon_histogram = await AnalyticsService.compute_polygon_count_distribution(
-        connection, shared_image_ids
-    )
-
+    """Annotation coverage and spatial heatmap in one response."""
     from app.schemas.analytics import (
         AnnotationPoint,
         BboxCountBucket,
@@ -1079,30 +822,44 @@ async def get_annotation_analysis(
         Spread,
     )
 
+    project_id = project["id"]
+    total = await AnalyticsRepository.count_images(connection, project_id, filters)
+    coverage_data = await _annotation_coverage(connection, project_id, filters)
+    heatmap_data = await _spatial_heatmap(connection, project_id, filters, grid_size=grid_size)
+
+    bbox_histogram = _dynamic_count_histogram(
+        await AnalyticsRepository.annotation_count_values(connection, project_id, filters, "bbox")
+    )
+    polygon_histogram = _dynamic_count_histogram(
+        await AnalyticsRepository.annotation_count_values(
+            connection, project_id, filters, "polygon"
+        )
+    )
+
     response_data = AnnotationAnalysisResponse(
         # Coverage
-        total_images=coverage_data.get("total_images", 0),
-        annotated_images=coverage_data.get("annotated_images", 0),
-        unannotated_images=coverage_data.get("unannotated_images", 0),
-        coverage_percentage=coverage_data.get("coverage_percentage", 0.0),
-        density_histogram=[DensityBucket(**b) for b in coverage_data.get("density_histogram", [])],
-        total_objects=coverage_data.get("total_objects", 0),
-        avg_objects_per_image=coverage_data.get("avg_objects_per_image", 0.0),
-        median_objects_per_image=coverage_data.get("median_objects_per_image", 0),
-        # Annotation type distributions (dynamic binning)
-        bbox_count_histogram=[BboxCountBucket(**b) for b in bbox_histogram],
-        polygon_count_histogram=[PolygonCountBucket(**b) for b in polygon_histogram],
-        # Heatmap
-        grid_density=heatmap_data.get("grid_density", []),
-        grid_size=heatmap_data.get("grid_size", grid_size),
-        max_cell_count=heatmap_data.get("max_cell_count", 0),
-        center_of_mass=CenterOfMass(**heatmap_data.get("center_of_mass", {"x": 0.5, "y": 0.5})),
-        spread=Spread(**heatmap_data.get("spread", {"x_std": 0.0, "y_std": 0.0})),
-        clustering_score=heatmap_data.get("clustering_score", 0.0),
-        total_annotations=heatmap_data.get("total_annotations", 0),
-        annotation_points=[
-            AnnotationPoint(**p) for p in heatmap_data.get("annotation_points", [])[:500]
+        total_images=coverage_data["total_images"],
+        annotated_images=coverage_data["annotated_images"],
+        unannotated_images=coverage_data["unannotated_images"],
+        coverage_percentage=coverage_data["coverage_percentage"],
+        density_histogram=[
+            DensityBucket(**bucket) for bucket in coverage_data["density_histogram"]
         ],
+        total_objects=coverage_data["total_objects"],
+        avg_objects_per_image=coverage_data["avg_objects_per_image"],
+        median_objects_per_image=coverage_data["median_objects_per_image"],
+        # Annotation type distributions (dynamic binning)
+        bbox_count_histogram=[BboxCountBucket(**bucket) for bucket in bbox_histogram],
+        polygon_count_histogram=[PolygonCountBucket(**bucket) for bucket in polygon_histogram],
+        # Heatmap
+        grid_density=heatmap_data["grid_density"],
+        grid_size=heatmap_data["grid_size"],
+        max_cell_count=heatmap_data["max_cell_count"],
+        center_of_mass=CenterOfMass(**heatmap_data["center_of_mass"]),
+        spread=Spread(**heatmap_data["spread"]),
+        clustering_score=heatmap_data["clustering_score"],
+        total_annotations=heatmap_data["total_annotations"],
+        annotation_points=[AnnotationPoint(**point) for point in heatmap_data["annotation_points"]],
     )
 
     return JsonResponse(

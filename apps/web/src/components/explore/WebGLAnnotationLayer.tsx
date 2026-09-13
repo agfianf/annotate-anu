@@ -3,15 +3,21 @@
  * Uses PixiJS for GPU-accelerated 2D rendering
  */
 
-import { useEffect, useRef, useCallback, memo } from 'react';
+import { useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import * as PIXI from 'pixi.js';
 import type { BboxPreview } from '../../lib/data-management-client';
+import type { AnnotationVisibilityPredicate } from '../../hooks/useAnnotationFilters';
 
 interface WebGLAnnotationLayerProps {
   /** Array of bounding boxes in normalized coordinates (0-1) */
   bboxes: BboxPreview[];
   /** Whether to show only on hover */
   showOnHover?: boolean;
+  /**
+   * Optional display filter deciding whether a box is drawn, the same predicate the SVG overlay
+   * takes so both renderers show the same set. Omitted means every box is drawn.
+   */
+  shouldShowAnnotation?: AnnotationVisibilityPredicate;
   /** Container dimensions */
   width: number;
   height: number;
@@ -58,11 +64,22 @@ function applyLOD(
 export const WebGLAnnotationLayer = memo(function WebGLAnnotationLayer({
   bboxes,
   showOnHover = true,
+  shouldShowAnnotation,
   width,
   height,
   lodThreshold = 150,
   lodMaxBoxes = 20,
 }: WebGLAnnotationLayerProps) {
+  // Apply the display filter before LOD so hidden boxes cannot occupy one of the
+  // slots LOD keeps, which would otherwise render fewer boxes here than the SVG
+  // overlay shows for the same image.
+  const visibleBboxes = useMemo(
+    () =>
+      shouldShowAnnotation
+        ? (bboxes ?? []).filter((bbox) => shouldShowAnnotation(bbox.label_id, bbox.confidence))
+        : (bboxes ?? []),
+    [bboxes, shouldShowAnnotation]
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const appRef = useRef<PIXI.Application | null>(null);
   const graphicsRef = useRef<PIXI.Graphics | null>(null);
@@ -114,13 +131,15 @@ export const WebGLAnnotationLayer = memo(function WebGLAnnotationLayer({
     const graphics = graphicsRef.current;
     const app = appRef.current;
 
-    if (!graphics || !app || !bboxes.length) return;
+    if (!graphics || !app) return;
 
     // Clear previous drawings
     graphics.clear();
 
+    if (!visibleBboxes.length) return;
+
     // Apply LOD filtering
-    const visibleBoxes = applyLOD(bboxes, width, lodThreshold, lodMaxBoxes);
+    const visibleBoxes = applyLOD(visibleBboxes, width, lodThreshold, lodMaxBoxes);
 
     // Calculate stroke width based on container size
     const strokeWidth = Math.max(1, Math.min(3, width / 100));
@@ -138,7 +157,7 @@ export const WebGLAnnotationLayer = memo(function WebGLAnnotationLayer({
         .rect(x, y, boxWidth, boxHeight)
         .stroke({ width: strokeWidth, color, alpha: 0.9 });
     }
-  }, [bboxes, width, height, lodThreshold, lodMaxBoxes]);
+  }, [visibleBboxes, width, height, lodThreshold, lodMaxBoxes]);
 
   // Initialize on mount
   useEffect(() => {
@@ -170,7 +189,7 @@ export const WebGLAnnotationLayer = memo(function WebGLAnnotationLayer({
     }
   }, [width, height, drawBoxes]);
 
-  if (!bboxes || bboxes.length === 0) return null;
+  if (visibleBboxes.length === 0) return null;
 
   return (
     <div

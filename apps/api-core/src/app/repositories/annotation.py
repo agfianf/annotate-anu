@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import delete, func, insert, literal, select, union_all, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.models.annotation import detections, image_tags, keypoints, segmentations
@@ -225,12 +225,7 @@ class KeypointRepository:
         data: dict,
     ) -> dict | None:
         data["updated_at"] = datetime.now(timezone.utc)
-        stmt = (
-            update(keypoints)
-            .where(keypoints.c.id == kp_id)
-            .values(**data)
-            .returning(keypoints)
-        )
+        stmt = update(keypoints).where(keypoints.c.id == kp_id).values(**data).returning(keypoints)
         result = await connection.execute(stmt)
         row = result.fetchone()
         return dict(row._mapping) if row else None
@@ -271,9 +266,7 @@ class AnnotationSummaryRepository:
                 images.c.shared_image_id,
                 func.count(detections.c.id).label("count"),
             )
-            .select_from(
-                detections.join(images, detections.c.image_id == images.c.id)
-            )
+            .select_from(detections.join(images, detections.c.image_id == images.c.id))
             .where(images.c.shared_image_id.in_(shared_image_ids))
             .group_by(images.c.shared_image_id)
         )
@@ -286,9 +279,7 @@ class AnnotationSummaryRepository:
                 images.c.shared_image_id,
                 func.count(segmentations.c.id).label("count"),
             )
-            .select_from(
-                segmentations.join(images, segmentations.c.image_id == images.c.id)
-            )
+            .select_from(segmentations.join(images, segmentations.c.image_id == images.c.id))
             .where(images.c.shared_image_id.in_(shared_image_ids))
             .group_by(images.c.shared_image_id)
         )
@@ -319,66 +310,88 @@ class AnnotationSummaryRepository:
 
         Joins through images table to find annotations on job images that
         reference the given shared images.
+
+        ``max_per_image`` is applied in SQL, over the *combined* detection and segmentation array
+        the caller receives, not once per source: detections rank ahead of segmentation bboxes
+        (``source_rank``), so a dense image fills its allowance with detections first, exactly as
+        the previous Python-side trim did. Ranking by ``(source_rank, id)`` makes the surviving
+        subset stable across identical calls. Applying the cap here rather than after the fetch is
+        what keeps a dense page from pulling every row across the wire only to discard most of it.
         """
         if not shared_image_ids:
             return {}
 
-        # Query detections with label info, confidence, and source (join with images and labels tables)
+        # Detections with label info, confidence, and source (join with images and labels tables)
         det_stmt = (
             select(
-                images.c.shared_image_id,
-                detections.c.x_min,
-                detections.c.y_min,
-                detections.c.x_max,
-                detections.c.y_max,
+                images.c.shared_image_id.label("shared_image_id"),
+                literal(0).label("source_rank"),
+                detections.c.id.label("annotation_id"),
+                detections.c.x_min.label("x_min"),
+                detections.c.y_min.label("y_min"),
+                detections.c.x_max.label("x_max"),
+                detections.c.y_max.label("y_max"),
                 labels.c.color.label("label_color"),
                 labels.c.name.label("label_name"),
-                detections.c.label_id,
-                detections.c.confidence,
-                detections.c.source,
+                detections.c.label_id.label("label_id"),
+                detections.c.confidence.label("confidence"),
+                detections.c.source.label("source"),
             )
             .select_from(
-                detections
-                .join(images, detections.c.image_id == images.c.id)
-                .join(labels, detections.c.label_id == labels.c.id)
+                detections.join(images, detections.c.image_id == images.c.id).join(
+                    labels, detections.c.label_id == labels.c.id
+                )
             )
             .where(images.c.shared_image_id.in_(shared_image_ids))
         )
-        det_result = await connection.execute(det_stmt)
-        det_rows = det_result.fetchall()
 
-        # Query segmentations with cached bbox, label info, confidence, and source
+        # Segmentations contribute their cached bbox, ranked after the detections
         seg_stmt = (
             select(
-                images.c.shared_image_id,
-                segmentations.c.bbox_x_min,
-                segmentations.c.bbox_y_min,
-                segmentations.c.bbox_x_max,
-                segmentations.c.bbox_y_max,
+                images.c.shared_image_id.label("shared_image_id"),
+                literal(1).label("source_rank"),
+                segmentations.c.id.label("annotation_id"),
+                segmentations.c.bbox_x_min.label("x_min"),
+                segmentations.c.bbox_y_min.label("y_min"),
+                segmentations.c.bbox_x_max.label("x_max"),
+                segmentations.c.bbox_y_max.label("y_max"),
                 labels.c.color.label("label_color"),
                 labels.c.name.label("label_name"),
-                segmentations.c.label_id,
-                segmentations.c.confidence,
-                segmentations.c.source,
+                segmentations.c.label_id.label("label_id"),
+                segmentations.c.confidence.label("confidence"),
+                segmentations.c.source.label("source"),
             )
             .select_from(
-                segmentations
-                .join(images, segmentations.c.image_id == images.c.id)
-                .join(labels, segmentations.c.label_id == labels.c.id)
+                segmentations.join(images, segmentations.c.image_id == images.c.id).join(
+                    labels, segmentations.c.label_id == labels.c.id
+                )
             )
             .where(images.c.shared_image_id.in_(shared_image_ids))
             .where(segmentations.c.bbox_x_min.isnot(None))  # Only include if bbox is cached
         )
-        seg_result = await connection.execute(seg_stmt)
-        seg_rows = seg_result.fetchall()
+
+        candidates = union_all(det_stmt, seg_stmt).subquery("bbox_candidates")
+        ranked = select(
+            candidates,
+            func.row_number()
+            .over(
+                partition_by=candidates.c.shared_image_id,
+                order_by=(candidates.c.source_rank, candidates.c.annotation_id),
+            )
+            .label("row_num"),
+        ).subquery("ranked_bboxes")
+        stmt = (
+            select(ranked)
+            .where(ranked.c.row_num <= max_per_image)
+            .order_by(ranked.c.shared_image_id, ranked.c.row_num)
+        )
+        rows = (await connection.execute(stmt)).fetchall()
 
         # Group bboxes by shared_image_id
         result: dict[UUID, list[dict]] = {sid: [] for sid in shared_image_ids}
-
-        # Add detection bboxes
-        for row in det_rows:
-            if len(result[row.shared_image_id]) < max_per_image:
-                result[row.shared_image_id].append({
+        for row in rows:
+            result[row.shared_image_id].append(
+                {
                     "x_min": row.x_min,
                     "y_min": row.y_min,
                     "x_max": row.x_max,
@@ -388,22 +401,8 @@ class AnnotationSummaryRepository:
                     "label_id": str(row.label_id) if row.label_id else None,
                     "confidence": row.confidence,
                     "source": row.source,
-                })
-
-        # Add segmentation bboxes
-        for row in seg_rows:
-            if len(result[row.shared_image_id]) < max_per_image:
-                result[row.shared_image_id].append({
-                    "x_min": row.bbox_x_min,
-                    "y_min": row.bbox_y_min,
-                    "x_max": row.bbox_x_max,
-                    "y_max": row.bbox_y_max,
-                    "label_color": row.label_color or "#10B981",
-                    "label_name": row.label_name,
-                    "label_id": str(row.label_id) if row.label_id else None,
-                    "confidence": row.confidence,
-                    "source": row.source,
-                })
+                }
+            )
 
         return result
 
@@ -423,14 +422,36 @@ class AnnotationSummaryRepository:
 
         Joins through images table to find annotations on job images that
         reference the given shared images.
+
+        ``max_per_image`` is applied in SQL, ordered by ``segmentations.id`` so the surviving
+        subset is stable across identical calls. The ranking pass reads ids only; the JSONB
+        ``polygon`` payload — the expensive column — is joined back in for the rows that survive
+        the cap, so a dense image no longer ships (and decodes) polygons that are thrown away.
         """
         if not shared_image_ids:
             return {}
 
-        # Query segmentations with polygon data, label info, confidence, and source
+        ranked = (
+            select(
+                images.c.shared_image_id.label("shared_image_id"),
+                segmentations.c.id.label("annotation_id"),
+                func.row_number()
+                .over(
+                    partition_by=images.c.shared_image_id,
+                    order_by=segmentations.c.id,
+                )
+                .label("row_num"),
+            )
+            .select_from(segmentations.join(images, segmentations.c.image_id == images.c.id))
+            .where(images.c.shared_image_id.in_(shared_image_ids))
+            .where(segmentations.c.polygon.isnot(None))
+            .subquery("ranked_polygons")
+        )
+
+        # Fetch polygon payload and label info only for the rows that survived the cap
         seg_stmt = (
             select(
-                images.c.shared_image_id,
+                ranked.c.shared_image_id,
                 segmentations.c.polygon,
                 labels.c.color.label("label_color"),
                 labels.c.name.label("label_name"),
@@ -439,12 +460,12 @@ class AnnotationSummaryRepository:
                 segmentations.c.source,
             )
             .select_from(
-                segmentations
-                .join(images, segmentations.c.image_id == images.c.id)
-                .join(labels, segmentations.c.label_id == labels.c.id)
+                ranked.join(segmentations, segmentations.c.id == ranked.c.annotation_id).join(
+                    labels, segmentations.c.label_id == labels.c.id
+                )
             )
-            .where(images.c.shared_image_id.in_(shared_image_ids))
-            .where(segmentations.c.polygon.isnot(None))
+            .where(ranked.c.row_num <= max_per_image)
+            .order_by(ranked.c.shared_image_id, ranked.c.row_num)
         )
         seg_result = await connection.execute(seg_stmt)
         seg_rows = seg_result.fetchall()
@@ -453,21 +474,22 @@ class AnnotationSummaryRepository:
         result: dict[UUID, list[dict]] = {sid: [] for sid in shared_image_ids}
 
         for row in seg_rows:
-            if len(result[row.shared_image_id]) < max_per_image:
-                polygon_points = row.polygon
-                # Simplify if too many points (for performance)
-                if polygon_points and len(polygon_points) > max_points_per_polygon:
-                    step = max(1, len(polygon_points) // max_points_per_polygon)
-                    polygon_points = polygon_points[::step]
+            polygon_points = row.polygon
+            # Simplify if too many points (for performance)
+            if polygon_points and len(polygon_points) > max_points_per_polygon:
+                step = max(1, len(polygon_points) // max_points_per_polygon)
+                polygon_points = polygon_points[::step]
 
-                result[row.shared_image_id].append({
+            result[row.shared_image_id].append(
+                {
                     "points": polygon_points or [],
                     "label_color": row.label_color or "#10B981",
                     "label_name": row.label_name,
                     "label_id": str(row.label_id) if row.label_id else None,
                     "confidence": row.confidence,
                     "source": row.source,
-                })
+                }
+            )
 
         return result
 
@@ -512,7 +534,9 @@ class AnnotationSummaryRepository:
         # Combine into summary
         result = {}
         for shared_image_id in shared_image_ids:
-            count_data = counts.get(shared_image_id, {"detection_count": 0, "segmentation_count": 0})
+            count_data = counts.get(
+                shared_image_id, {"detection_count": 0, "segmentation_count": 0}
+            )
             result[shared_image_id] = {
                 "detection_count": count_data["detection_count"],
                 "segmentation_count": count_data["segmentation_count"],
@@ -543,9 +567,7 @@ class AnnotationSummaryRepository:
                 ((detections.c.x_min + detections.c.x_max) / 2).label("center_x"),
                 ((detections.c.y_min + detections.c.y_max) / 2).label("center_y"),
             )
-            .select_from(
-                detections.join(images, detections.c.image_id == images.c.id)
-            )
+            .select_from(detections.join(images, detections.c.image_id == images.c.id))
             .where(images.c.shared_image_id.in_(shared_image_ids))
         )
         det_result = await connection.execute(det_stmt)
@@ -558,9 +580,7 @@ class AnnotationSummaryRepository:
                 ((segmentations.c.bbox_x_min + segmentations.c.bbox_x_max) / 2).label("center_x"),
                 ((segmentations.c.bbox_y_min + segmentations.c.bbox_y_max) / 2).label("center_y"),
             )
-            .select_from(
-                segmentations.join(images, segmentations.c.image_id == images.c.id)
-            )
+            .select_from(segmentations.join(images, segmentations.c.image_id == images.c.id))
             .where(images.c.shared_image_id.in_(shared_image_ids))
             .where(segmentations.c.bbox_x_min.isnot(None))
         )

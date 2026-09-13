@@ -30,6 +30,10 @@ interface UnifiedExploreSidebarProps {
   onWidthRangeChange: (min: number, max: number) => void;
   onHeightRangeChange: (min: number, max: number) => void;
   onSizeRangeChange: (min: number, max: number) => void;
+  /** Remove a numeric constraint outright. Without these, Reset can only widen a range to the facet's own bounds, which stays an active filter and keeps narrowing the gallery, exports and saved views. */
+  onClearWidthRange?: () => void;
+  onClearHeightRange?: () => void;
+  onClearSizeRange?: () => void;
   onFilepathPathsChange: (paths: string[]) => void;
   // Metadata aggregations
   widthAggregation?: NumericAggregation;
@@ -106,6 +110,9 @@ export function UnifiedExploreSidebar({
   onWidthRangeChange,
   onHeightRangeChange,
   onSizeRangeChange,
+  onClearWidthRange,
+  onClearHeightRange,
+  onClearSizeRange,
   onFilepathPathsChange,
   widthAggregation,
   heightAggregation,
@@ -834,6 +841,7 @@ export function UnifiedExploreSidebar({
                     aggregation={widthAggregation}
                     currentRange={filters.widthRange ?? null}
                     onRangeChange={onWidthRangeChange}
+                    onClear={onClearWidthRange}
                     unit="px"
                     isVisible={visibility.isMetadataVisible('width')}
                     onToggleVisibility={() => visibility.toggleMetadata('width')}
@@ -852,6 +860,7 @@ export function UnifiedExploreSidebar({
                     aggregation={heightAggregation}
                     currentRange={filters.heightRange ?? null}
                     onRangeChange={onHeightRangeChange}
+                    onClear={onClearHeightRange}
                     unit="px"
                     isVisible={visibility.isMetadataVisible('height')}
                     onToggleVisibility={() => visibility.toggleMetadata('height')}
@@ -885,6 +894,7 @@ export function UnifiedExploreSidebar({
                         // Convert back to bytes before sending to parent
                         onSizeRangeChange(reverseConverter(min), reverseConverter(max));
                       }}
+                      onClear={onClearSizeRange}
                       unit={sizeUnit}
                       isVisible={visibility.isMetadataVisible('fileSize')}
                       onToggleVisibility={() => visibility.toggleMetadata('fileSize')}

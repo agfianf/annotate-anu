@@ -2,11 +2,20 @@
 
 from uuid import UUID
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import Select, delete, func, insert, literal, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.models.attribute import attribute_schemas, image_attributes
+from app.repositories.image_scope import scope_ids
+
+
+def _id_operand(image_ids: list[UUID] | Select) -> list[UUID] | Select:
+    """The operand to give ``IN`` for an image set named either by ids or by a subquery.
+
+    A list is passed through; a ``Select`` is re-projected through `scope_ids` so it cannot auto-correlate against the enclosing aggregate.
+    """
+    return scope_ids(image_ids) if isinstance(image_ids, Select) else image_ids
 
 
 class AttributeSchemaRepository:
@@ -262,9 +271,12 @@ class ImageAttributeRepository:
         connection: AsyncConnection,
         project_id: int,
         attribute_schema_id: UUID,
-        image_ids: list[UUID] | None = None,
+        image_ids: list[UUID] | Select | None = None,
     ) -> list[dict]:
-        """Get aggregated counts for categorical attribute values."""
+        """Get aggregated counts for categorical attribute values.
+
+        ``image_ids`` is ``None`` when no filter is applied, in which case the counts cover the whole project. A ``Select`` of image ids — `ProjectImageRepository.filtered_image_ids_subquery` — restricts the counts in SQL without the caller fetching the ids; an empty list does the same for a caller that already holds them. "Matched nothing" and "no filter" must not collapse into each other, or a filter with no matches would silently report the unfiltered distribution, so the test here is ``is not None`` and never truthiness.
+        """
         stmt = (
             select(
                 image_attributes.c.value_categorical,
@@ -279,8 +291,8 @@ class ImageAttributeRepository:
             .order_by(func.count().desc())
         )
 
-        if image_ids:
-            stmt = stmt.where(image_attributes.c.shared_image_id.in_(image_ids))
+        if image_ids is not None:
+            stmt = stmt.where(image_attributes.c.shared_image_id.in_(_id_operand(image_ids)))
 
         result = await connection.execute(stmt)
         return [{"value": row.value_categorical, "count": row.count} for row in result.fetchall()]
@@ -290,18 +302,21 @@ class ImageAttributeRepository:
         connection: AsyncConnection,
         project_id: int,
         attribute_schema_id: UUID,
-        image_ids: list[UUID] | None = None,
+        image_ids: list[UUID] | Select | None = None,
         num_buckets: int = 20,
     ) -> dict:
-        """Get aggregated stats for numeric attribute values."""
+        """Get aggregated stats for numeric attribute values.
+
+        ``image_ids`` follows the same rule as :meth:`get_categorical_aggregation`: ``None`` is "no filter", a ``Select`` or a list of ids is the filtered set, and an empty list is "the filter matched nothing".
+        """
         base_where = [
             image_attributes.c.project_id == project_id,
             image_attributes.c.attribute_schema_id == attribute_schema_id,
             image_attributes.c.value_numeric.isnot(None),
         ]
 
-        if image_ids:
-            base_where.append(image_attributes.c.shared_image_id.in_(image_ids))
+        if image_ids is not None:
+            base_where.append(image_attributes.c.shared_image_id.in_(_id_operand(image_ids)))
 
         # Get min, max, avg
         stats_stmt = select(
@@ -331,15 +346,20 @@ class ImageAttributeRepository:
             histogram = [{"bucket_start": min_val, "bucket_end": max_val, "count": stats.total}]
         else:
             bucket_width = (max_val - min_val) / num_buckets
+            # literal() keeps the bounds as SQL literals rather than bound parameters, and the same
+            # expression object is reused in SELECT and GROUP BY. Two separately built expressions
+            # bind their own placeholders, which Postgres then refuses to treat as one grouping key
+            # ("column value_numeric must appear in the GROUP BY clause").
+            bucket_expr = func.floor(
+                (image_attributes.c.value_numeric - literal(min_val)) / literal(bucket_width)
+            )
             histogram_stmt = (
                 select(
-                    func.floor((image_attributes.c.value_numeric - min_val) / bucket_width).label(
-                        "bucket"
-                    ),
+                    bucket_expr.label("bucket"),
                     func.count().label("count"),
                 )
                 .where(*base_where)
-                .group_by(func.floor((image_attributes.c.value_numeric - min_val) / bucket_width))
+                .group_by(bucket_expr)
                 .order_by("bucket")
             )
 

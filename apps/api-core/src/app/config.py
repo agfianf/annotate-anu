@@ -105,6 +105,7 @@ class Settings(BaseSettings):
         default={
             "1x": (256, 256),  # Small zoom
             "2x": (512, 512),  # Medium zoom (default)
+            "3x": (768, 768),  # Retina-sized grid tile (DPR 2 at ~330 CSS px)
             "4x": (1024, 1024),  # Large zoom
         },
         description="Thumbnail dimensions for different zoom levels",

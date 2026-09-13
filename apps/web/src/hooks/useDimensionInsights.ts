@@ -19,8 +19,9 @@ export function useDimensionInsights({
   enabled = true,
 }: UseDimensionInsightsOptions) {
   return useQuery<DimensionInsightsResponse>({
-    queryKey: ['dimension-insights', projectId],
-    queryFn: () => analyticsApi.getDimensionInsights(projectId, filters),
+    // `filters` is sent to the server, so it must be in the key: without it a filter change reuses the previous panel's cached insights.
+    queryKey: ['dimension-insights', projectId, filters],
+    queryFn: ({ signal }) => analyticsApi.getDimensionInsights(projectId, filters, signal),
     enabled: enabled && !!projectId,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)

@@ -1,32 +1,34 @@
 """Router for Project Images (project image pool)."""
 
+import logging
 from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import Select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from app.dependencies.auth import get_current_active_user
 from app.dependencies.database import get_async_transaction_conn
 from app.dependencies.rbac import ProjectPermission
 from app.helpers.response_api import JsonResponse
+from app.models.data_management import shared_images
+from app.repositories.analytics import AnalyticsRepository
 from app.repositories.annotation import AnnotationSummaryRepository
 from app.repositories.image_quality import ImageQualityRepository
+from app.repositories.image_scope import ImageScopeRepository
 from app.repositories.project_image import ProjectImageRepository
 from app.repositories.shared_image import SharedImageRepository
 from app.repositories.shared_image_tag import SharedImageTagRepository
 from app.repositories.tag import TagRepository
+from app.routers.analytics import ImageFilters
 from app.schemas.auth import UserBase
 from app.schemas.data_management import (
     AddTagsRequest,
     AddTagsResponse,
-    AnnotationSummary,
     BboxPreview,
-    BulkTagPreviewRequest,
     BulkTagPreviewResponse,
-    BulkTagRequest,
     BulkTagResponse,
-    ExploreResponse,
     PolygonPreview,
     ProjectImageAdd,
     ProjectImageRemove,
@@ -34,9 +36,19 @@ from app.schemas.data_management import (
     ProjectPoolResponse,
     ReplacedTagInfo,
     SharedImageResponse,
-    SharedImageWithAnnotations,
     TagResponse,
 )
+from app.schemas.image_filters import (
+    MAX_FILTER_RESOLVED_IMAGES,
+    AnnotationSummaryWithTruncation,
+    BulkTagPreviewScopedRequest,
+    BulkTagScopedRequest,
+    ExplorePageResponse,
+    ImageFilterParams,
+    SharedImageWithAnnotationPreview,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/projects", tags=["Project Images"])
 
@@ -52,11 +64,17 @@ async def _enrich_image(
     project_id: int,
     annotation_summary: dict | None = None,
     tags: list[dict] | None = None,
-) -> SharedImageWithAnnotations:
+    bbox_limit: int | None = None,
+    polygon_limit: int | None = None,
+) -> SharedImageWithAnnotationPreview:
     """Enrich image with tags, thumbnail URL, and optional annotation summary.
 
     Pass ``tags`` (from ``SharedImageRepository.get_tags_bulk``) when enriching
     many images so the tags are fetched in one query instead of one per image.
+
+    ``bbox_limit`` and ``polygon_limit`` are the per-image geometry caps the summary was built
+    with. Reaching a cap sets the matching ``*_truncated`` flag so the client can label the image
+    as showing a partial overlay; the counts stay exact either way.
     """
     if tags is None:
         tags = await SharedImageRepository.get_tags(connection, image["id"], project_id)
@@ -70,14 +88,20 @@ async def _enrich_image(
         polygons = None
         if annotation_summary.get("polygons"):
             polygons = [PolygonPreview(**poly) for poly in annotation_summary["polygons"]]
-        ann_summary = AnnotationSummary(
+        ann_summary = AnnotationSummaryWithTruncation(
             detection_count=annotation_summary.get("detection_count", 0),
             segmentation_count=annotation_summary.get("segmentation_count", 0),
             bboxes=bboxes,
             polygons=polygons,
+            bboxes_truncated=bbox_limit is not None
+            and bboxes is not None
+            and len(bboxes) >= bbox_limit,
+            polygons_truncated=polygon_limit is not None
+            and polygons is not None
+            and len(polygons) >= polygon_limit,
         )
 
-    return SharedImageWithAnnotations(
+    return SharedImageWithAnnotationPreview(
         **{k: v for k, v in image.items() if k not in ("added_to_pool_at",)},
         thumbnail_url=_build_thumbnail_url(image["file_path"]),
         tags=[TagResponse(**t) for t in tags],
@@ -253,7 +277,7 @@ async def get_available_images(
 # ============================================================================
 # Explore - Advanced Filtering
 # ============================================================================
-@router.get("/{project_id}/explore", response_model=JsonResponse[ExploreResponse, None])
+@router.get("/{project_id}/explore", response_model=JsonResponse[ExplorePageResponse, None])
 async def explore_project_images(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
@@ -365,6 +389,12 @@ async def explore_project_images(
     include_polygons: bool = Query(
         default=True, description="Include polygon data for segmentations"
     ),
+    include_bbox: bool | None = Query(
+        default=None, description="Alias for include_bboxes; wins when both are sent"
+    ),
+    include_polygon: bool | None = Query(
+        default=None, description="Alias for include_polygons; wins when both are sent"
+    ),
     max_bboxes_per_image: int = Query(
         default=100, ge=1, le=500, description="Max bboxes per image"
     ),
@@ -376,6 +406,13 @@ async def explore_project_images(
     Explore images with combined filtering.
     Supports filtering by tags, task/job hierarchy (multi-task), annotation status, search, and metadata.
 
+    Annotation counts are always returned. Geometry is only fetched when asked for: with
+    ``include_bboxes``/``include_polygons`` off (or their ``include_bbox``/``include_polygon``
+    aliases), each summary carries its exact counts and no shapes, so hiding overlays makes the
+    response smaller. Geometry that is returned is capped per image; an image that hits a cap is
+    marked with ``bboxes_truncated``/``polygons_truncated`` rather than silently showing fewer
+    shapes than it has.
+
     Args:
         task_ids: Filter by multiple task IDs (OR logic - images in ANY of the selected tasks)
         include_bboxes: Include bbox previews for annotation overlay in gallery
@@ -383,11 +420,7 @@ async def explore_project_images(
     """
     project_id = project["id"]
 
-    images, total = await ProjectImageRepository.explore(
-        connection,
-        project_id=project_id,
-        page=page,
-        page_size=page_size,
+    filters = ImageFilterParams(
         tag_ids=tag_ids,
         excluded_tag_ids=excluded_tag_ids,
         include_match_mode=include_match_mode,
@@ -413,7 +446,6 @@ async def explore_project_images(
         filepath_pattern=filepath_pattern,
         filepath_paths=filepath_paths,
         image_uids=image_uids,
-        # Quality filters
         quality_min=quality_min,
         quality_max=quality_max,
         sharpness_min=sharpness_min,
@@ -424,42 +456,49 @@ async def explore_project_images(
         contrast_max=contrast_max,
         uniqueness_min=uniqueness_min,
         uniqueness_max=uniqueness_max,
-        # RGB filters
         red_min=red_min,
         red_max=red_max,
         green_min=green_min,
         green_max=green_max,
         blue_min=blue_min,
         blue_max=blue_max,
-        # Quality issues
         issues=issues,
     )
+
+    images, total = await ProjectImageRepository.explore(
+        connection,
+        project_id=project_id,
+        page=page,
+        page_size=page_size,
+        filters=filters,
+    )
+
+    want_bboxes = include_bboxes if include_bbox is None else include_bbox
+    want_polygons = include_polygons if include_polygon is None else include_polygon
 
     # Fetch annotation summaries for all images in batch
     image_ids = [img["id"] for img in images]
     annotation_summaries = await AnnotationSummaryRepository.get_summary_for_images(
         connection,
         image_ids,
-        include_bboxes=include_bboxes,
-        include_polygons=include_polygons,
+        include_bboxes=want_bboxes,
+        include_polygons=want_polygons,
         max_bboxes_per_image=max_bboxes_per_image,
         max_polygons_per_image=max_polygons_per_image,
     )
 
-    # DEBUG: Log annotation summary results (using print for visibility)
-    total_det = sum(s.get("detection_count", 0) for s in annotation_summaries.values())
-    total_seg = sum(s.get("segmentation_count", 0) for s in annotation_summaries.values())
-    total_bboxes = sum(len(s.get("bboxes", [])) for s in annotation_summaries.values())
-    total_polygons = sum(len(s.get("polygons", [])) for s in annotation_summaries.values())
-    print(
-        f"[DEBUG] Annotation summaries: {len(annotation_summaries)} images, {total_det} detections, {total_seg} segmentations, {total_bboxes} bboxes, {total_polygons} polygons",
-        flush=True,
-    )
-    if annotation_summaries:
-        first_key = list(annotation_summaries.keys())[0]
-        print(
-            f"[DEBUG] First annotation summary (key={first_key}): {annotation_summaries[first_key]}",
-            flush=True,
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "explore annotation summaries: project=%s page=%s images=%s detections=%s "
+            "segmentations=%s bboxes=%s polygons=%s geometry=%s",
+            project_id,
+            page,
+            len(annotation_summaries),
+            sum(s.get("detection_count", 0) for s in annotation_summaries.values()),
+            sum(s.get("segmentation_count", 0) for s in annotation_summaries.values()),
+            sum(len(s.get("bboxes") or []) for s in annotation_summaries.values()),
+            sum(len(s.get("polygons") or []) for s in annotation_summaries.values()),
+            f"bboxes={want_bboxes},polygons={want_polygons}",
         )
 
     tags_by_image = await SharedImageRepository.get_tags_bulk(connection, image_ids, project_id)
@@ -468,7 +507,13 @@ async def explore_project_images(
         ann_summary = annotation_summaries.get(img["id"])
         enriched.append(
             await _enrich_image(
-                connection, img, project_id, ann_summary, tags=tags_by_image.get(img["id"], [])
+                connection,
+                img,
+                project_id,
+                ann_summary,
+                tags=tags_by_image.get(img["id"], []),
+                bbox_limit=max_bboxes_per_image if want_bboxes else None,
+                polygon_limit=max_polygons_per_image if want_polygons else None,
             )
         )
 
@@ -495,7 +540,7 @@ async def explore_project_images(
         filters_applied["image_uids"] = [str(uid) for uid in image_uids]
 
     return JsonResponse(
-        data=ExploreResponse(
+        data=ExplorePageResponse(
             images=enriched,
             total=total,
             page=page,
@@ -511,13 +556,19 @@ async def explore_project_images(
 async def get_sidebar_aggregations(
     project: Annotated[dict, Depends(ProjectPermission("viewer"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
-    tag_ids: list[UUID] | None = Query(default=None),
+    filters: ImageFilters,
     attribute_filters: str | None = Query(default=None),  # JSON encoded
     sidebar_mode: str = Query(default="best"),  # "all", "fast", "best"
 ):
     """
     Get sidebar aggregations for FiftyOne-style filtering.
     Returns tag counts, categorical attribute aggregations, numeric stats, and size distribution.
+
+    Every panel describes the same image set as the gallery beside it — the "current results" rule `AnalyticsRepository` states: a facet counts matching images *after* all active filters, including a filter on the facet's own field. `filters` is the whole `ImageFilterParams` contract, resolved through `ProjectImageRepository.build_filtered_query`; it used to accept `tag_ids` alone, so every other filter the client sent was dropped on the floor, and the tag facet and the size distribution stayed project-wide even once it did not.
+
+    The filtered set is carried into the aggregates as a **statement**, never as a list of ids: a search matching 150 000 images must not put 150 000 UUIDs into Python and then back into every aggregate as an `IN` list, once per keystroke.
+
+    Only the counts move with the filter; the rows do not. Every tag the project defines is still listed, at zero when nothing in the results carries it, so the client can still offer it as a filter to add.
     """
     from app.repositories.attribute import AttributeSchemaRepository, ImageAttributeRepository
     from app.schemas.data_management import (
@@ -536,29 +587,35 @@ async def get_sidebar_aggregations(
     # Get total and filtered image counts
     total_images = await ProjectImageRepository.get_pool_count(connection, project_id)
 
-    # Get image IDs matching current filters (for dependent aggregations)
-    filtered_image_ids = None
-    if tag_ids:
-        # Get images that have all the selected tags
-        filtered_images, _ = await ProjectImageRepository.explore(
-            connection,
-            project_id=project_id,
-            page=1,
-            page_size=100000,  # Get all matching IDs
-            tag_ids=tag_ids,
-        )
-        filtered_image_ids = [img["id"] for img in filtered_images]
+    # Counted in SQL over the filtered set: a filter matching nothing reports 0, not the project
+    # total. The old `len(ids) if ids else total_images` made an empty result indistinguishable
+    # from no filter at all.
+    filtered_images_count = await AnalyticsRepository.count_images(connection, project_id, filters)
 
-    filtered_images_count = len(filtered_image_ids) if filtered_image_ids else total_images
+    # `None` means "no filter applied", so every aggregation below covers the whole pool. Anything
+    # else is the filtered set as an unexecuted `SELECT`, which the aggregates match against with
+    # `IN (SELECT ...)`. Resolving it to a list here is what made a one-character search term cost
+    # six statements each carrying the whole match set as bound parameters.
+    filtered_ids = (
+        None
+        if filters.is_empty()
+        else ProjectImageRepository.filtered_image_ids_subquery(project_id, filters)
+    )
 
-    # Get tag counts with usage
+    # Tag counts over the results, not over the project: a sidebar reporting 412 images carrying
+    # `red` beside `filtered_images: 3` was describing a different image set from the gallery.
+    # Every project tag stays in the list so the client can still offer it as a filter to add;
+    # only the count narrows.
+    filtered_tag_counts = dict(
+        await AnalyticsRepository.tag_image_counts(connection, project_id, filters)
+    )
     tags_with_count = await TagRepository.list_with_usage_count(connection, project_id)
     tag_counts = [
         TagCount(
             id=t["id"],
             name=t["name"],
             color=t["color"],
-            count=t.get("usage_count", 0),
+            count=filtered_tag_counts.get(t["id"], 0),
         )
         for t in tags_with_count
     ]
@@ -575,7 +632,7 @@ async def get_sidebar_aggregations(
     for schema in schemas:
         if schema["field_type"] == "categorical":
             values = await ImageAttributeRepository.get_categorical_aggregation(
-                connection, project_id, schema["id"], filtered_image_ids
+                connection, project_id, schema["id"], filtered_ids
             )
             categorical_aggregations.append(
                 CategoricalAggregation(
@@ -588,7 +645,7 @@ async def get_sidebar_aggregations(
             )
         elif schema["field_type"] == "numeric":
             stats = await ImageAttributeRepository.get_numeric_aggregation(
-                connection, project_id, schema["id"], filtered_image_ids
+                connection, project_id, schema["id"], filtered_ids
             )
             if stats["histogram"]:  # Only include if there's data
                 numeric_aggregations.append(
@@ -603,14 +660,11 @@ async def get_sidebar_aggregations(
                     )
                 )
 
-    # Get size distribution (for computed fields)
-    size_dist = await ProjectImageRepository.get_size_distribution(connection, project_id)
+    # Size distribution over the results too: it sits in the same panel as the width and height
+    # histograms, which have been filter-scoped all along.
+    size_dist = await ImageScopeRepository.size_distribution(connection, project_id, filtered_ids)
 
     # Get Metadata Stats (Width, Height, File Size)
-    from uuid import UUID
-
-    from app.models.data_management import shared_images
-
     # Helper to convert stats dict to NumericAggregation
     def to_numeric_agg(stats, name, display_name):
         # Use deterministic UUID for built-in metadata to avoid frontend key issues
@@ -626,18 +680,18 @@ async def get_sidebar_aggregations(
             histogram=[HistogramBucket(**h) for h in stats["histogram"]],
         )
 
-    width_stats_raw = await ProjectImageRepository.get_numeric_stats(
-        connection, project_id, shared_images.c.width, filtered_image_ids
+    width_stats_raw = await ImageScopeRepository.numeric_column_stats(
+        connection, project_id, shared_images.c.width, filtered_ids
     )
     width_stats = to_numeric_agg(width_stats_raw, "width", "Width")
 
-    height_stats_raw = await ProjectImageRepository.get_numeric_stats(
-        connection, project_id, shared_images.c.height, filtered_image_ids
+    height_stats_raw = await ImageScopeRepository.numeric_column_stats(
+        connection, project_id, shared_images.c.height, filtered_ids
     )
     height_stats = to_numeric_agg(height_stats_raw, "height", "Height")
 
-    size_stats_raw = await ProjectImageRepository.get_numeric_stats(
-        connection, project_id, shared_images.c.file_size_bytes, filtered_image_ids
+    size_stats_raw = await ImageScopeRepository.numeric_column_stats(
+        connection, project_id, shared_images.c.file_size_bytes, filtered_ids
     )
     file_size_stats = to_numeric_agg(size_stats_raw, "file_size_bytes", "File Size")
 
@@ -778,12 +832,81 @@ async def remove_tag_from_image(
     )
 
 
+#: Ceiling on one bulk tag request, counted in (image, tag) pairs — the rows the write actually
+#: touches, which is what decides whether the request finishes. `MAX_FILTER_RESOLVED_IMAGES` caps
+#: the images; this caps the work, and a request over either is refused before anything is written.
+#:
+#: Measured on this project's Postgres against the 10 100-image test pool: the set-based write
+#: (freeze the scope, one DELETE for displaced links, one `INSERT ... SELECT ... ON CONFLICT` per
+#: tag) runs at ~18 600 pairs/s — 101 000 pairs in 5.6 s, 202 000 in 10.8 s, linear. So this
+#: ceiling is a request of roughly eleven seconds. The per-pair loop it replaced ran at 844
+#: pairs/s, which put the old, unenforceable ceiling of 50 000 images × 50 tags at about 49
+#: minutes inside one transaction holding locks on `shared_image_tags` throughout.
+MAX_BULK_TAG_PAIRS = 200_000
+
+
+async def _resolve_bulk_targets(
+    connection: AsyncConnection,
+    project_id: int,
+    payload: BulkTagScopedRequest,
+) -> list[UUID] | Select:
+    """Resolve which images a bulk request acts on.
+
+    An explicit ``shared_image_ids`` list is used as given; the request schema caps it at 500.
+    A ``scope`` comes back as the **statement** that selects the matching ids, not as the ids: the
+    repository freezes it once and joins against it, so a 50 000-image scope costs the same number
+    of round trips as a 50-image one. Membership is still resolved **at action time** — the set is
+    whatever matches when the request arrives, minus the caller's ``excluded_image_ids``, so images
+    added since the user made the selection are included and images that stopped matching are not.
+
+    The scope is sized before anything is written, and a request whose (image, tag) pairs exceed
+    `MAX_BULK_TAG_PAIRS` is refused outright rather than accepted and left to time out.
+    """
+    if payload.shared_image_ids:
+        return payload.shared_image_ids
+    if payload.scope is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either a non-empty shared_image_ids list or scope",
+        )
+
+    scope = payload.scope
+    ids_query = ImageScopeRepository.filtered_scope(
+        project_id, scope.filters, scope.excluded_image_ids
+    )
+    matched = await ImageScopeRepository.count_scope(connection, ids_query)
+    if not matched:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Filter matches no images in this project's pool",
+        )
+    if matched > MAX_FILTER_RESOLVED_IMAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Filter matches more than {MAX_FILTER_RESOLVED_IMAGES} images; "
+                "narrow the filters before applying a bulk action"
+            ),
+        )
+    pairs = matched * len(payload.tag_ids)
+    if pairs > MAX_BULK_TAG_PAIRS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{matched} images x {len(payload.tag_ids)} tags is {pairs} tag assignments, "
+                f"over the {MAX_BULK_TAG_PAIRS} limit for one request; "
+                "narrow the filters or apply fewer tags at a time"
+            ),
+        )
+    return ids_query
+
+
 @router.post(
     "/{project_id}/images/bulk-tag/preview",
     response_model=JsonResponse[BulkTagPreviewResponse, None],
 )
 async def preview_bulk_tag(
-    payload: BulkTagPreviewRequest,
+    payload: BulkTagPreviewScopedRequest,
     project: Annotated[dict, Depends(ProjectPermission("annotator"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
@@ -792,14 +915,20 @@ async def preview_bulk_tag(
 
     Use this endpoint before bulk_tag_images to show the user a confirmation
     dialog when tags from the same label would be replaced.
+
+    Targets are named either by ``shared_image_ids`` or by ``scope``; a scope is resolved at
+    request time, so a preview and the operation that follows it can differ if the project
+    changes in between.
     """
     project_id = project["id"]
+
+    targets = await _resolve_bulk_targets(connection, project_id, payload)
 
     # Get preview stats
     preview = await SharedImageTagRepository.get_bulk_tag_preview(
         connection,
         project_id,
-        payload.shared_image_ids,
+        targets,
         payload.tag_ids,
     )
 
@@ -817,13 +946,20 @@ async def preview_bulk_tag(
 
 @router.post("/{project_id}/images/bulk-tag", response_model=JsonResponse[BulkTagResponse, None])
 async def bulk_tag_images(
-    payload: BulkTagRequest,
+    payload: BulkTagScopedRequest,
     project: Annotated[dict, Depends(ProjectPermission("annotator"))],
     current_user: Annotated[UserBase, Depends(get_current_active_user)],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
     """
     Add tags to multiple images in this project.
+
+    Name the targets either with an explicit ``shared_image_ids`` list or with a ``scope``
+    (a filter set plus ``excluded_image_ids``) to act on every image the filters match without
+    sending the ids. **A scope's membership is resolved at action time**, not when the user made
+    the selection: the server runs the filter as this request arrives, so images that started
+    matching in the meantime are tagged and images that stopped matching are not. Show the same
+    rule in the UI.
 
     Enforces the 1-tag-per-label rule: only one tag from each non-uncategorized
     label can exist on an image at a time. Adding a new tag from a label will
@@ -843,30 +979,29 @@ async def bulk_tag_images(
                 detail=f"Tag {tag_id} not found in this project",
             )
 
-    # Verify all images are in project pool
-    for image_id in payload.shared_image_ids:
-        in_pool = await ProjectImageRepository.is_in_pool(connection, project_id, image_id)
-        if not in_pool:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Image {image_id} is not in this project's pool",
-            )
+    targets = await _resolve_bulk_targets(connection, project_id, payload)
 
-    # Bulk add tags with automatic replacement (1-tag-per-label rule)
+    # Verify all images are in project pool. Filter-resolved targets come from the pool by
+    # construction, so only an explicitly supplied list needs checking.
+    if payload.shared_image_ids:
+        for image_id in payload.shared_image_ids:
+            in_pool = await ProjectImageRepository.is_in_pool(connection, project_id, image_id)
+            if not in_pool:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Image {image_id} is not in this project's pool",
+                )
+
+    # Bulk add tags with automatic replacement (1-tag-per-label rule). The replacement breakdown
+    # comes back from the same DELETE that performed the replacements; asking for it afterwards
+    # with the preview query, as this handler used to, could only ever answer an empty map, since
+    # by then the displaced tags were gone.
     result = await SharedImageTagRepository.bulk_add_tags_with_replacement(
         connection,
         project_id,
-        payload.shared_image_ids,
+        targets,
         payload.tag_ids,
         current_user.id,
-    )
-
-    # Get conflicts by label for response
-    preview = await SharedImageTagRepository.get_bulk_tag_preview(
-        connection,
-        project_id,
-        payload.shared_image_ids,
-        payload.tag_ids,
     )
 
     message = f"Added {result['tags_added']} tag(s) to {result['images_affected']} image(s)"
@@ -878,7 +1013,7 @@ async def bulk_tag_images(
             tags_added=result["tags_added"],
             tags_replaced=result["tags_replaced"],
             images_affected=result["images_affected"],
-            conflicts_by_label=preview["conflicts_by_label"],
+            conflicts_by_label=result["conflicts_by_label"],
         ),
         message=message,
         status_code=status.HTTP_200_OK,
@@ -887,25 +1022,37 @@ async def bulk_tag_images(
 
 @router.delete("/{project_id}/images/bulk-tag", response_model=JsonResponse[BulkTagResponse, None])
 async def bulk_untag_images(
-    payload: BulkTagRequest,
+    payload: BulkTagScopedRequest,
     project: Annotated[dict, Depends(ProjectPermission("annotator"))],
     connection: Annotated[AsyncConnection, Depends(get_async_transaction_conn)],
 ):
-    """Remove tags from multiple images in this project."""
+    """Remove tags from multiple images in this project.
+
+    Targets are named either with an explicit ``shared_image_ids`` list or with a ``scope``
+    (a filter set plus ``excluded_image_ids``). **A scope's membership is resolved at action
+    time**: the filter runs as this request arrives, not when the user made the selection.
+    """
     project_id = project["id"]
+
+    targets = await _resolve_bulk_targets(connection, project_id, payload)
+    image_count = (
+        len(targets)
+        if isinstance(targets, list)
+        else await ImageScopeRepository.count_scope(connection, targets)
+    )
 
     tags_removed = await SharedImageTagRepository.bulk_remove_tags(
         connection,
         project_id,
-        payload.shared_image_ids,
+        targets,
         payload.tag_ids,
     )
 
     return JsonResponse(
         data=BulkTagResponse(
             tags_added=tags_removed,  # Reusing field for removed count
-            images_affected=len(payload.shared_image_ids),
+            images_affected=image_count,
         ),
-        message=f"Removed {tags_removed} tag(s) from {len(payload.shared_image_ids)} image(s)",
+        message=f"Removed {tags_removed} tag(s) from {image_count} image(s)",
         status_code=status.HTTP_200_OK,
     )

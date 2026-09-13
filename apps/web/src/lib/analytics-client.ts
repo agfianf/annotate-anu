@@ -16,35 +16,17 @@ import type {
 } from '@/types/analytics';
 import type { ExploreFilters } from './data-management-client';
 import dataClient from './data-management-client';
+import { filterContractToSearchParams, toFilterContract } from './explore-filter-contract';
 
 /**
- * Build query params from explore filters
+ * Build query params from explore filters.
+ *
+ * Serialises the full canonical contract, so a panel that is given the gallery's filters describes exactly the gallery's image set — no subset of the contract is dropped on the way, which is what used to make a filtered panel disagree with the grid beside it. Not every panel is scoped that way: `useDatasetStats`, `useAnnotationCoverage`, `useEnhancedDatasetStats` and `useAnnotationAnalysis` deliberately pass `{}` because they describe the whole dataset regardless of the gallery's filters. The contract is honest about whichever set it is handed; it does not make the two agree.
+ *
+ * It also emits list values as repeated keys (`tag_ids=a&tag_ids=b`), which is what FastAPI binds; axios' default array encoding (`tag_ids[]=a`) does not bind at all.
  */
-function buildFilterParams(filters: ExploreFilters): Record<string, any> {
-  const params: Record<string, any> = {};
-
-  if (filters.search) params.search = filters.search;
-  if (filters.tag_ids) params.tag_ids = filters.tag_ids;
-  if (filters.excluded_tag_ids) params.excluded_tag_ids = filters.excluded_tag_ids;
-  if (filters.include_match_mode) params.include_match_mode = filters.include_match_mode;
-  if (filters.exclude_match_mode) params.exclude_match_mode = filters.exclude_match_mode;
-  if (filters.task_ids) params.task_ids = filters.task_ids;
-  if (filters.job_id !== undefined) params.job_id = filters.job_id;
-  if (filters.is_annotated !== undefined) params.is_annotated = filters.is_annotated;
-  if (filters.width_min !== undefined) params.width_min = filters.width_min;
-  if (filters.width_max !== undefined) params.width_max = filters.width_max;
-  if (filters.height_min !== undefined) params.height_min = filters.height_min;
-  if (filters.height_max !== undefined) params.height_max = filters.height_max;
-  if (filters.file_size_min !== undefined) params.file_size_min = filters.file_size_min;
-  if (filters.file_size_max !== undefined) params.file_size_max = filters.file_size_max;
-  if (filters.filepath_pattern) params.filepath_pattern = filters.filepath_pattern;
-  if (filters.filepath_paths) params.filepath_paths = filters.filepath_paths;
-  if (filters.image_uids) params.image_uids = filters.image_uids;
-  // Annotation count filters (objects per image)
-  if (filters.object_count_min !== undefined) params.object_count_min = filters.object_count_min;
-  if (filters.object_count_max !== undefined) params.object_count_max = filters.object_count_max;
-
-  return params;
+function buildFilterParams(filters: ExploreFilters): URLSearchParams {
+  return filterContractToSearchParams(toFilterContract(filters));
 }
 
 /**
@@ -56,14 +38,15 @@ export const analyticsApi = {
    */
   async getDatasetStats(
     projectId: string,
-    filters: ExploreFilters = {}
+    filters: ExploreFilters = {},
+    signal?: AbortSignal
   ): Promise<DatasetStatsResponse> {
     const params = buildFilterParams(filters);
     const response = await dataClient.get<{
       data: DatasetStatsResponse;
       message: string;
       success: boolean;
-    }>(`/api/v1/projects/${projectId}/analytics/dataset-stats`, { params });
+    }>(`/api/v1/projects/${projectId}/analytics/dataset-stats`, { params, signal });
     return response.data.data;
   },
 
@@ -72,14 +55,15 @@ export const analyticsApi = {
    */
   async getAnnotationCoverage(
     projectId: string,
-    filters: ExploreFilters = {}
+    filters: ExploreFilters = {},
+    signal?: AbortSignal
   ): Promise<AnnotationCoverageResponse> {
     const params = buildFilterParams(filters);
     const response = await dataClient.get<{
       data: AnnotationCoverageResponse;
       message: string;
       success: boolean;
-    }>(`/api/v1/projects/${projectId}/analytics/annotation-coverage`, { params });
+    }>(`/api/v1/projects/${projectId}/analytics/annotation-coverage`, { params, signal });
     return response.data.data;
   },
 
@@ -90,17 +74,18 @@ export const analyticsApi = {
   async getClassBalance(
     projectId: string,
     filters: ExploreFilters = {},
-    category_id?: string | null
+    category_id?: string | null,
+    signal?: AbortSignal
   ): Promise<ClassBalanceResponse> {
     const params = buildFilterParams(filters);
     if (category_id) {
-      params.category_id = category_id;
+      params.append('category_id', category_id);
     }
     const response = await dataClient.get<{
       data: ClassBalanceResponse;
       message: string;
       success: boolean;
-    }>(`/api/v1/projects/${projectId}/analytics/class-balance`, { params });
+    }>(`/api/v1/projects/${projectId}/analytics/class-balance`, { params, signal });
     return response.data.data;
   },
 
@@ -109,14 +94,15 @@ export const analyticsApi = {
    */
   async getSpatialHeatmap(
     projectId: string,
-    filters: ExploreFilters = {}
+    filters: ExploreFilters = {},
+    signal?: AbortSignal
   ): Promise<SpatialHeatmapResponse> {
     const params = buildFilterParams(filters);
     const response = await dataClient.get<{
       data: SpatialHeatmapResponse;
       message: string;
       success: boolean;
-    }>(`/api/v1/projects/${projectId}/analytics/spatial-heatmap`, { params });
+    }>(`/api/v1/projects/${projectId}/analytics/spatial-heatmap`, { params, signal });
     return response.data.data;
   },
 
@@ -125,14 +111,15 @@ export const analyticsApi = {
    */
   async getImageQuality(
     projectId: string,
-    filters: ExploreFilters = {}
+    filters: ExploreFilters = {},
+    signal?: AbortSignal
   ): Promise<ImageQualityResponse> {
     const params = buildFilterParams(filters);
     const response = await dataClient.get<{
       data: ImageQualityResponse;
       message: string;
       success: boolean;
-    }>(`/api/v1/projects/${projectId}/analytics/image-quality`, { params });
+    }>(`/api/v1/projects/${projectId}/analytics/image-quality`, { params, signal });
     return response.data.data;
   },
 
@@ -141,14 +128,15 @@ export const analyticsApi = {
    */
   async getDimensionInsights(
     projectId: string,
-    filters: ExploreFilters = {}
+    filters: ExploreFilters = {},
+    signal?: AbortSignal
   ): Promise<DimensionInsightsResponse> {
     const params = buildFilterParams(filters);
     const response = await dataClient.get<{
       data: DimensionInsightsResponse;
       message: string;
       success: boolean;
-    }>(`/api/v1/projects/${projectId}/analytics/dimension-insights`, { params });
+    }>(`/api/v1/projects/${projectId}/analytics/dimension-insights`, { params, signal });
     return response.data.data;
   },
 
@@ -163,17 +151,18 @@ export const analyticsApi = {
   async getEnhancedDatasetStats(
     projectId: string,
     filters: ExploreFilters = {},
-    category_id?: string | null
+    category_id?: string | null,
+    signal?: AbortSignal
   ): Promise<EnhancedDatasetStatsResponse> {
     const params = buildFilterParams(filters);
     if (category_id) {
-      params.category_id = category_id;
+      params.append('category_id', category_id);
     }
     const response = await dataClient.get<{
       data: EnhancedDatasetStatsResponse;
       message: string;
       success: boolean;
-    }>(`/api/v1/projects/${projectId}/analytics/enhanced-dataset-stats`, { params });
+    }>(`/api/v1/projects/${projectId}/analytics/enhanced-dataset-stats`, { params, signal });
     return response.data.data;
   },
 
@@ -184,15 +173,16 @@ export const analyticsApi = {
   async getAnnotationAnalysis(
     projectId: string,
     filters: ExploreFilters = {},
-    gridSize: number = 10
+    gridSize: number = 10,
+    signal?: AbortSignal
   ): Promise<AnnotationAnalysisResponse> {
     const params = buildFilterParams(filters);
-    params.grid_size = gridSize;
+    params.append('grid_size', gridSize.toString());
     const response = await dataClient.get<{
       data: AnnotationAnalysisResponse;
       message: string;
       success: boolean;
-    }>(`/api/v1/projects/${projectId}/analytics/annotation-analysis`, { params });
+    }>(`/api/v1/projects/${projectId}/analytics/annotation-analysis`, { params, signal });
     return response.data.data;
   },
 

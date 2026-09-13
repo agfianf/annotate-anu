@@ -7,6 +7,8 @@ interface NumericRangeFilterProps {
   aggregation: NumericAggregation;
   currentRange: { min: number; max: number } | null;
   onRangeChange: (min: number, max: number) => void;
+  /** Removes the constraint entirely. Without it, Reset can only widen the range to the facet's current bounds, which stays a real filter and keeps narrowing the gallery, exports and saved views. */
+  onClear?: () => void;
   unit?: string;
   // Visibility control props
   isVisible?: boolean;
@@ -19,6 +21,7 @@ export function NumericRangeFilter({
   aggregation,
   currentRange,
   onRangeChange,
+  onClear,
   unit = '',
   isVisible = true,
   onToggleVisibility,
@@ -442,7 +445,8 @@ export function NumericRangeFilter({
                 onClick={() => {
                   setLocalMin(min_value);
                   setLocalMax(max_value);
-                  onRangeChange(min_value, max_value);
+                  if (onClear) onClear();
+                  else onRangeChange(min_value, max_value);
                 }}
                 className="w-full text-[10px] text-emerald-600 hover:text-emerald-500 py-1 transition-colors border border-dashed border-emerald-500/30 hover:border-emerald-500/50 mt-1"
               >

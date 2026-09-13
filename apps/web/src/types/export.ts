@@ -30,7 +30,13 @@ export interface ModeOptions {
   label_filter?: string[];
 }
 
+/**
+ * The image-membership filters an export is scoped to.
+ *
+ * This is the export half of the canonical filter contract in `src/lib/explore-filter-contract.ts`; every field the gallery can filter on appears here, so an export always covers the set that was on screen. Every field is optional and absent means unconstrained. Keep it field-for-field with `ImageFilterContract` — `filterContractToSnapshot` fails to compile if the two drift.
+ */
 export interface FilterSnapshot {
+  search?: string;
   tag_ids?: string[];
   excluded_tag_ids?: string[];
   include_match_mode?: 'AND' | 'OR';
@@ -38,14 +44,44 @@ export interface FilterSnapshot {
   task_ids?: number[];
   job_id?: number;
   is_annotated?: boolean;
+  filepath_pattern?: string;
   filepath_paths?: string[];
   image_uids?: string[];
   width_min?: number;
   width_max?: number;
   height_min?: number;
   height_max?: number;
+  aspect_ratio_min?: number;
+  aspect_ratio_max?: number;
   file_size_min?: number;
   file_size_max?: number;
+  // Annotation count filters
+  object_count_min?: number;
+  object_count_max?: number;
+  bbox_count_min?: number;
+  bbox_count_max?: number;
+  polygon_count_min?: number;
+  polygon_count_max?: number;
+  // Quality metric filters
+  quality_min?: number;
+  quality_max?: number;
+  sharpness_min?: number;
+  sharpness_max?: number;
+  brightness_min?: number;
+  brightness_max?: number;
+  contrast_min?: number;
+  contrast_max?: number;
+  uniqueness_min?: number;
+  uniqueness_max?: number;
+  // RGB channel filters
+  red_min?: number;
+  red_max?: number;
+  green_min?: number;
+  green_max?: number;
+  blue_min?: number;
+  blue_max?: number;
+  /** Quality issues: blur, low_brightness, high_brightness, low_contrast, duplicate */
+  issues?: string[];
 }
 
 // ============================================================================

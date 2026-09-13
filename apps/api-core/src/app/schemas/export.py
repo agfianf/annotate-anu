@@ -2,10 +2,11 @@
 
 from datetime import datetime
 from enum import Enum
-from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+from app.schemas.image_filters import ImageFilterParams
 
 
 # ============================================================================
@@ -76,9 +77,7 @@ class ClassificationMappingConfig(BaseModel):
     mode: ClassificationMappingMode = Field(
         ..., description="Mapping mode: categorized or free_form"
     )
-    category_id: UUID | None = Field(
-        None, description="Tag category ID for categorized mode"
-    )
+    category_id: UUID | None = Field(None, description="Tag category ID for categorized mode")
     class_mapping: dict[str, list[str]] | None = Field(
         None,
         description="Manual class mapping for free_form mode: class_name -> [tag_ids]",
@@ -107,35 +106,13 @@ class ModeOptions(BaseModel):
     )
 
 
-class FilterSnapshot(BaseModel):
-    """Complete filter state for export (the recipe)."""
+class FilterSnapshot(ImageFilterParams):
+    """Complete filter state for export (the recipe).
 
-    # Tag filters
-    tag_ids: list[UUID] | None = Field(None, description="Include tags")
-    excluded_tag_ids: list[UUID] | None = Field(None, description="Exclude tags")
-    include_match_mode: Literal["AND", "OR"] = Field(
-        default="OR", description="Match mode for included tags"
-    )
-    exclude_match_mode: Literal["AND", "OR"] = Field(
-        default="OR", description="Match mode for excluded tags"
-    )
+    This is the canonical `ImageFilterParams` contract, not a copy of part of it. The snapshot the export stores therefore describes exactly the image set the gallery was showing, and `ProjectImageRepository.build_filtered_query` resolves both. It used to declare its own 16 fields by hand, which is how the export silently covered a different subset from the gallery's 46-field filter; adding a field to `ImageFilterParams` must keep reaching the export, so do not reintroduce a hand-written field list here.
 
-    # Scope filters
-    task_ids: list[int] | None = Field(None, description="Filter by task IDs")
-    job_id: int | None = Field(None, description="Filter by job ID")
-    is_annotated: bool | None = Field(None, description="Filter by annotation status")
-
-    # Path filters
-    filepath_paths: list[str] | None = Field(None, description="Filter by directory paths")
-    image_uids: list[UUID] | None = Field(None, description="Filter by specific image UIDs")
-
-    # Metadata filters
-    width_min: int | None = Field(None, ge=0, description="Minimum image width")
-    width_max: int | None = Field(None, ge=0, description="Maximum image width")
-    height_min: int | None = Field(None, ge=0, description="Minimum image height")
-    height_max: int | None = Field(None, ge=0, description="Maximum image height")
-    file_size_min: int | None = Field(None, ge=0, description="Minimum file size in bytes")
-    file_size_max: int | None = Field(None, ge=0, description="Maximum file size in bytes")
+    Snapshots written by older clients still validate: every field they carried is present in the contract under the same name, and everything else defaults to "no constraint".
+    """
 
 
 # ============================================================================
@@ -182,25 +159,19 @@ class ExportCreate(BaseModel):
 
     # Filter
     filter_snapshot: FilterSnapshot = Field(..., description="Filter configuration")
-    saved_filter_id: UUID | None = Field(
-        None, description="Reference to saved filter if used"
-    )
+    saved_filter_id: UUID | None = Field(None, description="Reference to saved filter if used")
 
     # Mode-specific configuration
     classification_config: ClassificationMappingConfig | None = Field(
         None, description="Classification mapping config (for classification mode)"
     )
-    mode_options: ModeOptions | None = Field(
-        None, description="Mode-specific options"
-    )
+    mode_options: ModeOptions | None = Field(None, description="Mode-specific options")
 
     # Version
     version_mode: VersionMode = Field(
         default=VersionMode.LATEST, description="Version selection mode"
     )
-    version_value: str | None = Field(
-        None, description="Version number or ISO timestamp"
-    )
+    version_value: str | None = Field(None, description="Version number or ISO timestamp")
 
     # User-provided name (optional, auto-generated if not provided)
     name: str | None = Field(
@@ -216,9 +187,7 @@ class ExportSummary(BaseModel):
 
     image_count: int = Field(..., description="Total images exported")
     annotation_count: int = Field(..., description="Total annotations exported")
-    class_counts: dict[str, int] = Field(
-        default_factory=dict, description="Counts per class/label"
-    )
+    class_counts: dict[str, int] = Field(default_factory=dict, description="Counts per class/label")
     split_counts: dict[str, int] = Field(
         default_factory=dict, description="Counts per split (train/val/test)"
     )
@@ -276,17 +245,38 @@ class ExportListResponse(BaseModel):
 # ============================================================================
 # Export Preview Schemas
 # ============================================================================
+class ExportScope(BaseModel):
+    """The image set an export covers, resolved from its filter snapshot.
+
+    Resolved by the same query the export execution runs, so the count shown before an export is created is the count the export will write, up to changes made to the project in between. `active_filters` names the constraints that actually narrowed the set, so the preview can spell the scope out instead of leaving the user to trust that the gallery's filters travelled with it.
+    """
+
+    image_count: int = Field(..., description="Images matching the snapshot right now")
+    active_filters: list[str] = Field(
+        default_factory=list,
+        description="Names of the filter fields that are set, in contract order",
+    )
+    is_whole_project: bool = Field(
+        ..., description="True when no filter is set and the export covers the whole project pool"
+    )
+    filters: FilterSnapshot = Field(
+        ..., description="The canonical filter set that was resolved, as stored on the export"
+    )
+
+
 class ExportPreview(BaseModel):
     """Preview of export before creation."""
 
     image_count: int = Field(..., description="Number of images matching filter")
+    scope: ExportScope | None = Field(
+        default=None,
+        description="Resolved scope: the same filter set and image count the export execution will use",
+    )
     annotation_counts: dict[str, int] = Field(
         default_factory=dict,
         description="Annotation counts by type (detection, segmentation, classification)",
     )
-    class_counts: dict[str, int] = Field(
-        default_factory=dict, description="Counts per class/label"
-    )
+    class_counts: dict[str, int] = Field(default_factory=dict, description="Counts per class/label")
     split_counts: dict[str, int] = Field(
         default_factory=dict, description="Counts per split (train/val/test/none)"
     )

@@ -15,6 +15,22 @@ export interface LabelConfidenceFilter {
 }
 
 /**
+ * True when an annotation should be drawn.
+ *
+ * This is a **display filter**: it decides which shapes are painted on an image that already
+ * matched the query. It never changes which images match, how many results are reported, or what
+ * an export contains. An image-membership filter such as "images containing a low-confidence
+ * prediction" would be a separate, server-supported filter.
+ *
+ * Arguments are the annotation's label id and its confidence in the 0-1 range, matching
+ * `BboxPreview` / `PolygonPreview`. Annotations with a null or undefined confidence are **always**
+ * shown: manual annotations carry no confidence and must not disappear behind a confidence range.
+ *
+ * Both the gallery thumbnails and the viewer take the same predicate so they render the same set.
+ */
+export type AnnotationVisibilityPredicate = (labelId?: string, confidence?: number) => boolean;
+
+/**
  * Annotation filters state for confidence filtering per label
  */
 export interface AnnotationFiltersState {
@@ -239,12 +255,17 @@ export function useAnnotationFilters(projectId: string, labels?: Label[]) {
   }, []);
 
   /**
-   * Check if an annotation should be shown based on label and confidence
+   * Check if an annotation should be shown based on label and confidence.
+   *
+   * Display-only: hiding a shape here never removes its image from the result set or changes any
+   * reported count. An annotation with no confidence is always shown when its label is visible —
+   * manual annotations carry no confidence and narrowing a range must not make them vanish.
+   *
    * @param labelId The label ID of the annotation (optional)
    * @param confidence The confidence score (0-1 range, optional)
    * @returns true if the annotation should be displayed
    */
-  const shouldShowAnnotation = useCallback(
+  const shouldShowAnnotation = useCallback<AnnotationVisibilityPredicate>(
     (labelId?: string, confidence?: number): boolean => {
       // If no labelId provided, show by default
       if (!labelId) return true;
@@ -257,7 +278,8 @@ export function useAnnotationFilters(projectId: string, labels?: Label[]) {
       // Check visibility toggle
       if (!filter.isVisible) return false;
 
-      // Check confidence threshold (convert 0-1 to 0-100)
+      // Check confidence threshold (convert 0-1 to 0-100). A missing confidence
+      // skips the range entirely rather than failing it.
       if (confidence != null) {
         const confidencePercent = confidence * 100;
         if (confidencePercent < filter.minConfidence || confidencePercent > filter.maxConfidence) {

@@ -26,8 +26,9 @@ export function useClassBalance({
   enabled = true,
 }: UseClassBalanceOptions) {
   return useQuery<ClassBalanceResponse>({
-    queryKey: ['class-balance', projectId, categoryId], // Category in key for caching
-    queryFn: () => analyticsApi.getClassBalance(projectId, filters, categoryId),
+    // `filters` is sent to the server, so it must be in the key: without it a filter change reuses the previous panel's cached counts.
+    queryKey: ['class-balance', projectId, categoryId, filters],
+    queryFn: ({ signal }) => analyticsApi.getClassBalance(projectId, filters, categoryId, signal),
     enabled: enabled && !!projectId,
     staleTime: 300000, // Cache for 5 minutes (static data)
     gcTime: 600000, // Keep in cache for 10 minutes

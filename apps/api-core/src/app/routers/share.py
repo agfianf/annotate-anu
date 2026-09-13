@@ -183,8 +183,8 @@ async def get_thumbnail(
     thumb: ThumbnailService = Depends(get_thumbnail_service),
     size: str = Query(
         default="2x",
-        pattern="^(1x|2x|4x)$",
-        description="Thumbnail size (1x=256px, 2x=512px, 4x=1024px)",
+        pattern="^(1x|2x|3x|4x)$",
+        description="Thumbnail size (1x=256px, 2x=512px, 3x=768px, 4x=1024px)",
     ),
 ):
     """Get thumbnail for an image with specified size. Generates on-demand if not cached."""

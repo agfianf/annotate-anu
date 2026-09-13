@@ -1,6 +1,12 @@
 import { projectImagesApi, type SidebarAggregationResponse } from '@/lib/data-management-client';
+import {
+  buildImageFilterContract,
+  filterContractKey,
+  type ImageFilterContract,
+  type ToolbarFilterState,
+} from '@/lib/explore-filter-contract';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 export interface ExploreFiltersState {
   tagFilters: Record<string, 'include' | 'exclude'>;
@@ -55,31 +61,85 @@ const defaultFilters: ExploreFiltersState = {
   sizeFilter: [],
 };
 
-export function useSidebarAggregations(projectId: string, filters: ExploreFiltersState) {
-  const includedTagIds = Object.entries(filters.tagFilters)
-    .filter(([_, mode]) => mode === 'include')
-    .map(([id]) => id);
+/**
+ * Facet semantics for the sidebar, decided once and applied consistently (G11).
+ *
+ * Every categorical facet — tags, attributes, size buckets — counts **current results**: it answers "how many of the images you are looking at have this value", so its numbers always add up to the gallery's matching count.
+ *
+ * A numeric range facet is the one exception: it is computed with **its own constraint removed**, the standard faceted-search rule. Its `min_value`/`max_value` are the slider's *track*, not a count, and a track derived from the field's own filter collapses onto the selection — drag width to 800-1200 and the track becomes 800-1200, so the range can only ever be narrowed and there is no way back short of Clear All. Removing only that field's own bounds keeps the track at the range of everything else that matches, which is what lets a user widen again.
+ *
+ * This needs no server change: `/explore/sidebar` takes an arbitrary contract, so the facet request is simply the same contract minus two fields. When the field carries no constraint the stripped contract is identical to the gallery's, the query key is identical too, and TanStack serves it from the same cache entry — so the extra request exists only while that slider is actually constrained.
+ */
+const NUMERIC_FACET_FIELDS: Record<'width' | 'height' | 'fileSize', readonly (keyof ImageFilterContract)[]> = {
+  width: ['width_min', 'width_max'],
+  height: ['height_min', 'height_max'],
+  fileSize: ['file_size_min', 'file_size_max'],
+};
+
+function omitContractFields(
+  contract: ImageFilterContract,
+  fields: readonly (keyof ImageFilterContract)[]
+): ImageFilterContract {
+  const next = { ...contract };
+  fields.forEach((field) => {
+    delete next[field];
+  });
+  return next;
+}
+
+function useSidebarFacet(
+  projectId: string,
+  contract: ImageFilterContract,
+  fields: readonly (keyof ImageFilterContract)[]
+) {
+  const facetContract = useMemo(() => omitContractFields(contract, fields), [contract, fields]);
+
+  return useQuery({
+    // Keyed on the facet's own contract, so a width-relaxed request is a different entry from the
+    // gallery's — and the same entry whenever width is unconstrained.
+    queryKey: ['sidebar-aggregations', projectId, filterContractKey(facetContract)],
+    queryFn: ({ signal }) =>
+      projectImagesApi.getSidebarAggregations(projectId, facetContract, signal),
+    staleTime: 30000, // 30 seconds
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Facet counts for the sidebar, scoped to the same filters as the gallery.
+ *
+ * The request is the canonical filter contract, and the query key is that contract's serialisation rather than a list of tag ids: keying on ids alone made flipping a tag from include to exclude reuse the previous entry, so the sidebar kept showing counts for a filter that was no longer applied.
+ *
+ * The three numeric aggregations come from facet queries that drop their own field's bounds; see `NUMERIC_FACET_FIELDS`.
+ */
+export function useSidebarAggregations(
+  projectId: string,
+  filters: ExploreFiltersState,
+  toolbarFilters?: ToolbarFilterState
+) {
+  const contract = useMemo(
+    () => buildImageFilterContract(filters, toolbarFilters),
+    [filters, toolbarFilters]
+  );
 
   const query = useQuery({
-    queryKey: ['sidebar-aggregations', projectId, Object.keys(filters.tagFilters)],
-    queryFn: () =>
-      projectImagesApi.getSidebarAggregations(projectId, {
-        tag_ids: includedTagIds.length > 0 ? includedTagIds : undefined,
-      }),
+    queryKey: ['sidebar-aggregations', projectId, filterContractKey(contract)],
+    queryFn: ({ signal }) => projectImagesApi.getSidebarAggregations(projectId, contract, signal),
     staleTime: 30000, // 30 seconds
     refetchOnWindowFocus: false,
   });
 
-  // Extract metadata aggregations from computed
-  const widthAggregation = query.data?.computed?.width_stats;
-  const heightAggregation = query.data?.computed?.height_stats;
-  const sizeAggregation = query.data?.computed?.file_size_stats;
+  const widthFacet = useSidebarFacet(projectId, contract, NUMERIC_FACET_FIELDS.width);
+  const heightFacet = useSidebarFacet(projectId, contract, NUMERIC_FACET_FIELDS.height);
+  const fileSizeFacet = useSidebarFacet(projectId, contract, NUMERIC_FACET_FIELDS.fileSize);
 
-  // Debug logging
-  if (query.data && !widthAggregation) {
-    console.log('[useSidebarAggregations] API response:', query.data);
-    console.log('[useSidebarAggregations] Computed field:', query.data.computed);
-  }
+  // Track from the facet query; fall back to the gallery-scoped response until it arrives, so a
+  // slider never renders without a track.
+  const widthAggregation = widthFacet.data?.computed?.width_stats ?? query.data?.computed?.width_stats;
+  const heightAggregation =
+    heightFacet.data?.computed?.height_stats ?? query.data?.computed?.height_stats;
+  const sizeAggregation =
+    fileSizeFacet.data?.computed?.file_size_stats ?? query.data?.computed?.file_size_stats;
 
   return {
     ...query,
@@ -192,6 +252,29 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     setFilters((prev) => ({ ...prev, aspectRatioRange: { min, max } }));
   }, []);
 
+  /*
+   * Removing a numeric range means setting it to `undefined`, never widening it to sentinel bounds.
+   * A widened range is still a range: it reaches `/explore`, `/explore/sidebar`, the saved-view URL
+   * and the export snapshot as a real `width_min`/`width_max` pair, so an image outside the sentinel
+   * stays excluded from an export the user believes is unfiltered.
+   */
+  const clearWidthRange = useCallback(() => {
+    setFilters((prev) => ({ ...prev, widthRange: undefined }));
+  }, []);
+
+  const clearHeightRange = useCallback(() => {
+    setFilters((prev) => ({ ...prev, heightRange: undefined }));
+  }, []);
+
+  const clearAspectRatioRange = useCallback(() => {
+    setFilters((prev) => ({ ...prev, aspectRatioRange: undefined }));
+  }, []);
+
+  /** Clears `sizeRange`, the file-size constraint in bytes. */
+  const clearFileSizeRange = useCallback(() => {
+    setFilters((prev) => ({ ...prev, sizeRange: undefined }));
+  }, []);
+
   const setFilepathFilter = useCallback((pattern: string) => {
     setFilters((prev) => ({ ...prev, filepathPattern: pattern }));
   }, []);
@@ -274,6 +357,10 @@ export function useExploreFilters(initialFilters?: Partial<ExploreFiltersState>)
     setHeightRange,
     setAspectRatioRange,
     setSizeRange,
+    clearWidthRange,
+    clearHeightRange,
+    clearAspectRatioRange,
+    clearFileSizeRange,
     setFilepathFilter,
     setFilepathPaths,
     setImageUids,

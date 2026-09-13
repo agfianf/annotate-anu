@@ -8,6 +8,7 @@
 import { memo, useId, useMemo } from 'react';
 import type { BboxPreview, PolygonPreview } from '../../lib/data-management-client';
 import type { AnnotationDisplayState, DimLevel, StrokeOpacityLevel } from '../../hooks/useExploreVisibility';
+import type { AnnotationVisibilityPredicate } from '../../hooks/useAnnotationFilters';
 import { getTextColorForBackground } from '../../lib/colors';
 
 // Stroke width mapping (relative to viewBox 0-1)
@@ -54,8 +55,11 @@ interface AnnotationOverlayProps {
   displayOptions?: AnnotationDisplayState;
   /** Whether to show only on hover */
   showOnHover?: boolean;
-  /** Optional filter function to determine if an annotation should be shown */
-  shouldShowAnnotation?: (labelId?: string, confidence?: number) => boolean;
+  /**
+   * Optional display filter deciding whether an annotation is drawn. Omitted means every
+   * annotation is drawn. It never affects which images match a query or any reported count.
+   */
+  shouldShowAnnotation?: AnnotationVisibilityPredicate;
 }
 
 /**

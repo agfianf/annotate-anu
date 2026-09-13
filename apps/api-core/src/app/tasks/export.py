@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from app.config import settings
 from app.helpers.database import get_async_engine
 from app.models.annotation import detections, image_tags, segmentations
-from app.models.data_management import project_images, shared_images
 from app.models.image import images
 from app.models.job import jobs
 from app.models.project import labels
@@ -22,6 +21,7 @@ from app.services.export import (
     build_classification_manifest,
     build_coco_json,
     create_export_zip,
+    query_export_images,
 )
 from app.tasks.main import celery_app
 
@@ -291,129 +291,11 @@ async def _query_images_for_export(
     project_id: int,
     filter_snapshot: dict,
 ) -> list[dict]:
-    """Query images for export based on filter snapshot."""
-    from sqlalchemy import func, or_
+    """The images this export covers, resolved by the one canonical filter implementation.
 
-    from app.models.data_management import shared_image_tags
-
-    # Base query
-    query = (
-        select(
-            shared_images.c.id,
-            shared_images.c.file_path,
-            shared_images.c.filename,
-            shared_images.c.width,
-            shared_images.c.height,
-        )
-        .join(
-            project_images,
-            shared_images.c.id == project_images.c.shared_image_id,
-        )
-        .where(project_images.c.project_id == project_id)
-    )
-
-    # Apply filters from snapshot
-    tag_ids = filter_snapshot.get("tag_ids")
-    excluded_tag_ids = filter_snapshot.get("excluded_tag_ids")
-    include_match_mode = filter_snapshot.get("include_match_mode", "OR")
-    exclude_match_mode = filter_snapshot.get("exclude_match_mode", "OR")
-    task_ids = filter_snapshot.get("task_ids")
-    job_id = filter_snapshot.get("job_id")
-    is_annotated = filter_snapshot.get("is_annotated")
-    filepath_paths = filter_snapshot.get("filepath_paths")
-    image_uids = filter_snapshot.get("image_uids")
-    file_size_min = filter_snapshot.get("file_size_min")
-    file_size_max = filter_snapshot.get("file_size_max")
-
-    # Tag filters
-    if tag_ids:
-        tag_uuids = [UUID(t) if isinstance(t, str) else t for t in tag_ids]
-        if include_match_mode == "OR":
-            subquery = (
-                select(shared_image_tags.c.shared_image_id)
-                .where(shared_image_tags.c.tag_id.in_(tag_uuids))
-                .distinct()
-            )
-            query = query.where(shared_images.c.id.in_(subquery))
-        else:
-            for tag_id in tag_uuids:
-                subquery = select(shared_image_tags.c.shared_image_id).where(
-                    shared_image_tags.c.tag_id == tag_id
-                )
-                query = query.where(shared_images.c.id.in_(subquery))
-
-    if excluded_tag_ids:
-        excluded_uuids = [UUID(t) if isinstance(t, str) else t for t in excluded_tag_ids]
-        if exclude_match_mode == "OR":
-            subquery = (
-                select(shared_image_tags.c.shared_image_id)
-                .where(shared_image_tags.c.tag_id.in_(excluded_uuids))
-                .distinct()
-            )
-            query = query.where(shared_images.c.id.notin_(subquery))
-        else:
-            subquery = (
-                select(shared_image_tags.c.shared_image_id)
-                .where(shared_image_tags.c.tag_id.in_(excluded_uuids))
-                .group_by(shared_image_tags.c.shared_image_id)
-                .having(func.count() == len(excluded_uuids))
-            )
-            query = query.where(shared_images.c.id.notin_(subquery))
-
-    # Task/job filters
-    if task_ids or job_id:
-        job_query = (
-            select(images.c.shared_image_id)
-            .join(jobs, images.c.job_id == jobs.c.id)
-            .where(images.c.shared_image_id.isnot(None))
-        )
-        if job_id:
-            job_query = job_query.where(jobs.c.id == job_id)
-        if task_ids:
-            job_query = job_query.where(jobs.c.task_id.in_(task_ids))
-        query = query.where(shared_images.c.id.in_(job_query))
-
-    # Filepath filters
-    if filepath_paths:
-        path_conditions = [shared_images.c.file_path.like(f"{path}%") for path in filepath_paths]
-        query = query.where(or_(*path_conditions))
-
-    # Image UID filter
-    if image_uids:
-        uid_list = [UUID(u) if isinstance(u, str) else u for u in image_uids]
-        query = query.where(shared_images.c.id.in_(uid_list))
-
-    # File size filters
-    if file_size_min is not None:
-        query = query.where(shared_images.c.file_size_bytes >= file_size_min)
-    if file_size_max is not None:
-        query = query.where(shared_images.c.file_size_bytes <= file_size_max)
-
-    # Dimension filters
-    if filter_snapshot.get("width_min"):
-        query = query.where(shared_images.c.width >= filter_snapshot["width_min"])
-    if filter_snapshot.get("width_max"):
-        query = query.where(shared_images.c.width <= filter_snapshot["width_max"])
-    if filter_snapshot.get("height_min"):
-        query = query.where(shared_images.c.height >= filter_snapshot["height_min"])
-    if filter_snapshot.get("height_max"):
-        query = query.where(shared_images.c.height <= filter_snapshot["height_max"])
-
-    # Annotation status filter
-    if is_annotated is not None:
-        annotated_subquery = (
-            select(images.c.shared_image_id)
-            .where(images.c.shared_image_id.isnot(None))
-            .where(images.c.is_annotated == True)  # noqa: E712
-            .distinct()
-        )
-        if is_annotated:
-            query = query.where(shared_images.c.id.in_(annotated_subquery))
-        else:
-            query = query.where(shared_images.c.id.notin_(annotated_subquery))
-
-    result = await connection.execute(query)
-    return [dict(row._mapping) for row in result.fetchall()]
+    The export preview, the gallery page the user was looking at, and this task all resolve membership through `ProjectImageRepository.build_filtered_query`. This function used to re-implement a 12-field subset of the filter by hand, so an export generated here could legitimately cover a different set of images from the one its own preview reported.
+    """
+    return await query_export_images(connection, project_id, filter_snapshot)
 
 
 async def _get_project_labels(

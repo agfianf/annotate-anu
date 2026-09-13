@@ -25,7 +25,7 @@ export function useDatasetStats({
 }: UseDatasetStatsOptions) {
   return useQuery({
     queryKey: ['dataset-stats', projectId], // No filters in key - always show full dataset
-    queryFn: () => analyticsApi.getDatasetStats(projectId, {}), // Empty filters = full dataset
+    queryFn: ({ signal }) => analyticsApi.getDatasetStats(projectId, {}, signal), // Empty filters = full dataset
     enabled: enabled && !!projectId,
     staleTime: 300000, // Cache for 5 minutes (static data)
     gcTime: 600000, // Keep in cache for 10 minutes

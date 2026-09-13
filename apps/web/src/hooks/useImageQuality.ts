@@ -24,7 +24,7 @@ export function useImageQuality({
 }: UseImageQualityOptions) {
   return useQuery<ImageQualityResponse>({
     queryKey: ['image-quality', projectId, filters],
-    queryFn: () => analyticsApi.getImageQuality(projectId, filters),
+    queryFn: ({ signal }) => analyticsApi.getImageQuality(projectId, filters, signal),
     enabled: enabled && !!projectId,
     staleTime: 60000, // Cache for 1 minute
     gcTime: 300000, // Keep in cache for 5 minutes

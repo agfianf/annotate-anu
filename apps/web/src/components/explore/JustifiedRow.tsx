@@ -7,6 +7,7 @@ import { memo, useCallback, useMemo } from 'react';
 import type { LayoutRow } from '../../lib/justified-layout';
 import type { ImageWithRowInfo } from '../../hooks/useJustifiedRows';
 import type { VisibilityState } from '../../hooks/useExploreVisibility';
+import type { SharedImage } from '../../lib/data-management-client';
 import { ImageThumbnail } from './ImageThumbnail';
 
 interface JustifiedRowProps {
@@ -26,6 +27,10 @@ interface JustifiedRowProps {
   categoryColorMap?: Record<string, string>;
   /** Optional filter function for annotation confidence filtering */
   shouldShowAnnotation?: (labelId?: string, confidence?: number) => boolean;
+  /** Explicit open action (contract C7); enables the keyboard-reachable tile controls. */
+  onOpenImage?: (image: SharedImage) => void;
+  /** Image that owns the grid's single tab stop (roving tabindex). */
+  activeImageId?: string | null;
 }
 
 interface RowThumbnailProps {
@@ -40,6 +45,8 @@ interface RowThumbnailProps {
   visibility?: VisibilityState;
   categoryColorMap?: Record<string, string>;
   shouldShowAnnotation?: (labelId?: string, confidence?: number) => boolean;
+  onOpenImage?: (image: SharedImage) => void;
+  isActive?: boolean;
 }
 
 /**
@@ -59,6 +66,8 @@ const RowThumbnail = memo(function RowThumbnail({
   visibility,
   categoryColorMap,
   shouldShowAnnotation,
+  onOpenImage,
+  isActive,
 }: RowThumbnailProps) {
   const imageId = image.id;
 
@@ -96,6 +105,10 @@ const RowThumbnail = memo(function RowThumbnail({
       visibility={visibility}
       categoryColorMap={categoryColorMap}
       shouldShowAnnotation={shouldShowAnnotation}
+      onOpen={onOpenImage}
+      isActive={isActive}
+      renderedWidth={width}
+      renderedHeight={height}
     />
   );
 });
@@ -113,6 +126,8 @@ export const JustifiedRow = memo(function JustifiedRow({
   visibility,
   categoryColorMap,
   shouldShowAnnotation,
+  onOpenImage,
+  activeImageId,
 }: JustifiedRowProps) {
   const rowStyle = useMemo<React.CSSProperties>(
     () => ({
@@ -151,6 +166,8 @@ export const JustifiedRow = memo(function JustifiedRow({
             visibility={visibility}
             categoryColorMap={categoryColorMap}
             shouldShowAnnotation={shouldShowAnnotation}
+            onOpenImage={onOpenImage}
+            isActive={image.id === activeImageId}
           />
         );
       })}
